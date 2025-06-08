@@ -1,11 +1,15 @@
+'use client'
 import React  from "react";
 import { Button } from "./Button";
 import { Container } from "./Container";
+import { Text } from "./Text";
+import { Frame, useNode } from "@craftjs/core";
 
-export const CardContainer = ({background, padding = 20}) => {
+export const Card = ({background, padding = 20}) => {
   return (
-    <Container background={background} padding={padding}>
-      <div className="">
+    <Frame>
+      <Container background={background} padding={padding}>
+      <div className="text-only">
         <Text text="Title" fontSize={20} />
         <Text text="Subtitle" fontSize={15} />
       </div>
@@ -13,5 +17,6 @@ export const CardContainer = ({background, padding = 20}) => {
         <Button size="small" text="Learn more" variant="contained" color="primary" />
       </div>
     </Container>
+    </Frame>
   )
 }

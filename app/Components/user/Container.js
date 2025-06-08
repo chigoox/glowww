@@ -1,5 +1,8 @@
+'use client'
+
 import React from "react";
 import Card from "antd/es/card/Card";
+import { useNode } from "@craftjs/core";
 
 export const Container = ({background, padding = 0, children}) => {
   return (

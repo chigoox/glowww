@@ -1,30 +1,48 @@
-import { Card, Grid, } from "antd";
-import Image from "next/image";
-import { Topbar } from "./Componets/TopBar";
-import { Container } from "./Componets/user/Container";
-import { Toolbox } from "./Componets/ToolBox";
-import { SettingsPanel } from "./Componets/SettingsPanel";
+'use client'
+import React from 'react';
+import { Typography } from 'antd';
 
-export default function Home() {
+import { Toolbox } from './Components/ToolBox';
+import { SettingsPanel } from './Components/SettingsPanel';
+import { Topbar } from './Components/TopBar';
+
+import { Container } from './Components/user/Container';
+import { Button } from './Components/user/Button';
+import { Card } from './Components/user/userCard';
+import { Text } from './Components/user/Text';
+
+import {Editor, Frame, Element} from "@craftjs/core";
+
+export default function App() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-         <div className="grid">
+    <div className="mx-auto w-[800px]">
+      <Typography.Title level={5} className="text-center">
+        A super simple page editor
+      </Typography.Title>
+      <Editor resolver={{Card, Button, Text, Container}}> 
+      <div className="pt-2 space-y-4">
         <Topbar />
-        <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-          <Container padding={5} background="#eee">
-            <Card />
-          </Container>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card>
+
+        <div className="flex gap-4">
+          {/* Main Content */}
+          <Frame>
+          <div className="flex-1">
+            <Container padding={5} background="#eee">
+              <Card />
+            </Container>
+          </div>
+          </Frame>
+
+          {/* Sidebar */}
+          <div className="w-[260px]">
+            <div className="bg-white rounded shadow p-2 space-y-4">
               <Toolbox />
               <SettingsPanel />
-          </Card>          
+            </div>
+          </div>
         </div>
       </div>
-      </main>
-       
+       </Editor>
     </div>
   );
 }
