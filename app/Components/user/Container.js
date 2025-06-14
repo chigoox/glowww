@@ -20,7 +20,7 @@ export const Container = ({ background, padding = 0, children , ySpacing}) => {
   return (
     <Card
       ref={cardRef}
-      style={{ margin: "5px 0", background, padding: `${padding}px` }}
+      style={{ margin: "5px 0", background, padding: `${padding}px`, position: "relative" }}
     >
       {children}
     </Card>
