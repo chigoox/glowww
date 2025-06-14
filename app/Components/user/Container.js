@@ -7,7 +7,7 @@ import { useNode } from "@craftjs/core";
 
 
 
-export const Container = ({ background, padding = 0, children }) => {
+export const Container = ({ background, padding = 0, children , ySpacing}) => {
   const { connectors: { connect, drag } } = useNode();
   const cardRef = useRef(null);
 

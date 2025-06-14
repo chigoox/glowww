@@ -10,7 +10,7 @@ import { Element, Frame, useNode } from "@craftjs/core";
 export const CardTop = ({children}) => {
   const { connectors: {connect} } = useNode();
   return (
-    <div ref={connect} className="text-only">
+    <div ref={connect} className="text-only border border-dashed border-gray-300 p-4 rounded-lg">
       {children}
     </div>
   )
@@ -26,7 +26,7 @@ CardTop.craft = {
 export const CardBottom = ({children}) => {
   const { connectors: {connect} } = useNode();
   return (
-    <div ref={connect}>
+    <div className="border border-dashed border-gray-300 p-4 rounded-lg" ref={connect}>
       {children}
     </div>
   )
@@ -47,8 +47,11 @@ export const Card = ({background, padding = 20}) => {
         <Text text="Title" fontSize={20} />
         <Text text="Subtitle" fontSize={15} />
       </Element>
+      <div className={`h-10`}></div>
       <Element is={CardBottom} id="buttons-only" canvas>
-        <Button size="small" text="Learn more" variant="contained" color="primary" />
+        <Button size="small" variant="contained" color="primary">
+          <Text>test</Text>
+        </Button>
       </Element>
     </Container>
   )
