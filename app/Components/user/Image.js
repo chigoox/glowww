@@ -5,6 +5,8 @@ import React, { useRef, useEffect, useState } from "react";
 import { Input, Form, Button, Slider, Tooltip, Space } from "antd";
 import { BorderOutlined, LinkOutlined, UploadOutlined, BgColorsOutlined, PictureOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, VerticalAlignMiddleOutlined, AppstoreOutlined, ColumnWidthOutlined, ColumnHeightOutlined, BorderVerticleOutlined, BorderHorizontalOutlined } from '@ant-design/icons';
 import Draggable from "react-draggable";
+import { ResizableBox } from "react-resizable";
+import "react-resizable/css/styles.css";
 
 const positionOptions = [
   { value: "static", icon: <AppstoreOutlined />, label: "Static" },
@@ -153,6 +155,7 @@ export const Image = ({
           nodeRef={draggableRef}
         >
           <div
+          className=""
             ref={draggableRef}
             style={{
               position: "fixed",
@@ -191,7 +194,7 @@ export const Image = ({
                 ✕
               </Button>
             </div>
-            <Form layout="vertical" size="small" style={{ minWidth: 180 }}>
+            <Form className={'overflow-y-scroll h-96'} layout="vertical" size="small" style={{ minWidth: 180 }}>
               <Form.Item label="Alt">
                 <Input
                   value={alt}
@@ -352,9 +355,20 @@ export const Image = ({
 
   return (
     <div className="absolute inset-0" ref={ref}>
-      {link ? (
-        <a href={link} target="_blank" rel="noopener noreferrer">
-          <img
+      <ResizableBox
+        width={width}
+        height={height}
+        onResizeStop={(e, data) => {
+          setProp((props) => {
+            props.width = data.size.width;
+            props.height = data.size.height;
+          });
+        }}
+        resizeHandles={["se"]}
+        minConstraints={[50, 50]}
+        maxConstraints={[9000, 9000]}
+      >
+      <img
             ref={imgRef}
             src={src}
             alt={alt}
@@ -378,30 +392,7 @@ export const Image = ({
               setMenuOpen(true);
             }}
           />
-        </a>
-      ) : (
-        <img
-          ref={imgRef}
-          src={src}
-          alt={alt}
-          style={{
-            width,
-            height,
-            border,
-            borderRadius,
-            objectFit,
-            position,
-            display,
-            justifyContent: display.includes("flex") ? justifyContent : undefined,
-            alignItems: display.includes("flex") ? alignItems : undefined,
-            left: position === "absolute" || position === "fixed" || position === "relative" ? x : undefined,
-            top: position === "absolute" || position === "fixed" || position === "relative" ? y : undefined,
-            zIndex,
-            cursor: "pointer",
-          }}
-          onClick={() => setMenuOpen(true)}
-        />
-      )}
+          </ResizableBox>
       {editorMenu}
     </div>
   );
