@@ -15,13 +15,7 @@ export const SettingsPanel = () => {
 
         <div>
           <Typography.Text className="block mb-1">Prop</Typography.Text>
-          <Slider
-            defaultValue={0}
-            min={7}
-            max={50}
-            step={1}
-            tooltip={{ open: true }}
-          />
+        
         </div>
 
         <Button danger>Delete</Button>

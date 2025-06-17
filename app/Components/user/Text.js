@@ -4,8 +4,8 @@ import { useNode } from "@craftjs/core";
 import React, { useRef, useEffect, useState } from "react";
 import { Typography, Input, Select, Form, Popover, Button, Slider } from "antd";
 import { BgColorsOutlined, FontColorsOutlined, BorderOutlined, BgOutlined } from '@ant-design/icons';
-import Draggable from "react-draggable";
-
+//import Draggable from "react-draggable";
+const Draggable = null 
 const fontFamilies = [
   { value: "Arial", label: "Arial" },
   { value: "Georgia", label: "Georgia" },
