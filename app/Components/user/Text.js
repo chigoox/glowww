@@ -1,4 +1,5 @@
 'use client';
+import { StyleMenu } from "./StyleMenu";
 import ReactDOM from "react-dom";
 import { useNode } from "@craftjs/core";
 import React, { useRef, useEffect, useState } from "react";
@@ -31,9 +32,10 @@ export const Text = ({
   borderRadius = 0,
   children,
 }) => {
-    const { connectors: {connect, drag}, hasSelectedNode, hasDraggedNode, actions: {setProp} } = useNode((state) => ({
+    const { id, connectors: {connect, drag}, hasSelectedNode, hasDraggedNode, actions: {setProp} } = useNode((state) => ({
     hasSelectedNode: state.events.selected,
-    hasDraggedNode: state.events.dragged
+    hasDraggedNode: state.events.dragged,
+    id: state.id,
   }));
 
   const ref = useRef(null);
@@ -70,109 +72,28 @@ export const Text = ({
 
  const editorMenu = isClient && menuOpen
     ? ReactDOM.createPortal(
-        <Draggable
-          handle=".drag-handle"
-          position={menuPosition}
-          onStop={(_, data) => setMenuPosition({ x: data.x, y: data.y })}
-          nodeRef={draggableRef}
-        >
-          <div
-            ref={draggableRef}
-            style={{
-              position: "fixed",
-              zIndex: 9999,
-              top: 0,
-              left: 0,
-              background: "#fff",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              borderRadius: 8,
-              minWidth: 240,
-              padding: 16,
-            }}
-          >
-            <div
-              className="drag-handle"
-              style={{
-                cursor: "move",
-                fontWeight: 500,
-                marginBottom: 8,
-                userSelect: "none",
-              }}
-            >
-              Edit Text (Drag me)
-              <Button
-                size="small"
-                style={{ float: "right" }}
-                onClick={() => setMenuOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-               <Form layout="vertical" size="small" style={{ minWidth: 220 }}>
-      <Form.Item label="Text">
-        <Input
-          value={text}
-          autoFocus
-          onChange={e => setProp(props => { props.text = e.target.value; })}
-        />
-      </Form.Item>
-      <Form.Item label="Font">
-        <Select
-          value={fontFamily}
-          options={fontFamilies}
-          onChange={val => setProp(props => { props.fontFamily = val; })}
-        />
-      </Form.Item>
-      <Form.Item label="Font Size">
-        <Slider
-          min={7}
-          max={50}
-          value={fontSize}
-          onChange={val => setProp(props => { props.fontSize = val; })}
-        />
-      </Form.Item>
-      <Form.Item label="Font Color">
-        <Input
-          type="color"
-          value={color}
-          onChange={e => setProp(props => { props.color = e.target.value; })}
-          prefix={<FontColorsOutlined />}
-        />
-      </Form.Item>
-      <Form.Item label="Background">
-        <Input
-          type="color"
-          value={background}
-          onChange={e => setProp(props => { props.background = e.target.value; })}
-          prefix={<BgColorsOutlined />}
-        />
-      </Form.Item>
-      <Form.Item label="Border">
-        <Input
-          value={border}
-          onChange={e => setProp(props => { props.border = e.target.value; })}
-          placeholder="e.g. 1px solid #000"
-          prefix={<BorderOutlined />}
-        />
-      </Form.Item>
-      <Form.Item label="Radius">
-        <Slider
-          min={0}
-          max={50}
-          value={borderRadius}
-          onChange={val => setProp(props => { props.borderRadius = val; })}
-        />
-      </Form.Item>
-      <Form.Item label="Align">
-        <Select
-          value={textAlign}
-          options={alignments}
-          onChange={val => setProp(props => { props.textAlign = val; })}
-        />
-      </Form.Item>
-    </Form>
-          </div>
-        </Draggable>,
+        <StyleMenu
+        nodeId={id}
+        props={{
+          text,
+          fontSize,
+          textAlign,
+          fontFamily,
+          color,
+          background,
+          border,
+          borderRadius,
+          menuX: menuPosition.x,
+          menuY: menuPosition.y,
+        }}
+        setProp={setProp}
+        supportedProps={[
+          "text", "fontSize", "textAlign", "fontFamily", "color", "background",
+          "border", "borderRadius", "textDecoration", "fontStyle", "fontWeight"
+        ]}
+        onClose={() => setMenuOpen(false)}
+        onDelete={() => actions.delete(id)}
+      />,
         document.body
       )
     : null;
@@ -192,7 +113,11 @@ export const Text = ({
           marginBottom: 0,
           cursor: "pointer"
         }}
-        onClick={() => setMenuOpen(true)}
+        onContextMenu={e => {
+  e.preventDefault();
+  setMenuPosition({ x: e.clientX, y: e.clientY });
+  setMenuOpen(true);
+}}
       >
         {text || children}
       </Typography.Paragraph>

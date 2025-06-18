@@ -5,6 +5,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { Input, Form, Button, Slider, Space } from "antd";
 import {DeleteOutlined,DragOutlined, BorderOutlined, LinkOutlined, UploadOutlined, BgColorsOutlined, PictureOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, VerticalAlignMiddleOutlined, AppstoreOutlined, ColumnWidthOutlined, ColumnHeightOutlined, BorderVerticleOutlined, BorderHorizontalOutlined } from '@ant-design/icons';
 import interact from "interactjs";
+import { StyleMenu } from "./StyleMenu"; 
 
 
 const HANDLE_SIZE = 12;
@@ -595,10 +596,9 @@ useEffect(() => {
       width: imgState.width,
       height: imgState.height,
       border: border,
-      borderRadius: radiusMode === "all"
-        ? `${cornerRadius.tl}px`
-        : `${cornerRadius.tl}px ${cornerRadius.tr}px ${cornerRadius.br}px ${cornerRadius.bl}px`,
-      //overflow: "hidden",
+      borderRadius: typeof borderRadius === "number"
+      ? `${borderRadius}px`
+      : borderRadius,
       userSelect: "none",
       background: "#fff",
       zIndex: zIndex,
@@ -606,7 +606,10 @@ useEffect(() => {
       display: display,
       position:  position,
     }}
-    onClick={handleMenuOpen}
+    onContextMenu={e => {
+  e.preventDefault();
+  handleMenuOpen(e);
+}}
   >
        <img
       src={src || 'https://plus.unsplash.com/premium_photo-1687173116184-c972fec1be54?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'}
@@ -660,7 +663,35 @@ useEffect(() => {
 >
   <DragOutlined style={{ fontSize: 18, color: "#555" }} />
 </div>
-      {editorMenu}
+      {isClient && menuOpen && (
+  <StyleMenu
+    nodeId={id}
+    props={{
+    src,
+    alt,
+    width,
+    height,
+    border,
+    objectFit,
+    borderRadius,
+    link,
+    position,
+    display,
+    x,
+    y,
+    zIndex,
+    menuX: menuDragPos.x,
+    menuY: menuDragPos.y,
+  }}
+    setProp={setProp}
+    supportedProps={['src','alt',
+      "width", "height", "border", "borderRadius", "boxShadow", "backgroundColor", "backgroundImage", "objectFit",
+      "position", "display", "zIndex", "overflow", "margin", "padding", "float", "transition", "transform"
+    ]}
+    onClose={() => setMenuOpen(false)}
+    onDelete={() => actions.delete(id)}
+  />
+)}
     </div>
   );
 };
