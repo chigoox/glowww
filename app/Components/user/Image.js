@@ -1,7 +1,7 @@
 'use client';
 import ReactDOM from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState,useMemo } from "react";
 import { Input, Form, Button, Slider, Space } from "antd";
 import {DeleteOutlined,DragOutlined, BorderOutlined, LinkOutlined, UploadOutlined, BgColorsOutlined, PictureOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, VerticalAlignMiddleOutlined, AppstoreOutlined, ColumnWidthOutlined, ColumnHeightOutlined, BorderVerticleOutlined, BorderHorizontalOutlined } from '@ant-design/icons';
 import interact from "interactjs";
@@ -62,6 +62,8 @@ export const Image = ({
   zIndex = 1,
   children,
 }) => {
+
+
 
 const {
     id,
@@ -663,8 +665,7 @@ useEffect(() => {
 >
   <DragOutlined style={{ fontSize: 18, color: "#555" }} />
 </div>
-      {isClient && menuOpen && (
-  <StyleMenu
+      {isClient && menuOpen && <StyleMenu
     nodeId={id}
     props={{
     src,
@@ -690,8 +691,8 @@ useEffect(() => {
     ]}
     onClose={() => setMenuOpen(false)}
     onDelete={() => actions.delete(id)}
-  />
-)}
+  />} 
+        
     </div>
   );
 };

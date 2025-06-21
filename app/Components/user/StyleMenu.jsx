@@ -1,7 +1,22 @@
+'use client'
 import React, { useEffect, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import interact from "interactjs";
-import { Button, Input, Slider, Space, Select } from "antd";
-import { DeleteOutlined, CloseOutlined, FontColorsOutlined, PictureOutlined } from '@ant-design/icons';
+import { Button, Input, Slider, Space, Select, Tooltip, Form } from "antd";
+import {
+  DeleteOutlined,
+  CloseOutlined,
+  BgColorsOutlined,
+  FontColorsOutlined,
+  PictureOutlined,
+  BorderOutlined,
+  RadiusUpleftOutlined,
+  RadiusUprightOutlined,
+  RadiusBottomleftOutlined,
+  RadiusBottomrightOutlined,
+  LinkOutlined,
+  UploadOutlined
+} from "@ant-design/icons";
 
 const fontWeights = [400, 500, 600, 700, 800, 900];
 const textAligns = ["left", "center", "right", "justify"];
@@ -12,16 +27,43 @@ const floats = ["none", "left", "right"];
 const textDecorations = ["none", "underline", "line-through", "overline"];
 const textTransforms = ["none", "uppercase", "lowercase", "capitalize"];
 const whiteSpaces = ["normal", "nowrap", "pre", "pre-line", "pre-wrap"];
-const flexDirections = ["row", "row-reverse", "column", "column-reverse"];
-const alignItems = ["stretch", "flex-start", "center", "flex-end", "baseline"];
-const justifyContents = ["flex-start", "center", "flex-end", "space-between", "space-around", "space-evenly"];
+const flexDirections = [
+  "row",
+  "row-reverse",
+  "column",
+  "column-reverse",
+];
+const alignItems = [
+  "stretch",
+  "flex-start",
+  "center",
+  "flex-end",
+  "baseline",
+];
+const justifyContents = [
+  "flex-start",
+  "center",
+  "flex-end",
+  "space-between",
+  "space-around",
+  "space-evenly",
+];
 
-
-// Google Fonts list (expand as needed)
 const googleFonts = [
-  "Roboto", "Open Sans", "Lato", "Montserrat", "Oswald",
-  "Raleway", "Merriweather", "Poppins", "Nunito", "Inter",
-  "Playfair Display", "Source Sans Pro", "Work Sans", "Rubik"
+  "Roboto",
+  "Open Sans",
+  "Lato",
+  "Montserrat",
+  "Oswald",
+  "Raleway",
+  "Merriweather",
+  "Poppins",
+  "Nunito",
+  "Inter",
+  "Playfair Display",
+  "Source Sans Pro",
+  "Work Sans",
+  "Rubik",
 ];
 
 export function StyleMenu({
@@ -30,592 +72,794 @@ export function StyleMenu({
   setProp,
   supportedProps,
   onClose,
-  onDelete
+  onDelete,
 }) {
+  // Initialize local state from props
+  // These local states prevent focus loss during editing
+  const [src, setSrc] = useState(props.src || "");
+  const [alt, setAlt] = useState(props.alt || "");
+  const [text, setText] = useState(props.text || "");
+  const [fontFamily, setFontFamily] = useState(props.fontFamily || "");
+  const [fontSize, setFontSize] = useState(props.fontSize || 14);
+  const [fontWeight, setFontWeight] = useState(props.fontWeight || 400);
+  const [color, setColor] = useState(props.color || "#000000");
+  const [textAlign, setTextAlign] = useState(props.textAlign || "left");
+  const [width, setWidth] = useState(props.width || 200);
+  const [height, setHeight] = useState(props.height || 200);
+  const [margin, setMargin] = useState(props.margin || "");
+  const [padding, setPadding] = useState(props.padding || "");
+  const [border, setBorder] = useState(props.border || "");
+  const [boxShadow, setBoxShadow] = useState(props.boxShadow || "");
+  const [display, setDisplay] = useState(props.display || "block");
+  const [position, setPosition] = useState(props.position || "static");
+  const [float, setFloat] = useState(props.float || "none");
+  const [zIndex, setZIndex] = useState(props.zIndex || 1);
+  const [overflow, setOverflow] = useState(props.overflow || "visible");
+  const [backgroundColor, setBackgroundColor] = useState(props.backgroundColor || "#ffffff");
+  const [backgroundImage, setBackgroundImage] = useState(props.backgroundImage || "");
+  const [flexDirection, setFlexDirection] = useState(props.flexDirection || "row");
+  const [alignItems, setAlignItems] = useState(props.alignItems || "stretch");
+  const [justifyContent, setJustifyContent] = useState(props.justifyContent || "flex-start");
+  const [gridTemplateColumns, setGridTemplateColumns] = useState(props.gridTemplateColumns || "");
+  const [transition, setTransition] = useState(props.transition || "");
+  const [transform, setTransform] = useState(props.transform || "");
+  const [animation, setAnimation] = useState(props.animation || "");
+  const [objectFit, setObjectFit] = useState(props.objectFit || "cover");
+  const [link, setLink] = useState(props.link || "");
 
+  // Draggable menu
+  const menuRef = useRef(null);
+  const [dragPos, setDragPos] = useState({
+    x: props.menuX || 100,
+    y: props.menuY || 100,
+  });
+
+  // Border radius state
   const [radiusMode, setRadiusMode] = useState("all");
-const [cornerRadius, setCornerRadius] = useState({
-  tl: props.borderRadius || 0,
-  tr: props.borderRadius || 0,
-  br: props.borderRadius || 0,
-  bl: props.borderRadius || 0,
-});
+  const [cornerRadius, setCornerRadius] = useState({
+    tl: typeof props.borderRadius === "number"
+      ? props.borderRadius
+      : parseInt((props.borderRadius || "0").split(" ")[0]) || 0,
+    tr: typeof props.borderRadius === "number"
+      ? props.borderRadius
+      : parseInt((props.borderRadius || "0").split(" ")[1]) || 0,
+    br: typeof props.borderRadius === "number"
+      ? props.borderRadius
+      : parseInt((props.borderRadius || "0").split(" ")[2]) || 0,
+    bl: typeof props.borderRadius === "number"
+      ? props.borderRadius
+      : parseInt((props.borderRadius || "0").split(" ")[3]) || 0,
+  });
 
-
-  // Helper to render a button group for a property
-  const ButtonGroup = ({ options, value, onChange }) => (
-    <Space.Compact block>
-      {options.map(opt => (
-        <Button
-          key={opt}
-          type={value === opt ? "primary" : "default"}
-          size="small"
-          style={{ minWidth: 32, padding: 0 }}
-          onClick={() => onChange(opt)}
-        >
-          {opt}
-        </Button>
-      ))}
-    </Space.Compact>
-  );
-
-  // Dynamically load Google Font if selected
+  // Update borderRadius when cornerRadius changes
   useEffect(() => {
-    if (!props.fontFamily) return;
-    const linkId = "google-font-" + props.fontFamily.replace(/\s+/g, "-");
+    if (!supportedProps.includes("borderRadius")) return;
+    if (radiusMode === "all") {
+      setProp((p) => {
+        p.borderRadius = cornerRadius.tl;
+      });
+    } else {
+      setProp((p) => {
+        p.borderRadius = `${cornerRadius.tl}px ${cornerRadius.tr}px ${cornerRadius.br}px ${cornerRadius.bl}px`;
+      });
+    }
+    // eslint-disable-next-line
+  }, [cornerRadius, radiusMode]);
+
+  // Google Fonts loader
+  useEffect(() => {
+    if (!fontFamily) return;
+    const linkId = "google-font-" + fontFamily.replace(/\s+/g, "-");
     if (document.getElementById(linkId)) return;
     const link = document.createElement("link");
     link.id = linkId;
     link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css?family=${props.fontFamily.replace(/\s+/g, "+")}:400,700&display=swap`;
+    link.href = `https://fonts.googleapis.com/css?family=${fontFamily.replace(/\s+/g, "+")}:400,700&display=swap`;
     document.head.appendChild(link);
-    // No cleanup: keep font loaded for performance
-  }, [props.fontFamily]);
+  }, [fontFamily]);
 
-  //
-  useEffect(() => {
-  if (!supportedProps.includes("borderRadius")) return;
-  if (radiusMode === "all") {
-    setProp(p => { p.borderRadius = cornerRadius.tl; });
-  } else {
-    setProp(p => {
-      p.borderRadius = `${cornerRadius.tl}px ${cornerRadius.tr}px ${cornerRadius.br}px ${cornerRadius.bl}px`;
-    });
-  }
-  // eslint-disable-next-line
-}, [cornerRadius, radiusMode]);
-
-  // Make menu draggable
-  const menuRef = useRef(null);
+  // Make menu draggable with interact.js
   useEffect(() => {
     if (!menuRef.current) return;
     interact(menuRef.current).draggable({
-      allowFrom: '.drag-handle',
+      allowFrom: ".drag-handle",
       listeners: {
         move(event) {
-          const target = event.target;
-          const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-          const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-          target.style.transform = `translate(${x}px, ${y}px)`;
-          target.setAttribute('data-x', x);
-          target.setAttribute('data-y', y);
-        }
-      }
+          setDragPos((pos) => ({
+            x: pos.x + event.dx,
+            y: pos.y + event.dy,
+          }));
+        },
+      },
     });
     return () => {
       if (menuRef.current) interact(menuRef.current).unset();
     };
   }, []);
 
-  return (
+  // Prevent drag bubbling to main component
+  const stopAll = (e) => e.stopPropagation();
+
+  // Button group helper (like in Image component)
+  const ButtonGroup = ({ options, value, onChange, icons }) => (
+    <Space.Compact block>
+      {options.map((opt, i) => (
+        <Tooltip title={opt} key={opt}>
+          <Button
+            type={value === opt ? "primary" : "default"}
+            size="small"
+            style={{
+              minWidth: 32,
+              padding: 0,
+              fontWeight: 500,
+              ...(value === opt
+                ? { borderColor: "#1677ff", color: "#1677ff" }
+                : {}),
+            }}
+            onClick={() => {
+              onChange(opt);
+              // Also update parent immediately for button selections
+              if (options === fontWeights) setProp(p => { p.fontWeight = opt; });
+              if (options === textAligns) setProp(p => { p.textAlign = opt; });
+              if (options === displays) setProp(p => { p.display = opt; });
+              if (options === positions) setProp(p => { p.position = opt; });
+              if (options === overflows) setProp(p => { p.overflow = opt; });
+              if (options === floats) setProp(p => { p.float = opt; });
+              if (options === flexDirections) setProp(p => { p.flexDirection = opt; });
+              if (options === alignItems) setProp(p => { p.alignItems = opt; });
+              if (options === justifyContents) setProp(p => { p.justifyContent = opt; });
+            }}
+            icon={icons ? icons[i] : undefined}
+          >
+            {!icons && opt}
+          </Button>
+        </Tooltip>
+      ))}
+    </Space.Compact>
+  );
+
+  // Create portal for menu
+  return ReactDOM.createPortal(
     <div
       ref={menuRef}
-        onPointerDown={e => e.stopPropagation()}
-  onPointerMove={e => e.stopPropagation()}
-  onPointerUp={e => e.stopPropagation()}
-  onMouseDown={e => e.stopPropagation()}
+      
       style={{
         position: "fixed",
         zIndex: 9999,
-        top: props.menuY || 100,
-        left: props.menuX || 100,
+        top: 0,
+        left: 0,
+        transform: `translate(${dragPos.x}px, ${dragPos.y}px)`,
         background: "#fff",
-        boxShadow: "0 2px 16px rgba(0,0,0,0.18)",
-        borderRadius: 12,
-        minWidth: 220,
-        maxWidth: 340,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+        borderRadius: 16,
+        minWidth: 260,
+        maxWidth: 380,
         fontSize: 13,
-        cursor: "default"
+        cursor: "default",
+        border: "1px solid #eee",
+        padding: 0,
       }}
     >
+      {/* Header - similar to editorMenu */}
       <div
         className="drag-handle"
         style={{
-          fontWeight: 600,
-          marginBottom: 8,
+          fontWeight: 700,
+          padding: "16px 20px 10px 20px",
           userSelect: "none",
           letterSpacing: 0.5,
-          fontSize: 15,
+          fontSize: 16,
           color: "#222",
-          cursor: "move"
+          cursor: "move",
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          background: "#f8fafd",
+          borderBottom: "1px solid #f0f0f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
-        Style
-        <Button
-          size="small"
-          type="text"
-          style={{ float: "right" }}
-          icon={<CloseOutlined />}
-          onClick={onClose}
-        />
-        <Button
-          danger
-          icon={<DeleteOutlined />}
-          onClick={onDelete}
-          size="small"
-          style={{ float: "right", marginRight: 4 }}
-        />
+        <span>Style</span>
+        <span>
+          <Tooltip title="Delete">
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              onClick={onDelete}
+              size="small"
+              style={{ marginRight: 4 }}
+            />
+          </Tooltip>
+          <Tooltip title="Close">
+            <Button
+              size="small"
+              type="text"
+              icon={<CloseOutlined />}
+              onClick={onClose}
+            />
+          </Tooltip>
+        </span>
       </div>
-      <div
-        className="flex flex-col gap-2 p-4"
-        style={{
-          height: "24rem", // h-96
-          overflowY: "auto"
+
+      {/* Content - Using Form like editorMenu */}
+      <Form 
+      onPointerDown={stopAll}
+      onPointerMove={stopAll}
+      onPointerUp={stopAll}
+        className="overflow-y-auto"
+        layout="vertical" 
+        size="small" 
+        style={{ 
+          height: "24rem",
+          padding: "18px 20px 18px 20px",
+          overflowY: "auto" 
         }}
       >
-
-        {supportedProps.includes("src") && (
-  <div>
-    <span className="text-xs">Source (src)</span>
-    <Input
-      value={props.src}
-      onChange={e => setProp(p => { p.src = e.target.value; })}
-      size="small"
-      placeholder="Image or video URL"
-    />
-  </div>
-)}
-{supportedProps.includes("alt") && (
-  <div>
-    <span className="text-xs">Alt Text</span>
-    <Input
-      value={props.alt}
-      onChange={e => setProp(p => { p.alt = e.target.value; })}
-      size="small"
-      placeholder="Alt text"
-    />
-  </div>
-)}
-        {/* Text Properties */}
-        {supportedProps.includes("color") && (
-          <div>
-            <span className="text-xs">Text Color</span>
-            <Input
-              type="color"
-              value={props.color}
-              onChange={e => setProp(p => { p.color = e.target.value; })}
-              prefix={<FontColorsOutlined />}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("fontFamily") && (
-          <div>
-            <span className="text-xs">Font Family</span>
-            <Select
-              showSearch
-              value={props.fontFamily}
-              style={{ width: "100%" }}
-              onChange={val => setProp(p => { p.fontFamily = val; })}
-              options={googleFonts.map(f => ({ value: f, label: f }))}
-              size="small"
-              placeholder="Select font"
-              optionFilterProp="label"
-            />
-          </div>
-        )}
-        {supportedProps.includes("fontSize") && (
-          <div>
-            <span className="text-xs">Font Size</span>
-            <Slider
-              min={7}
-              max={72}
-              value={props.fontSize}
-              onChange={val => setProp(p => { p.fontSize = val; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("fontWeight") && (
-          <div>
-            <span className="text-xs">Font Weight</span>
-            <ButtonGroup
-              options={fontWeights}
-              value={props.fontWeight}
-              onChange={val => setProp(p => { p.fontWeight = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("textAlign") && (
-          <div>
-            <span className="text-xs">Text Align</span>
-            <ButtonGroup
-              options={textAligns}
-              value={props.textAlign}
-              onChange={val => setProp(p => { p.textAlign = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("textDecoration") && (
-          <div>
-            <span className="text-xs">Text Decoration</span>
-            <ButtonGroup
-              options={textDecorations}
-              value={props.textDecoration}
-              onChange={val => setProp(p => { p.textDecoration = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("lineHeight") && (
-          <div>
-            <span className="text-xs">Line Height</span>
-            <Slider
-              min={0.8}
-              max={3}
-              step={0.05}
-              value={props.lineHeight}
-              onChange={val => setProp(p => { p.lineHeight = val; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("letterSpacing") && (
-          <div>
-            <span className="text-xs">Letter Spacing</span>
-            <Slider
-              min={-2}
-              max={10}
-              step={0.1}
-              value={props.letterSpacing}
-              onChange={val => setProp(p => { p.letterSpacing = val; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("textTransform") && (
-          <div>
-            <span className="text-xs">Text Transform</span>
-            <ButtonGroup
-              options={textTransforms}
-              value={props.textTransform}
-              onChange={val => setProp(p => { p.textTransform = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("whiteSpace") && (
-          <div>
-            <span className="text-xs">White Space</span>
-            <ButtonGroup
-              options={whiteSpaces}
-              value={props.whiteSpace}
-              onChange={val => setProp(p => { p.whiteSpace = val; })}
-            />
-          </div>
+        {/* Media Section */}
+        {(supportedProps.includes("src") ||
+          supportedProps.includes("alt") ||
+          supportedProps.includes("link")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PictureOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Media</span>
+            </div>}
+          >
+            {supportedProps.includes("src") && (
+              <Form.Item label="Source" style={{ marginBottom: 8 }}>
+                <Input
+                  value={src}
+                  onChange={e => setSrc(e.target.value)}
+                  onBlur={() => setProp(p => { p.src = src; })}
+                  size="small"
+                  placeholder="Image or video URL"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("alt") && (
+              <Form.Item label="Alt Text" style={{ marginBottom: 8 }}>
+                <Input
+                  value={alt}
+                  onChange={e => setAlt(e.target.value)}
+                  onBlur={() => setProp(p => { p.alt = alt; })}
+                  size="small"
+                  placeholder="Alt text"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("link") && (
+              <Form.Item label="Link" style={{ marginBottom: 8 }}>
+                <Input
+                  value={link}
+                  onChange={e => setLink(e.target.value)}
+                  onBlur={() => setProp(p => { p.link = link; })}
+                  size="small"
+                  placeholder="Link URL"
+                  prefix={<LinkOutlined />}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
         )}
 
+        {/* Text Section */}
+        {(supportedProps.includes("text") ||
+          supportedProps.includes("fontFamily") ||
+          supportedProps.includes("fontSize") ||
+          supportedProps.includes("fontWeight") ||
+          supportedProps.includes("color") ||
+          supportedProps.includes("textAlign")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <FontColorsOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Text</span>
+            </div>}
+          >
+            {supportedProps.includes("text") && (
+              <Form.Item label="Text" style={{ marginBottom: 8 }}>
+                <Input.TextArea
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  onBlur={() => setProp(p => { p.text = text; })}
+                  size="small"
+                  autoSize={{ minRows: 2, maxRows: 4 }}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("fontFamily") && (
+              <Form.Item label="Font" style={{ marginBottom: 8 }}>
+                <Select
+  showSearch
+  value={fontFamily}
+  onChange={val => {
+    setFontFamily(val);
+    setProp(p => { p.fontFamily = val; });
+  }}
+  options={googleFonts.map((f) => ({
+    value: f,
+    label: f,
+  }))}
+  size="small"
+  style={{ width: "100%" }}
+  dropdownStyle={{ zIndex: 99999 }}  // Add this line to fix z-index
+  getPopupContainer={triggerNode => triggerNode.parentNode} // Ensure dropdown renders in the right container
+  placeholder="Font"
+  optionFilterProp="label"
+/>                     
+              </Form.Item>
+            )}
+            {supportedProps.includes("fontSize") && (
+              <Form.Item label="Size" style={{ marginBottom: 8 }}>
+                <Slider
+                  min={7}
+                  max={72}
+                  value={fontSize}
+                  onChange={val => setFontSize(val)}
+                  onAfterChange={val => setProp(p => { p.fontSize = val; })}
+                  size="small"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("fontWeight") && (
+              <Form.Item label="Weight" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={fontWeights}
+                  value={fontWeight}
+                  onChange={setFontWeight}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("color") && (
+              <Form.Item label="Color" style={{ marginBottom: 8 }}>
+                <Input
+                  type="color"
+                  value={color}
+                  onChange={e => setColor(e.target.value)}
+                  onBlur={() => setProp(p => { p.color = color; })}
+                  size="small"
+                  style={{ width: 40, height: 32, padding: 2 }}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("textAlign") && (
+              <Form.Item label="Align" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={textAligns}
+                  value={textAlign}
+                  onChange={setTextAlign}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
+        )}
+      
         {/* Box Model */}
-        {supportedProps.includes("width") && (
-          <div>
-            <span className="text-xs">Width</span>
-            <Slider
-              min={10}
-              max={1200}
-              value={props.width}
-              onChange={val => setProp(p => { p.width = val; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("height") && (
-          <div>
-            <span className="text-xs">Height</span>
-            <Slider
-              min={10}
-              max={800}
-              value={props.height}
-              onChange={val => setProp(p => { p.height = val; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("margin") && (
-          <div>
-            <span className="text-xs">Margin</span>
-            <Input
-              value={props.margin}
-              onChange={e => setProp(p => { p.margin = e.target.value; })}
-              size="small"
-              placeholder="e.g. 10px 20px"
-            />
-          </div>
-        )}
-        {supportedProps.includes("padding") && (
-          <div>
-            <span className="text-xs">Padding</span>
-            <Input
-              value={props.padding}
-              onChange={e => setProp(p => { p.padding = e.target.value; })}
-              size="small"
-              placeholder="e.g. 10px 20px"
-            />
-          </div>
-        )}
-        {supportedProps.includes("border") && (
-          <div>
-            <span className="text-xs">Border</span>
-            <Input
-              value={props.border}
-              onChange={e => setProp(p => { p.border = e.target.value; })}
-              size="small"
-              placeholder="e.g. 1px solid #000"
-            />
-          </div>
-        )}
-        {supportedProps.includes("borderColor") && (
-          <div>
-            <span className="text-xs">Border Color</span>
-            <Input
-              type="color"
-              value={props.borderColor}
-              onChange={e => setProp(p => { p.borderColor = e.target.value; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("borderRadius") && (
-  <div>
-    <span className="text-xs">Border Radius</span>
-    <div className="flex gap-2 mb-2">
-      <Button
-        size="small"
-        type={radiusMode === "all" ? "primary" : "default"}
-        onClick={() => setRadiusMode("all")}
-      >
-        All
-      </Button>
-      <Button
-        size="small"
-        type={radiusMode === "corners" ? "primary" : "default"}
-        onClick={() => setRadiusMode("corners")}
-      >
-        Corners
-      </Button>
-    </div>
-    {radiusMode === "all" ? (
-      <Slider
-        min={0}
-        max={100}
-        value={cornerRadius.tl}
-        onChange={val => setCornerRadius(r => ({ tl: val, tr: val, br: val, bl: val }))}
-        size="small"
-      />
-    ) : (
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <span className="text-xs">Top Left</span>
-          <Slider
-            min={0}
-            max={100}
-            value={cornerRadius.tl}
-            onChange={val => setCornerRadius(r => ({ ...r, tl: val }))}
-            size="small"
-          />
-        </div>
-        <div>
-          <span className="text-xs">Top Right</span>
-          <Slider
-            min={0}
-            max={100}
-            value={cornerRadius.tr}
-            onChange={val => setCornerRadius(r => ({ ...r, tr: val }))}
-            size="small"
-          />
-        </div>
-        <div>
-          <span className="text-xs">Bottom Right</span>
-          <Slider
-            min={0}
-            max={100}
-            value={cornerRadius.br}
-            onChange={val => setCornerRadius(r => ({ ...r, br: val }))}
-            size="small"
-          />
-        </div>
-        <div>
-          <span className="text-xs">Bottom Left</span>
-          <Slider
-            min={0}
-            max={100}
-            value={cornerRadius.bl}
-            onChange={val => setCornerRadius(r => ({ ...r, bl: val }))}
-            size="small"
-          />
-        </div>
-      </div>
-    )}
+        {(supportedProps.includes("width") ||
+          supportedProps.includes("height") ||
+          supportedProps.includes("margin") ||
+          supportedProps.includes("padding") ||
+          supportedProps.includes("border") ||
+          supportedProps.includes("borderRadius") ||
+          supportedProps.includes("boxShadow")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BorderOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Box</span>
+            </div>}
+          >
+            {supportedProps.includes("width") && (
+              <Form.Item label="Width" style={{ marginBottom: 8 }}>
+                <Slider
+                  min={10}
+                  max={1200}
+                  value={width}
+                  onChange={val => setWidth(val)}
+                  onAfterChange={val => setProp(p => { p.width = val; })}
+                  size="small"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("height") && (
+              <Form.Item label="Height" style={{ marginBottom: 8 }}>
+                <Slider
+                  min={10}
+                  max={800}
+                  value={height}
+                  onChange={val => setHeight(val)}
+                  onAfterChange={val => setProp(p => { p.height = val; })}
+                  size="small"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("margin") && (
+              <Form.Item label="Margin" style={{ marginBottom: 8 }}>
+                <Input
+                  value={margin}
+                  onChange={e => setMargin(e.target.value)}
+                  onBlur={() => setProp(p => { p.margin = margin; })}
+                  size="small"
+                  placeholder="e.g. 10px 20px"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("padding") && (
+              <Form.Item label="Padding" style={{ marginBottom: 8 }}>
+                <Input
+                  value={padding}
+                  onChange={e => setPadding(e.target.value)}
+                  onBlur={() => setProp(p => { p.padding = padding; })}
+                  size="small"
+                  placeholder="e.g. 10px 20px"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("border") && (
+              <Form.Item label="Border" style={{ marginBottom: 8 }}>
+                <Input
+                  value={border}
+                  onChange={e => setBorder(e.target.value)}
+                  onBlur={() => setProp(p => { p.border = border; })}
+                  size="small"
+                  placeholder="e.g. 1px solid #000"
+                />
+              </Form.Item>
+            )}
+            {/* Border radius */}
+            {supportedProps.includes("borderRadius") && (
+              <Form.Item label="Radius" style={{ marginBottom: 8 }}>
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    size="small"
+                    type={radiusMode === "all" ? "primary" : "default"}
+                    onClick={() => setRadiusMode("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    size="small"
+                    type={radiusMode === "corners" ? "primary" : "default"}
+                    onClick={() => setRadiusMode("corners")}
+                  >
+                    Corners
+                  </Button>
+                </div>
+                {radiusMode === "all" ? (
+  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <RadiusUpleftOutlined />
+    <Slider
+      min={0}
+      max={100}
+      value={cornerRadius.tl}
+      onChange={(val) =>
+        setCornerRadius((r) => ({
+          tl: val,
+          tr: val,
+          br: val,
+          bl: val,
+        }))
+      }
+      onAfterChange={(val) => 
+        setProp(p => { p.borderRadius = val; })
+      }
+      size="small"
+    />
   </div>
-)}
-        {supportedProps.includes("boxShadow") && (
-          <div>
-            <span className="text-xs">Box Shadow</span>
-            <Input
-              value={props.boxShadow}
-              onChange={e => setProp(p => { p.boxShadow = e.target.value; })}
-              size="small"
-              placeholder="e.g. 0 2px 8px #0003"
-            />
-          </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusUpleftOutlined /> TL
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.tl}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, tl: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusUprightOutlined /> TR
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.tr}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, tr: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusBottomrightOutlined /> BR
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.br}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, br: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusBottomleftOutlined /> BL
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.bl}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, bl: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                  </div>
+                )}
+              </Form.Item>
+            )}
+            {supportedProps.includes("boxShadow") && (
+              <Form.Item label="Shadow" style={{ marginBottom: 8 }}>
+                <Input
+                  value={boxShadow}
+                  onChange={e => setBoxShadow(e.target.value)}
+                  onBlur={() => setProp(p => { p.boxShadow = boxShadow; })}
+                  size="small"
+                  placeholder="e.g. 0 2px 8px #0003"
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
         )}
 
         {/* Layout */}
-        {supportedProps.includes("display") && (
-          <div>
-            <span className="text-xs">Display</span>
-            <ButtonGroup
-              options={displays}
-              value={props.display}
-              onChange={val => setProp(p => { p.display = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("position") && (
-          <div>
-            <span className="text-xs">Position</span>
-            <ButtonGroup
-              options={positions}
-              value={props.position}
-              onChange={val => setProp(p => { p.position = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("float") && (
-          <div>
-            <span className="text-xs">Float</span>
-            <ButtonGroup
-              options={floats}
-              value={props.float}
-              onChange={val => setProp(p => { p.float = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("zIndex") && (
-          <div>
-            <span className="text-xs">Z-Index</span>
-            <Slider
-              min={0}
-              max={100}
-              value={props.zIndex}
-              onChange={val => setProp(p => { p.zIndex = val; })}
-              size="small"
-            />
-          </div>
-        )}
-        {supportedProps.includes("overflow") && (
-          <div>
-            <span className="text-xs">Overflow</span>
-            <ButtonGroup
-              options={overflows}
-              value={props.overflow}
-              onChange={val => setProp(p => { p.overflow = val; })}
-            />
-          </div>
+        {(supportedProps.includes("display") ||
+          supportedProps.includes("position") ||
+          supportedProps.includes("float") ||
+          supportedProps.includes("zIndex") ||
+          supportedProps.includes("overflow")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BgColorsOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Layout</span>
+            </div>}
+          >
+            {supportedProps.includes("display") && (
+              <Form.Item label="Display" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={displays}
+                  value={display}
+                  onChange={setDisplay}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("position") && (
+              <Form.Item label="Position" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={positions}
+                  value={position}
+                  onChange={setPosition}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("float") && (
+              <Form.Item label="Float" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={floats}
+                  value={float}
+                  onChange={setFloat}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("zIndex") && (
+              <Form.Item label="Z-Index" style={{ marginBottom: 8 }}>
+                <Slider
+                  min={0}
+                  max={100}
+                  value={zIndex}
+                  onChange={val => setZIndex(val)}
+                  onAfterChange={val => setProp(p => { p.zIndex = val; })}
+                  size="small"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("overflow") && (
+              <Form.Item label="Overflow" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={overflows}
+                  value={overflow}
+                  onChange={setOverflow}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
         )}
 
         {/* Background */}
-        {supportedProps.includes("backgroundColor") && (
-          <div>
-            <span className="text-xs">Background Color</span>
-            <Input
-              type="color"
-              value={props.backgroundColor}
-              onChange={e => setProp(p => { p.backgroundColor = e.target.value; })}
-              size="small"
-            />
-          </div>
+        {(supportedProps.includes("backgroundColor") ||
+          supportedProps.includes("backgroundImage")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BgColorsOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Background</span>
+            </div>}
+          >
+            {supportedProps.includes("backgroundColor") && (
+              <Form.Item label="Color" style={{ marginBottom: 8 }}>
+                <Input
+                  type="color"
+                  value={backgroundColor}
+                  onChange={e => setBackgroundColor(e.target.value)}
+                  onBlur={() => setProp(p => { p.backgroundColor = backgroundColor; })}
+                  size="small"
+                  style={{ width: 40, height: 32, padding: 2 }}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("backgroundImage") && (
+              <Form.Item label="Image" style={{ marginBottom: 8 }}>
+                <Input
+                  value={backgroundImage}
+                  onChange={e => setBackgroundImage(e.target.value)}
+                  onBlur={() => setProp(p => { p.backgroundImage = backgroundImage; })}
+                  size="small"
+                  placeholder="URL or CSS"
+                  prefix={<PictureOutlined />}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
         )}
-        {supportedProps.includes("backgroundImage") && (
-          <div>
-            <span className="text-xs">Background Image</span>
-            <Input
-              value={props.backgroundImage}
-              onChange={e => setProp(p => { p.backgroundImage = e.target.value; })}
-              size="small"
-              placeholder="URL or CSS"
-              prefix={<PictureOutlined />}
-            />
-          </div>
+
+        {/* Object Fit (for images) */}
+        {supportedProps.includes("objectFit") && (
+          <Form.Item label="Object Fit">
+            <Space.Compact block>
+              {["fill", "contain", "cover", "none", "scale-down"].map(opt => (
+                <Button
+                  key={opt}
+                  type={objectFit === opt ? "primary" : "default"}
+                  size="small"
+                  onClick={() => {
+                    setObjectFit(opt);
+                    setProp(p => { p.objectFit = opt; });
+                  }}
+                >
+                  {opt}
+                </Button>
+              ))}
+            </Space.Compact>
+          </Form.Item>
         )}
 
         {/* Flexbox */}
-        {supportedProps.includes("flexDirection") && (
-          <div>
-            <span className="text-xs">Flex Direction</span>
-            <ButtonGroup
-              options={flexDirections}
-              value={props.flexDirection}
-              onChange={val => setProp(p => { p.flexDirection = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("alignItems") && (
-          <div>
-            <span className="text-xs">Align Items</span>
-            <ButtonGroup
-              options={alignItems}
-              value={props.alignItems}
-              onChange={val => setProp(p => { p.alignItems = val; })}
-            />
-          </div>
-        )}
-        {supportedProps.includes("justifyContent") && (
-          <div>
-            <span className="text-xs">Justify Content</span>
-            <ButtonGroup
-              options={justifyContents}
-              value={props.justifyContent}
-              onChange={val => setProp(p => { p.justifyContent = val; })}
-            />
-          </div>
+        {(supportedProps.includes("flexDirection") ||
+          supportedProps.includes("alignItems") ||
+          supportedProps.includes("justifyContent")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BorderOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Flexbox</span>
+            </div>}
+          >
+            {supportedProps.includes("flexDirection") && (
+              <Form.Item label="Direction" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={flexDirections}
+                  value={flexDirection}
+                  onChange={setFlexDirection}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("alignItems") && (
+              <Form.Item label="Align Items" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={alignItems}
+                  value={alignItems}
+                  onChange={setAlignItems}
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("justifyContent") && (
+              <Form.Item label="Justify" style={{ marginBottom: 8 }}>
+                <ButtonGroup
+                  options={justifyContents}
+                  value={justifyContent}
+                  onChange={setJustifyContent}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
         )}
 
         {/* Grid */}
         {supportedProps.includes("gridTemplateColumns") && (
-          <div>
-            <span className="text-xs">Grid Columns</span>
-            <Input
-              value={props.gridTemplateColumns}
-              onChange={e => setProp(p => { p.gridTemplateColumns = e.target.value; })}
-              size="small"
-              placeholder="e.g. 1fr 1fr"
-            />
-          </div>
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BorderOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Grid</span>
+            </div>}
+          >
+            <Form.Item label="Columns" style={{ marginBottom: 8 }}>
+              <Input
+                value={gridTemplateColumns}
+                onChange={e => setGridTemplateColumns(e.target.value)}
+                onBlur={() => setProp(p => { p.gridTemplateColumns = gridTemplateColumns; })}
+                size="small"
+                placeholder="e.g. 1fr 1fr"
+              />
+            </Form.Item>
+          </Form.Item>
         )}
 
         {/* Animation/Transition */}
-        {supportedProps.includes("transition") && (
-          <div>
-            <span className="text-xs">Transition</span>
-            <Input
-              value={props.transition}
-              onChange={e => setProp(p => { p.transition = e.target.value; })}
-              size="small"
-              placeholder="e.g. all 0.3s"
-            />
-          </div>
+        {(supportedProps.includes("transition") ||
+          supportedProps.includes("transform") ||
+          supportedProps.includes("animation")) && (
+          <Form.Item 
+            label={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BgColorsOutlined />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>Animation</span>
+            </div>}
+          >
+            {supportedProps.includes("transition") && (
+              <Form.Item label="Transition" style={{ marginBottom: 8 }}>
+                <Input
+                  value={transition}
+                  onChange={e => setTransition(e.target.value)}
+                  onBlur={() => setProp(p => { p.transition = transition; })}
+                  size="small"
+                  placeholder="e.g. all 0.3s"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("transform") && (
+              <Form.Item label="Transform" style={{ marginBottom: 8 }}>
+                <Input
+                  value={transform}
+                  onChange={e => setTransform(e.target.value)}
+                  onBlur={() => setProp(p => { p.transform = transform; })}
+                  size="small"
+                  placeholder="e.g. rotate(10deg)"
+                />
+              </Form.Item>
+            )}
+            {supportedProps.includes("animation") && (
+              <Form.Item label="Animation" style={{ marginBottom: 8 }}>
+                <Input
+                  value={animation}
+                  onChange={e => setAnimation(e.target.value)}
+                  onBlur={() => setProp(p => { p.animation = animation; })}
+                  size="small"
+                  placeholder="e.g. fadeIn 1s"
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
         )}
-        {supportedProps.includes("transform") && (
-          <div>
-            <span className="text-xs">Transform</span>
-            <Input
-              value={props.transform}
-              onChange={e => setProp(p => { p.transform = e.target.value; })}
-              size="small"
-              placeholder="e.g. rotate(10deg)"
-            />
-          </div>
-        )}
-        {supportedProps.includes("animation") && (
-          <div>
-            <span className="text-xs">Animation</span>
-            <Input
-              value={props.animation}
-              onChange={e => setProp(p => { p.animation = e.target.value; })}
-              size="small"
-              placeholder="e.g. fadeIn 1s"
-            />
-          </div>
-        )}
-      </div>
-    </div>
+
+        <Form.Item>
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            onClick={onDelete}
+            block
+            style={{ marginTop: 8 }}
+          >
+            Delete
+          </Button>
+        </Form.Item>
+      </Form>
+    </div>,
+    document.body
   );
 }
