@@ -106,6 +106,7 @@ export function StyleMenu({
   const [animation, setAnimation] = useState(props.animation || "");
   const [objectFit, setObjectFit] = useState(props.objectFit || "cover");
   const [link, setLink] = useState(props.link || "");
+  const [rotation, setRotation] = useState(0);
 
   // Draggable menu
   const menuRef = useRef(null);
@@ -131,20 +132,20 @@ export function StyleMenu({
       : parseInt((props.borderRadius || "0").split(" ")[3]) || 0,
   });
 
-  // Update borderRadius when cornerRadius changes
-  useEffect(() => {
-    if (!supportedProps.includes("borderRadius")) return;
-    if (radiusMode === "all") {
-      setProp((p) => {
-        p.borderRadius = cornerRadius.tl;
-      });
-    } else {
-      setProp((p) => {
-        p.borderRadius = `${cornerRadius.tl}px ${cornerRadius.tr}px ${cornerRadius.br}px ${cornerRadius.bl}px`;
-      });
-    }
-    // eslint-disable-next-line
-  }, [cornerRadius, radiusMode]);
+// Update borderRadius when cornerRadius changes
+useEffect(() => {
+  if (!supportedProps.includes("borderRadius")) return;
+  
+  // Only handle "corners" mode in the effect
+  if (radiusMode === "corners") {
+    setProp((p) => {
+      p.borderRadius = `${cornerRadius.tl}px ${cornerRadius.tr}px ${cornerRadius.br}px ${cornerRadius.bl}px`;
+    });
+  }
+
+  
+  // eslint-disable-next-line
+}, [cornerRadius, radiusMode]);
 
   // Google Fonts loader
   useEffect(() => {
@@ -177,13 +178,24 @@ export function StyleMenu({
     };
   }, []);
 
+
+ // extract rotation value from existing transform
+useEffect(() => {
+  if (props.transform) {
+    const rotateMatch = props.transform.match(/rotate\((-?\d+)deg\)/);
+    if (rotateMatch) {
+      setRotation(parseInt(rotateMatch[1], 10));
+    }
+  }
+}, [props.transform]);
+
   // Prevent drag bubbling to main component
   const stopAll = (e) => e.stopPropagation();
 
   // Button group helper (like in Image component)
-  const ButtonGroup = ({ options, value, onChange, icons }) => (
+  const ButtonGroup = ({ options = [], value, onChange, icons }) => (
     <Space.Compact block>
-      {options.map((opt, i) => (
+      {options?.map((opt, i) => (
         <Tooltip title={opt} key={opt}>
           <Button
             type={value === opt ? "primary" : "default"}
@@ -284,9 +296,7 @@ export function StyleMenu({
 
       {/* Content - Using Form like editorMenu */}
       <Form 
-      onPointerDown={stopAll}
-      onPointerMove={stopAll}
-      onPointerUp={stopAll}
+      onClick={stopAll}
         className="overflow-y-auto"
         layout="vertical" 
         size="small" 
@@ -396,7 +406,7 @@ export function StyleMenu({
                   max={72}
                   value={fontSize}
                   onChange={val => setFontSize(val)}
-                  onAfterChange={val => setProp(p => { p.fontSize = val; })}
+                  onChangeComplete={val => setProp(p => { p.fontSize = val; })}
                   size="small"
                 />
               </Form.Item>
@@ -454,8 +464,12 @@ export function StyleMenu({
                   min={10}
                   max={1200}
                   value={width}
-                  onChange={val => setWidth(val)}
-                  onAfterChange={val => setProp(p => { p.width = val; })}
+                  onChange={val => {
+        setWidth(val);
+        // Update parent in real-time
+        setProp(p => { p.width = val; });
+      }}
+                  //onChangeComplete={val => setProp(p => { p.width = val; })}
                   size="small"
                 />
               </Form.Item>
@@ -466,12 +480,176 @@ export function StyleMenu({
                   min={10}
                   max={800}
                   value={height}
-                  onChange={val => setHeight(val)}
-                  onAfterChange={val => setProp(p => { p.height = val; })}
+                  onChange={val => {
+        setHeight(val);
+        // Update parent in real-time
+        setProp(p => { p.height = val; });
+      }}
                   size="small"
                 />
               </Form.Item>
             )}
+            {supportedProps.includes("zIndex") && (
+              <Form.Item label="Z-Index" style={{ marginBottom: 8 }}>
+                <Slider
+                  min={0}
+                  max={100}
+                  value={zIndex}
+                  onChange={val => setZIndex(val)}
+                  onChangeComplete={val => setProp(p => { p.zIndex = val; })}
+                  size="small"
+                />
+              </Form.Item>
+            )}
+
+            {supportedProps.includes("transform") && (
+  <>
+    <Form.Item label="Rotation" style={{ marginBottom: 8 }}>
+      <div style={{}}>
+        <BgColorsOutlined rotate={rotation} />
+        <Slider
+          min={-180}
+          max={180}
+          value={rotation}
+          onChange={val => {
+  setRotation(val);
+  
+  // Simplified, direct transform application
+  setProp(p => { 
+    p.transform = `rotate(${val}deg)`;
+    return p; // Make sure to return p
+  });
+  
+  // Also update local state to keep UI in sync
+  setTransform(`rotate(${val}deg)`);
+}}
+          size="small"
+          marks={{
+            '-180': '-180°',
+            0: '0°',
+            180: '180°'
+          }}
+        />
+        {rotation}°
+      </div>
+    </Form.Item>
+  </>
+)}
+
+            {/* Border radius */}
+            {supportedProps.includes("borderRadius") && (
+              <Form.Item label="Radius" style={{ marginBottom: 8 }}>
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    size="small"
+                    type={radiusMode === "all" ? "primary" : "default"}
+                    onClick={() => setRadiusMode("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    size="small"
+                    type={radiusMode === "corners" ? "primary" : "default"}
+                    onClick={() => setRadiusMode("corners")}
+                  >
+                    Corners
+                  </Button>
+                </div>
+                {radiusMode === "all" ? (
+  <div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <RadiusUpleftOutlined />
+      {cornerRadius.tl} px
+    </div>
+    <div className="w-full flex-shrink-0">
+      <Slider
+        min={0}
+        max={100}
+        value={cornerRadius.tl}
+        onChange={(val) => {
+          // Update state during dragging
+          setCornerRadius((r) => ({
+            tl: val,
+            tr: val,
+            br: val,
+            bl: val,
+          }));
+          
+          // Important: Update parent in real-time
+          setProp(p => { 
+            p.borderRadius = val; // Set as number, not string with px
+            return p;
+          });
+        }}
+        size="small"
+        style={{ width: '100%' }} // Add explicit width
+      />
+    </div>
+  </div>
+) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusUpleftOutlined /> TL
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.tl}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, tl: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusUprightOutlined /> TR
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.tr}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, tr: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                    <div>
+                      <div style={{display: "flex", fontSize: 12, fontWeight: 500, color: "#444", gap: 4 }}>
+                        <div><RadiusBottomrightOutlined /> BR</div>
+                        {cornerRadius.br} px
+                      </div>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.br}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, br: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
+                        <RadiusBottomleftOutlined /> BL
+                      </span>
+                      <Slider
+                        min={0}
+                        max={100}
+                        value={cornerRadius.bl}
+                        onChange={(val) =>
+                          setCornerRadius((r) => ({ ...r, bl: val }))
+                        }
+                        size="small"
+                      />
+                    </div>
+                  </div>
+                )}
+              </Form.Item>
+            )}
+
             {supportedProps.includes("margin") && (
               <Form.Item label="Margin" style={{ marginBottom: 8 }}>
                 <Input
@@ -505,108 +683,7 @@ export function StyleMenu({
                 />
               </Form.Item>
             )}
-            {/* Border radius */}
-            {supportedProps.includes("borderRadius") && (
-              <Form.Item label="Radius" style={{ marginBottom: 8 }}>
-                <div className="flex gap-2 mb-2">
-                  <Button
-                    size="small"
-                    type={radiusMode === "all" ? "primary" : "default"}
-                    onClick={() => setRadiusMode("all")}
-                  >
-                    All
-                  </Button>
-                  <Button
-                    size="small"
-                    type={radiusMode === "corners" ? "primary" : "default"}
-                    onClick={() => setRadiusMode("corners")}
-                  >
-                    Corners
-                  </Button>
-                </div>
-                {radiusMode === "all" ? (
-  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <RadiusUpleftOutlined />
-    <Slider
-      min={0}
-      max={100}
-      value={cornerRadius.tl}
-      onChange={(val) =>
-        setCornerRadius((r) => ({
-          tl: val,
-          tr: val,
-          br: val,
-          bl: val,
-        }))
-      }
-      onAfterChange={(val) => 
-        setProp(p => { p.borderRadius = val; })
-      }
-      size="small"
-    />
-  </div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <div>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
-                        <RadiusUpleftOutlined /> TL
-                      </span>
-                      <Slider
-                        min={0}
-                        max={100}
-                        value={cornerRadius.tl}
-                        onChange={(val) =>
-                          setCornerRadius((r) => ({ ...r, tl: val }))
-                        }
-                        size="small"
-                      />
-                    </div>
-                    <div>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
-                        <RadiusUprightOutlined /> TR
-                      </span>
-                      <Slider
-                        min={0}
-                        max={100}
-                        value={cornerRadius.tr}
-                        onChange={(val) =>
-                          setCornerRadius((r) => ({ ...r, tr: val }))
-                        }
-                        size="small"
-                      />
-                    </div>
-                    <div>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
-                        <RadiusBottomrightOutlined /> BR
-                      </span>
-                      <Slider
-                        min={0}
-                        max={100}
-                        value={cornerRadius.br}
-                        onChange={(val) =>
-                          setCornerRadius((r) => ({ ...r, br: val }))
-                        }
-                        size="small"
-                      />
-                    </div>
-                    <div>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: "#444" }}>
-                        <RadiusBottomleftOutlined /> BL
-                      </span>
-                      <Slider
-                        min={0}
-                        max={100}
-                        value={cornerRadius.bl}
-                        onChange={(val) =>
-                          setCornerRadius((r) => ({ ...r, bl: val }))
-                        }
-                        size="small"
-                      />
-                    </div>
-                  </div>
-                )}
-              </Form.Item>
-            )}
+            
             {supportedProps.includes("boxShadow") && (
               <Form.Item label="Shadow" style={{ marginBottom: 8 }}>
                 <Input
@@ -660,18 +737,7 @@ export function StyleMenu({
                 />
               </Form.Item>
             )}
-            {supportedProps.includes("zIndex") && (
-              <Form.Item label="Z-Index" style={{ marginBottom: 8 }}>
-                <Slider
-                  min={0}
-                  max={100}
-                  value={zIndex}
-                  onChange={val => setZIndex(val)}
-                  onAfterChange={val => setProp(p => { p.zIndex = val; })}
-                  size="small"
-                />
-              </Form.Item>
-            )}
+            
             {supportedProps.includes("overflow") && (
               <Form.Item label="Overflow" style={{ marginBottom: 8 }}>
                 <ButtonGroup
@@ -694,17 +760,27 @@ export function StyleMenu({
             </div>}
           >
             {supportedProps.includes("backgroundColor") && (
-              <Form.Item label="Color" style={{ marginBottom: 8 }}>
-                <Input
-                  type="color"
-                  value={backgroundColor}
-                  onChange={e => setBackgroundColor(e.target.value)}
-                  onBlur={() => setProp(p => { p.backgroundColor = backgroundColor; })}
-                  size="small"
-                  style={{ width: 40, height: 32, padding: 2 }}
-                />
-              </Form.Item>
-            )}
+  <Form.Item label="Color" style={{ marginBottom: 8 }}>
+    <Input
+      type="color"
+      value={backgroundColor}
+      onChange={e => {
+        const newColor = e.target.value;
+        setBackgroundColor(newColor);
+        
+        // Update both properties in real-time to ensure compatibility
+        setProp(p => { 
+          p.backgroundColor = newColor;
+          p.background = newColor; // Also set the background property
+          return p;
+        });
+      }}
+      // Remove onBlur handler since we're updating in real-time
+      size="small"
+      style={{ width: 40, height: 32, padding: 2 }}
+    />
+  </Form.Item>
+)}
             {supportedProps.includes("backgroundImage") && (
               <Form.Item label="Image" style={{ marginBottom: 8 }}>
                 <Input
@@ -722,7 +798,7 @@ export function StyleMenu({
 
         {/* Object Fit (for images) */}
         {supportedProps.includes("objectFit") && (
-          <Form.Item label="Object Fit">
+          <Form.Item label="Objecta Fit">
             <Space.Compact block>
               {["fill", "contain", "cover", "none", "scale-down"].map(opt => (
                 <Button

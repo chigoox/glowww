@@ -22,7 +22,7 @@ export default function App() {
 
         <div className="flex-row-reverse flex gap-4">
           {/* Main Content */}
-         <div className=' border-amber-700 border-2 w-full h-full'>
+         <div className='  w-full h-full'>
            <Frame className='w-full'>
             <Element is={Container} padding={5} background="#eee" canvas>
              

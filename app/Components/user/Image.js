@@ -61,19 +61,20 @@ export const Image = ({
   y = 0,
   zIndex = 1,
   children,
+  transform = "none",
 }) => {
 
 
 
 const {
-    id,
-    connectors: { connect, drag },
-    hasSelectedNode,
-    actions: { setProp }
-  } = useNode((node) => ({
-    id: node.id,
-    hasSelectedNode: node.events.selected,
-  }));
+  id,
+  connectors: { connect, drag },
+  hasSelectedNode,
+  actions: { setProp }
+} = useNode((state) => ({  // Change from 'node' to 'state'
+  id: state.id,
+  hasSelectedNode: state.events.selected,
+}));
 
 const { actions } = useEditor();
 
@@ -85,15 +86,27 @@ const { actions } = useEditor();
   const [menuDragPos, setMenuDragPos] = useState({ x: 100, y: 100 });
   const handleRefs = useRef({});
   const dragIconRef = useRef(null);
+  
 
+  const [isSelected, setIsSelected] = useState(false);
+useEffect(() => {
+  setIsSelected(hasSelectedNode);
+}, [hasSelectedNode]);
+const handleClick = (e) => {
+  e.stopPropagation();
+  setIsSelected(true);
+  // Try to force selection in Craft.js
+  actions.selectNode(id);
+};
+  
   const [isCraftDrag, setIsCraftDrag] = useState(false);
   
-// Only set menu position when opening
-const handleMenuOpen = (e) => {
-  if (!menuOpen) {
-    setMenuDragPos({ x: e.clientX, y: e.clientY });
-    setMenuOpen(true);
-  }
+  // Only set menu position when opening
+  const handleMenuOpen = (e) => {
+    if (!menuOpen) {
+      setMenuDragPos({ x: e.clientX, y: e.clientY });
+      setMenuOpen(true);
+    }
 };
 
 useEffect(() => {
@@ -101,6 +114,14 @@ useEffect(() => {
     connect(drag(dragIconRef.current));
   }
 }, [connect, drag]);
+
+// Connect the main div properly in the useEffect
+useEffect(() => {
+  if (ref.current) {
+    connect(ref.current);
+  }
+}, [connect, ref]);
+
 
 // Make the menu draggable with interact.js
 useEffect(() => {
@@ -122,7 +143,7 @@ useEffect(() => {
 }, [menuRef, menuOpen]);
 
 // Resize with 8 handles
-  useEffect(() => {
+useEffect(() => {
     handles.forEach(handle => {
       const handleEl = handleRefs.current[handle.key];
       if (!handleEl) return;
@@ -148,15 +169,15 @@ useEffect(() => {
                 width = Math.max(50, width - event.dx);
                 height = Math.max(50, height + event.dy);
                 x += event.dx;
-              }
-              // Side handles
-              else if (handle.key === "tm") {
-                height = Math.max(50, height - event.dy);
-                y += event.dy;
-              } else if (handle.key === "bm") {
-                height = Math.max(50, height + event.dy);
-              } else if (handle.key === "ml") {
-                width = Math.max(50, width - event.dx);
+                }
+                // Side handles
+                else if (handle.key === "tm") {
+                  height = Math.max(50, height - event.dy);
+                  y += event.dy;
+                } else if (handle.key === "bm") {
+                  height = Math.max(50, height + event.dy);
+                } else if (handle.key === "ml") {
+                  width = Math.max(50, width - event.dx);
                 x += event.dx;
               } else if (handle.key === "mr") {
                 width = Math.max(50, width + event.dx);
@@ -175,16 +196,16 @@ useEffect(() => {
       });
     };
   }, [setProp]);
-
+  
   // Sync state with props
   useEffect(() => { setImgState({ x, y, width, height }); }, [x, y, width, height]);
-
-useEffect(() => {
-  const handleUp = () => setIsCraftDrag(false);
-  window.addEventListener('mouseup', handleUp);
-  return () => window.removeEventListener('mouseup', handleUp);
-}, []);
-
+  
+  useEffect(() => {
+    const handleUp = () => setIsCraftDrag(false);
+    window.addEventListener('mouseup', handleUp);
+    return () => window.removeEventListener('mouseup', handleUp);
+  }, []);
+  
   // For interact.js state
   const [imgState, setImgState] = useState({
     x,
@@ -201,17 +222,17 @@ useEffect(() => {
       x, y, width, height, borderRadius
     }));
   }, [x, y, width, height, borderRadius]);
-
+  
   useEffect(() => {
     setIsClient(true);
   }, []);
-
+  
   // interact.js for drag and resize
  useEffect(() => {
-  if (!ref.current || isCraftDrag) return; // <-- Don't enable interact.js drag if Craft.js drag is active
+   if (!ref.current || isCraftDrag) return; // <-- Don't enable interact.js drag if Craft.js drag is active
 
-  interact(ref.current)
-    .draggable({
+   interact(ref.current)
+   .draggable({
       listeners: {
         move(event) {
           setImgState((prev) => {
@@ -226,14 +247,14 @@ useEffect(() => {
         },
       },
     });
-
-  return () => {
-    if (ref.current) {
-      interact(ref.current).unset();
-    }
-  };
-}, [ref, setProp, isCraftDrag]);
-
+    
+    return () => {
+      if (ref.current) {
+        interact(ref.current).unset();
+      }
+    };
+  }, [ref, setProp, isCraftDrag]);
+  
   // Handle base64 upload
   const handleBase64Upload = (e) => {
     const file = e.target.files[0];
@@ -244,12 +265,12 @@ useEffect(() => {
     };
     reader.readAsDataURL(file);
   };
-
+  
   // Placeholder for Firebase upload
   const handleFirebaseUpload = () => {
     alert("Firebase upload not implemented. Add your logic here.");
   };
-
+  
   // Button group for options
   const ButtonGroup = ({ options, value, onChange, size = "small" }) => (
     <Space.Compact block>
@@ -283,7 +304,7 @@ useEffect(() => {
             size="small"
             style={{ minWidth: 32, padding: 0 }}
             onClick={() => onChange(opt.value)}
-          >
+            >
             {opt.label}
           </Button>
           <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 px-2 py-1 bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition z-50">
@@ -293,7 +314,7 @@ useEffect(() => {
       ))}
     </Space.Compact>
   );
-
+  
   // Border radius controls (all or individual corners)
   const [radiusMode, setRadiusMode] = useState("all");
   const [cornerRadius, setCornerRadius] = useState({
@@ -313,13 +334,13 @@ useEffect(() => {
       });
     }
   }, [cornerRadius, radiusMode, setProp]);
-
+  
   // Editor menu
   const editorMenu = isClient && menuOpen
-    ? ReactDOM.createPortal(
-        <div
-           ref={menuRef}
-         style={{
+  ? ReactDOM.createPortal(
+    <div
+    ref={menuRef}
+    style={{
           position: "fixed",
           zIndex: 9999,
           top: menuDragPos.y,
@@ -351,7 +372,7 @@ useEffect(() => {
             <Button
   danger
   icon={<DeleteOutlined />}
- onClick={() => actions.delete(id)}
+  onClick={() => actions.delete(id)}
   block
   className="text-xs"
   style={{ marginTop: 8, height: 24, width:24, border:"none" }}
@@ -362,7 +383,7 @@ useEffect(() => {
               type="text"
               style={{ float: "right" }}
               onClick={() => setMenuOpen(false)}
-            >
+              >
               ✕
             </Button>
           </div>
@@ -508,18 +529,18 @@ useEffect(() => {
                   size="small"
                   type={radiusMode === "corners" ? "primary" : "default"}
                   onClick={() => setRadiusMode("corners")}
-                >
+                  >
                   Corners
                 </Button>
               </div>
               {radiusMode === "all" ? (
                 <Slider
-                  min={0}
-                  max={50}
-                  value={cornerRadius.tl}
-                  onChange={val => setCornerRadius(r => ({ tl: val, tr: val, br: val, bl: val }))}
-                  tooltip={{ open: false }}
-                  size="small"
+                min={0}
+                max={50}
+                value={cornerRadius.tl}
+                onChange={val => setCornerRadius(r => ({ tl: val, tr: val, br: val, bl: val }))}
+                tooltip={{ open: false }}
+                size="small"
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
@@ -532,7 +553,7 @@ useEffect(() => {
                       onChange={val => setCornerRadius(r => ({ ...r, tl: val }))}
                       tooltip={{ open: false }}
                       size="small"
-                    />
+                      />
                   </div>
                   <div>
                     <span className="text-xs">Top Right</span>
@@ -543,7 +564,7 @@ useEffect(() => {
                       onChange={val => setCornerRadius(r => ({ ...r, tr: val }))}
                       tooltip={{ open: false }}
                       size="small"
-                    />
+                      />
                   </div>
                   <div>
                     <span className="text-xs">Bottom Right</span>
@@ -554,7 +575,7 @@ useEffect(() => {
                       onChange={val => setCornerRadius(r => ({ ...r, br: val }))}
                       tooltip={{ open: false }}
                       size="small"
-                    />
+                      />
                   </div>
                   <div>
                     <span className="text-xs">Bottom Left</span>
@@ -565,7 +586,7 @@ useEffect(() => {
                       onChange={val => setCornerRadius(r => ({ ...r, bl: val }))}
                       tooltip={{ open: false }}
                       size="small"
-                    />
+                      />
                   </div>
                 </div>
               )}
@@ -575,7 +596,7 @@ useEffect(() => {
   <Button
   danger
   icon={<DeleteOutlined />}
- onClick={() => actions.delete(id)}
+  onClick={() => actions.delete(id)}
   block
   style={{ marginTop: 8 }}
 >
@@ -586,11 +607,13 @@ useEffect(() => {
         </div>,
         document.body
       )
-    : null;
-
-  return (
-    <div
+      : null;
+      
+      console.log(hasSelectedNode, "hasSelectedNode");
+      return (
+        <div
     ref={ref}
+    onClick={handleClick}
     className={`absolute ${hasSelectedNode ? "border-2 border-blue-500" : ""} shadow`}
     style={{
       left: imgState.x,
@@ -607,6 +630,7 @@ useEffect(() => {
       transition: "box-shadow 0.2s",
       display: display,
       position:  position,
+     transform: transform,
     }}
     onContextMenu={e => {
   e.preventDefault();
@@ -628,8 +652,9 @@ useEffect(() => {
   <div
     key={handle.key}
     ref={el => handleRefs.current[handle.key] = el}
-    className="absolute"
+    className={`absolute`}
     style={{
+      opacity: isSelected ? 1 : 0,
       width: HANDLE_SIZE,
       height: HANDLE_SIZE,
       background: "red",
@@ -645,6 +670,7 @@ useEffect(() => {
   ref={dragIconRef}
   style={{
     position: "absolute",
+    opacity: isSelected ? 1 : 0,
     left: "50%",
     bottom: -HANDLE_SIZE * 3,
     transform: "translateX(-50%)",
@@ -686,8 +712,8 @@ useEffect(() => {
   }}
     setProp={setProp}
     supportedProps={['src','alt',
-      "width", "height", "border", "borderRadius", "boxShadow", "backgroundColor", "backgroundImage", "objectFit",
-      "position", "display", "zIndex", "overflow", "margin", "padding", "float", "transition", "transform"
+      "height","width", "border", "borderRadius", "boxShadow", "backgroundColor", "backgroundImage", "objectFit",
+      "position", "zIndex", "margin", "float", "transition", "transform"
     ]}
     onClose={() => setMenuOpen(false)}
     onDelete={() => actions.delete(id)}

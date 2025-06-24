@@ -30,7 +30,9 @@ export const Text = ({
   background = "#fff",
   border = "none",
   borderRadius = 0,
+  padding = 0,
   children,
+  transform = "none",
 }) => {
     const { id, connectors: {connect, drag}, hasSelectedNode, hasDraggedNode, actions: {setProp} } = useNode((state) => ({
     hasSelectedNode: state.events.selected,
@@ -85,11 +87,12 @@ export const Text = ({
           borderRadius,
           menuX: menuPosition.x,
           menuY: menuPosition.y,
+          transform,
         }}
         setProp={setProp}
         supportedProps={[
-          "text", "fontSize", "textAlign", "fontFamily", "color", "background",
-          "border", "borderRadius", "textDecoration", "fontStyle", "fontWeight"
+          "text", "fontSize","position", "textAlign", "fontFamily", "color", "background","transform","padding",
+          "border", "borderRadius", "display","textDecoration", "fontStyle", "fontWeight", 'backgroundColor'
         ]}
         onClose={() => setMenuOpen(false)}
         onDelete={() => actions.delete(id)}
@@ -99,31 +102,42 @@ export const Text = ({
     : null;
 
   return (
-    <div ref={ref}>
-      <Typography.Paragraph
-        ref={textRef}
-        style={{
-          fontSize: `${fontSize}px`,
-          textAlign,
-          fontFamily,
-          color,
-          background,
-          border,
-          borderRadius,
-          marginBottom: 0,
-          cursor: "pointer"
-        }}
-        onContextMenu={e => {
-  e.preventDefault();
-  setMenuPosition({ x: e.clientX, y: e.clientY });
-  setMenuOpen(true);
-}}
-      >
-        {text || children}
-      </Typography.Paragraph>
-      {editorMenu}
-    </div>
-  );
+  <div 
+    ref={ref}
+    style={{
+      transform: transform, 
+      transformOrigin: 'center center',
+      display: 'inline-block',
+      width: 'fit-content', // Add this
+      position: 'relative', // Add this
+    }}
+  >
+    <Typography.Paragraph
+      ref={textRef}
+      style={{
+        fontSize: `${fontSize}px`,
+        textAlign,
+        fontFamily,
+        color,
+        background,
+        border,
+        borderRadius,
+        marginBottom: 0,
+        cursor: "pointer",
+      padding,
+
+      }}
+      onContextMenu={e => {
+        e.preventDefault();
+        setMenuPosition({ x: e.clientX, y: e.clientY });
+        setMenuOpen(true);
+      }}
+    >
+      {text || children}
+    </Typography.Paragraph>
+    {editorMenu}
+  </div>
+);
 };
 
 Text.craft = {
@@ -136,6 +150,8 @@ Text.craft = {
     color: "#222",
     border: "none",
     borderRadius: 0,
+    padding: 0,
+    transform: "none",
   },
   rules: {
     canDrag: (node) => node.data.props.text !== "Drag",
