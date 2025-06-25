@@ -1,43 +1,48 @@
 'use client'
-import React from 'react';
-import { Typography } from 'antd';
+import { useState } from 'react';
 
 import { Toolbox } from './Components/ToolBox';
-import { SettingsPanel } from './Components/SettingsPanel';
 import { Topbar } from './Components/TopBar';
 
-import { Container } from './Components/user/Container';
-import { Button } from './Components/user/Button';
-import { Card, CardBottom, CardTop } from './Components/user/UserCard';
-import { Text } from './Components/user/Text';
-import { Image } from './Components/user/Image';
-import {Editor, Frame, Element} from "@craftjs/core";
+import { Editor, Element, Frame } from "@craftjs/core";
+import { Box } from './Components/user/Box';
+import { StyleMenu } from './Components/StyleMenu';
 
 export default function App() {
+  const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
+
+
   return (
     <div className="mx-auto  p-4">
-      <Editor resolver={{Card, Button, Text, Container, CardTop, CardBottom, Image}}> 
+      <Editor resolver={{Box}}> 
       <div className="pt-2 space-y-2">
         <Topbar />
 
-        <div className="flex-row-reverse flex gap-4">
+        <div className="flex-row-reverse  flex gap-4">
           {/* Main Content */}
-         <div className='  w-full h-full'>
-           <Frame className='w-full'>
-            <Element is={Container} padding={5} background="#eee" canvas>
-             
-             
-            </Element>
-          </Frame>
+          <StyleMenu />
+
+         <div className=' w-full h-full'>
+            <Frame className='w-full'>
+              <Element is={Box} padding={5} background="#eee" 
+                    canvas
+              >
+              
+              
+              </Element>
+            </Frame>
          </div>
 
           {/* Sidebar */}
           <div className="w-32">
             <div className="bg-white rounded shadow p-2 space-y-4">
-              <Toolbox />
-              <SettingsPanel />
+              <Toolbox openMenuNodeId={openMenuNodeId}
+                  setOpenMenuNodeId={setOpenMenuNodeId} />
+              
             </div>
+
           </div>
+
         </div>
       </div>
        </Editor>

@@ -106,6 +106,8 @@ export const Container = ({
   // Children & other props
   children,
   ySpacing,
+  openMenuNodeId,
+   setOpenMenuNodeId,
   ...props 
 }) => {
   const { id, connectors: { connect, drag }, actions: { setProp }, selected } = useNode((node) => ({
@@ -118,7 +120,9 @@ export const Container = ({
   const dragHandleRef = useRef(null);
 
   // StyleMenu state
-  const [menuOpen, setMenuOpen] = useState(false);
+  console.log(openMenuNodeId)
+ const menuOpen = openMenuNodeId === id;
+ console.log(menuOpen)
   const [menuDragPos, setMenuDragPos] = useState({ x: 100, y: 100 });
   const [isClient, setIsClient] = useState(false);
 
@@ -137,9 +141,10 @@ export const Container = ({
 
   // Open style menu on right click
   const handleContextMenu = (e) => {
+    console.log('first', openMenuNodeId, id)
     e.preventDefault();
     setMenuDragPos({ x: e.clientX, y: e.clientY });
-    setMenuOpen(true);
+    setOpenMenuNodeId(id);
   };
 
   // Supported style props for the menu
@@ -165,7 +170,6 @@ export const Container = ({
     }
     return value;
   };
-
   return (
     <Card
       className={`${selected ? 'ring-2 ring-blue-500' : ''} overflow-hidden`}
@@ -237,7 +241,25 @@ export const Container = ({
       >
         <DragOutlined />
       </div>
-      {children}
+      {/* Pass openMenuNodeId and setOpenMenuNodeId to all children */}
+    {React.Children.map(children, child => {
+  if (React.isValidElement(child) && child.type !== React.Fragment) {
+    return React.cloneElement(child, { openMenuNodeId, setOpenMenuNodeId });
+  }
+  // For fragments, recursively map their children
+  if (React.isValidElement(child) && child.type === React.Fragment) {
+    return React.cloneElement(
+      child,
+      {},
+      React.Children.map(child.props.children, c =>
+        React.isValidElement(c)
+          ? React.cloneElement(c, { openMenuNodeId, setOpenMenuNodeId })
+          : c
+      )
+    );
+  }
+  return child;
+})}
       {/* StyleMenu portal */}
       {isClient && menuOpen && (
         <StyleMenu
@@ -280,14 +302,14 @@ export const Container = ({
             displayOptions,
             flexDirectionOptions,
             flexWrapOptions,
-            alignItemsOptions,
+            alignItems:alignItemsOptions,
             justifyContentOptions,
             overflowOptions,
             ...props
           }}
           setProp={setProp}
           supportedProps={supportedProps}
-          onClose={() => setMenuOpen(false)}
+          onClose={() => setOpenMenuNodeId(null)}
           onDelete={() => actions.delete(id)}
         />
       )}

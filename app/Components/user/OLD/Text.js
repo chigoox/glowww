@@ -33,6 +33,8 @@ export const Text = ({
   padding = 0,
   children,
   transform = "none",
+  openMenuNodeId,
+   setOpenMenuNodeId
 }) => {
     const { id, connectors: {connect, drag}, hasSelectedNode, hasDraggedNode, actions: {setProp} } = useNode((state) => ({
     hasSelectedNode: state.events.selected,
@@ -52,7 +54,7 @@ export const Text = ({
     }
   }, [hasSelectedNode]);
 
-    const [menuOpen, setMenuOpen] = useState(false);
+    const menuOpen = openMenuNodeId === id;
   const [menuPosition, setMenuPosition] = useState({ x: 100, y: 100 });
 
    const [isClient, setIsClient] = useState(false);
@@ -94,7 +96,7 @@ export const Text = ({
           "text", "fontSize","position", "textAlign", "fontFamily", "color", "background","transform","padding",
           "border", "borderRadius", "display","textDecoration", "fontStyle", "fontWeight", 'backgroundColor'
         ]}
-        onClose={() => setMenuOpen(false)}
+        onClose={() => setOpenMenuNodeId(null)}
         onDelete={() => actions.delete(id)}
       />,
         document.body
@@ -130,7 +132,7 @@ export const Text = ({
       onContextMenu={e => {
         e.preventDefault();
         setMenuPosition({ x: e.clientX, y: e.clientY });
-        setMenuOpen(true);
+        setOpenMenuNodeId(id);
       }}
     >
       {text || children}

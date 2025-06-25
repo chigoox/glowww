@@ -5,7 +5,7 @@ import React, { useRef, useEffect, useState,useMemo } from "react";
 import { Input, Form, Button, Slider, Space } from "antd";
 import {DeleteOutlined,DragOutlined, BorderOutlined, LinkOutlined, UploadOutlined, BgColorsOutlined, PictureOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, VerticalAlignMiddleOutlined, AppstoreOutlined, ColumnWidthOutlined, ColumnHeightOutlined, BorderVerticleOutlined, BorderHorizontalOutlined } from '@ant-design/icons';
 import interact from "interactjs";
-import { StyleMenu } from "./StyleMenu"; 
+import { StyleMenu } from "../StyleMenu"; 
 
 
 const HANDLE_SIZE = 12;
@@ -62,6 +62,8 @@ export const Image = ({
   zIndex = 1,
   children,
   transform = "none",
+   openMenuNodeId,
+   setOpenMenuNodeId
 }) => {
 
 
@@ -79,7 +81,8 @@ const {
 const { actions } = useEditor();
 
   const ref = useRef(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const menuOpen = openMenuNodeId === id;
+  console.log(openMenuNodeId)
   const [menuPosition, setMenuPosition] = useState({ x: 100, y: 100 });
   const [isClient, setIsClient] = useState(false);
   const menuRef = useRef(null);
@@ -104,8 +107,9 @@ const handleClick = (e) => {
   // Only set menu position when opening
   const handleMenuOpen = (e) => {
     if (!menuOpen) {
+      console.log(id)
       setMenuDragPos({ x: e.clientX, y: e.clientY });
-      setMenuOpen(true);
+      setOpenMenuNodeId(id);
     }
 };
 
@@ -382,7 +386,7 @@ useEffect(() => {
               size="small"
               type="text"
               style={{ float: "right" }}
-              onClick={() => setMenuOpen(false)}
+              onClick={() => setOpenMenuNodeId(null)}
               >
               ✕
             </Button>
@@ -715,7 +719,7 @@ useEffect(() => {
       "height","width", "border", "borderRadius", "boxShadow", "backgroundColor", "backgroundImage", "objectFit",
       "position", "zIndex", "margin", "float", "transition", "transform"
     ]}
-    onClose={() => setMenuOpen(false)}
+   onClose={() => setOpenMenuNodeId(null)}
     onDelete={() => actions.delete(id)}
   />} 
         
