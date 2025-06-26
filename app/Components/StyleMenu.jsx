@@ -1771,19 +1771,21 @@ export function StyleMenu({
 
   return (
     <div
-      style={{
-        background: "#fff",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        borderRadius: 8,
-        minWidth: 320,
-        maxWidth: 450,
-        fontSize: 13,
-        border: "1px solid #eee",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column"
-      }}
-    >
+    style={{
+      background: "#fff",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+      borderRadius: 8,
+      minWidth: 320,
+      maxWidth: 450,
+      fontSize: 13,
+      border: "1px solid #eee",
+      height: "89vh", // Change from "100%" to "100vh"
+      maxHeight: "89vh", // Add max height constraint
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden" // Prevent overflow on the main container
+    }}
+  >
       {/* Header */}
       <div
         style={{
@@ -1822,11 +1824,12 @@ export function StyleMenu({
 
       <div
         style={{
-          flex: 1,
-          padding: "0",
-          overflowY: "auto",
-          minHeight: 0
-        }}
+        flex: 1,
+        padding: "0",
+        overflowY: "auto",
+        minHeight: 0,
+        maxHeight: "calc(100vh - 60px)" // Subtract header height
+      }}
       >
         <Collapse
           items={collapseItems}

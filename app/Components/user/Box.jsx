@@ -5,8 +5,37 @@ import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
 import { DragOutlined } from '@ant-design/icons';
 
-
-export const Box = ({children }) => {
+export const Box = ({
+  // Add all the style props that StyleMenu can control
+  width = "auto",
+  height = "auto",
+  padding = 20,
+  margin = "5px 0",
+  backgroundColor = "white",
+  background = "white",
+  border = "none",
+  borderRadius = 0,
+  boxShadow = "none",
+  display = "block",
+  position = "relative",
+  zIndex = 1,
+  overflow = "visible",
+  transform = "none",
+  opacity = 1,
+  top,
+  right,
+  bottom,
+  left,
+  minWidth,
+  maxWidth,
+  minHeight,
+  maxHeight,
+  flexDirection = "row",
+  alignItems = "stretch",
+  justifyContent = "flex-start",
+  gap = 0,
+  children 
+}) => {
   const { id, connectors: { connect, drag }, actions: { setProp }, selected } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
@@ -15,7 +44,6 @@ export const Box = ({children }) => {
 
   const cardRef = useRef(null);
   const dragHandleRef = useRef(null);
-
 
   useEffect(() => {
     if (cardRef.current) {
@@ -26,19 +54,48 @@ export const Box = ({children }) => {
     }
   }, [connect, drag]);
 
-  // Open style menu on right click
-  const handleContextMenu = (e) => {
-    console.log('first', openMenuNodeId, id)
-    e.preventDefault();
-   
+  // Helper function to process values (add px to numbers where appropriate)
+  const processValue = (value, property) => {
+    if (typeof value === 'number' && !['opacity', 'zIndex'].includes(property)) {
+      return `${value}px`;
+    }
+    return value;
   };
 
-
   return (
-    <Card
+    <div
       className={`${selected ? 'ring-2 ring-blue-500' : ''} overflow-hidden`}
       ref={cardRef}
-      onContextMenu={handleContextMenu}
+      style={{ 
+        // Apply all the style props to the actual element
+        width: processValue(width, 'width'),
+        height: processValue(height, 'height'),
+        padding: processValue(padding, 'padding'),
+        margin: processValue(margin, 'margin'),
+        backgroundColor,
+        background,
+        border,
+        borderRadius: processValue(borderRadius, 'borderRadius'),
+        boxShadow,
+        display,
+        position,
+        zIndex,
+        overflow,
+        transform,
+        opacity,
+        top: top !== undefined ? processValue(top, 'top') : undefined,
+        right: right !== undefined ? processValue(right, 'right') : undefined,
+        bottom: bottom !== undefined ? processValue(bottom, 'bottom') : undefined,
+        left: left !== undefined ? processValue(left, 'left') : undefined,
+        minWidth: minWidth && processValue(minWidth, 'minWidth'),
+        maxWidth: maxWidth && processValue(maxWidth, 'maxWidth'),
+        minHeight: minHeight && processValue(minHeight, 'minHeight'),
+        maxHeight: maxHeight && processValue(maxHeight, 'maxHeight'),
+        flexDirection,
+        alignItems,
+        justifyContent,
+        gap: processValue(gap, 'gap'),
+      }}
     >
       {/* Drag handle */}
       <div
@@ -63,20 +120,36 @@ export const Box = ({children }) => {
         <DragOutlined />
       </div>
       {children}
-    </Card>
+    </div>
   );
 };
 
-// Define default props for Craft.js
+// Define default props for Craft.js - these will be the initial values
 Box.craft = {
   props: {
     width: "auto",
     height: "auto",
-    position: "relative",
     padding: 20,
+    margin: "5px 0",
+    backgroundColor: "white",
     background: "white",
+    border: "none",
+    borderRadius: 0,
+    boxShadow: "none",
+    display: "block",
+    position: "relative",
+    zIndex: 1,
+    overflow: "visible",
+    transform: "none",
+    opacity: 1,
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    gap: 0,
   },
   rules: {
     canDrag: () => true,
+    canDrop: () => true,
+    canMoveIn: () => true,
   }
 };
