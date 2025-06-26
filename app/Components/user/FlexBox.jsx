@@ -5,7 +5,7 @@ import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
 import { DragOutlined } from '@ant-design/icons';
 
-export const Box = ({
+export const FlexBox = ({
   // Layout & Position
   width = "auto",
   height = "auto",
@@ -401,7 +401,7 @@ placeContent,
 };
 
 // Define default props for Craft.js - these will be the initial values
-Box.craft = {
+FlexBox.craft = {
   props: {
     // Layout & Position
     width: "auto",
@@ -494,8 +494,51 @@ Box.craft = {
     canMoveIn: () => true,
   },
    custom: {
-    styleMenu: {
-      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border']
-    }
+  styleMenu: {
+    supportedProps: [
+      // Layout & Position
+      'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+      'display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
+      'visibility', 'float', 'clear', 'boxSizing',
+      
+      // Overflow & Scroll
+      'overflow', 'overflowX', 'overflowY', 'resize',
+      
+      // Spacing
+      'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+      'marginX', 'marginY',
+      'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+      'paddingX', 'paddingY',
+      
+      // Border
+      'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
+      'borderBottomLeftRadius', 'borderBottomRightRadius',
+      
+      // Typography
+      'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'fontStretch',
+      'lineHeight', 'letterSpacing', 'wordSpacing', 'textAlign', 'textDecoration',
+      'textTransform', 'textIndent', 'textShadow', 'verticalAlign', 'whiteSpace',
+      'wordBreak', 'wordWrap',
+      
+      // Flexbox Container Properties
+      'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent',
+      'gap', 'rowGap', 'columnGap',
+      
+      // Flexbox Item Properties
+      'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'order',
+      
+      // Colors & Backgrounds
+      'color', 'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
+      'backgroundRepeat', 'backgroundPosition', 'backgroundAttachment', 'backgroundClip', 'backgroundOrigin',
+      
+      // Effects
+      'boxShadow', 'opacity', 'transform',
+      
+      // HTML Attributes
+      'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',
+      'contentEditable', 'draggable', 'spellCheck', 'translate', 'dir', 'lang',
+      'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy'
+    ]
   }
+}
 };

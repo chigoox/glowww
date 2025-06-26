@@ -15,7 +15,7 @@ import {
   TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,
   VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined
 } from "@ant-design/icons";
-import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag } from "antd";
+import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag, Radio } from "antd";
 import { useEditor } from "@craftjs/core";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
@@ -439,19 +439,24 @@ export function StyleMenu({
     const [currentNodeId] = state.events.selected;
     let selected;
 
+
     if (currentNodeId) {
+      const node = state.nodes[currentNodeId];
       selected = {
         id: currentNodeId,
-        name: state.nodes[currentNodeId].data.name,
-        displayName: state.nodes[currentNodeId].data.displayName,
-        props: state.nodes[currentNodeId].data.props,
-        isDeletable: state.nodes[currentNodeId].data.name !== 'ROOT'
+        name: node.data.name,
+        displayName: node.data.displayName,
+        props: node.data.props,
+        isDeletable: node.data.name !== 'ROOT',
+        supportedProps: node.data.custom?.styleMenu?.supportedProps || 
+                        node.related?.craft?.styleMenu?.supportedProps ||
+                        supportedProps
       };
     }
 
     return { selected };
   });
-
+console.log(selected?.supportedProps)
   // Initialize default local style structure
   const getDefaultLocalStyle = useCallback(() => ({
     // Position & Layout
@@ -801,10 +806,260 @@ export function StyleMenu({
     }
   }), [localStyle, debouncedSync]);
 
-  const shouldShow = useCallback((section) => 
-    supportedProps.length === 0 || supportedProps.includes(section), 
-    [supportedProps]
-  );
+  const shouldShow = useCallback((section) => {
+  const propsToCheck = selected?.supportedProps || supportedProps;
+  
+  // If no restrictions, show everything
+  if (propsToCheck.length === 0) return true;
+  
+  // Check if the section itself is supported
+  if (propsToCheck.includes(section)) return true;
+
+    // Special handling for borderRadius section
+  if (section === 'borderRadius') {
+    const radiusProps = ['borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius'];
+    return radiusProps.some(prop => propsToCheck.includes(prop));
+  }
+  
+  // Check individual property mappings to sections
+  const propertyToSectionMap = {
+    // Basic properties
+    'src': 'basic',
+    'alt': 'basic', 
+    'href': 'basic',
+    'placeholder': 'basic',
+    'title': 'basic',
+    'id': 'basic',
+    'className': 'basic',
+    'target': 'basic',
+    'rel': 'basic',
+    'type': 'basic',
+    'value': 'basic',
+    'name': 'basic',
+    
+    // Layout properties
+    'display': 'layout',
+    'position': 'layout',
+    'width': 'layout',
+    'height': 'layout',
+    'minWidth': 'layout',
+    'maxWidth': 'layout',
+    'minHeight': 'layout',
+    'maxHeight': 'layout',
+    'zIndex': 'layout',
+    'visibility': 'layout',
+    'float': 'layout',
+    'clear': 'layout',
+    'boxSizing': 'layout',
+    'top': 'layout',
+    'right': 'layout',
+    'bottom': 'layout',
+    'left': 'layout',
+    
+    // Spacing properties
+    'margin': 'spacing',
+    'padding': 'spacing',
+    'marginTop': 'spacing',
+    'marginRight': 'spacing',
+    'marginBottom': 'spacing',
+    'marginLeft': 'spacing',
+    'paddingTop': 'spacing',
+    'paddingRight': 'spacing',
+    'paddingBottom': 'spacing',
+    'paddingLeft': 'spacing',
+    
+    // Typography properties
+    'fontFamily': 'typography',
+    'fontSize': 'typography',
+    'fontWeight': 'typography',
+    'fontStyle': 'typography',
+    'lineHeight': 'typography',
+    'letterSpacing': 'typography',
+    'wordSpacing': 'typography',
+    'textAlign': 'typography',
+    'textDecoration': 'typography',
+    'textTransform': 'typography',
+    'textIndent': 'typography',
+    'textShadow': 'typography',
+    'verticalAlign': 'typography',
+    'whiteSpace': 'typography',
+    'wordBreak': 'typography',
+    'wordWrap': 'typography',
+    
+    // Color properties
+    'color': 'colors',
+    'backgroundColor': 'colors',
+    'backgroundImage': 'colors',
+    'backgroundSize': 'colors',
+    'backgroundRepeat': 'colors',
+    'backgroundPosition': 'colors',
+    'backgroundAttachment': 'colors',
+    
+    // Border properties
+    'border': 'border',
+    'borderWidth': 'border',
+    'borderStyle': 'border',
+    'borderColor': 'border',
+    'borderRadius': 'border',
+    'borderTopWidth': 'border',
+    'borderRightWidth': 'border',
+    'borderBottomWidth': 'border',
+    'borderLeftWidth': 'border',
+    'borderTopStyle': 'border',
+    'borderRightStyle': 'border',
+    'borderBottomStyle': 'border',
+    'borderLeftStyle': 'border',
+    'borderTopColor': 'border',
+    'borderRightColor': 'border',
+    'borderBottomColor': 'border',
+    'borderLeftColor': 'border',
+    'borderTopLeftRadius': 'border',
+    'borderTopRightRadius': 'border',
+    'borderBottomLeftRadius': 'border',
+    'borderBottomRightRadius': 'border',
+    
+    // Flexbox properties
+    'flexDirection': 'flexbox',
+    'flexWrap': 'flexbox',
+    'justifyContent': 'flexbox',
+    'alignItems': 'flexbox',
+    'alignContent': 'flexbox',
+    'gap': 'flexbox',
+    'rowGap': 'flexbox',
+    'columnGap': 'flexbox',
+    'flex': 'flexbox',
+    'flexGrow': 'flexbox',
+    'flexShrink': 'flexbox',
+    'flexBasis': 'flexbox',
+    'alignSelf': 'flexbox',
+    'order': 'flexbox',
+    
+    // Effects properties
+    'opacity': 'effects',
+    'filter': 'effects',
+    'backdropFilter': 'effects',
+    'boxShadow': 'effects',
+    'clipPath': 'effects',
+    'mask': 'effects',
+    'mixBlendMode': 'effects',
+    'backgroundBlendMode': 'effects',
+    
+    // Overflow properties
+    'overflow': 'overflow',
+    'overflowX': 'overflow',
+    'overflowY': 'overflow',
+    'resize': 'overflow',
+    'scrollBehavior': 'overflow',
+    
+    // Grid properties
+    'gridTemplateColumns': 'grid',
+    'gridTemplateRows': 'grid',
+    'gridTemplateAreas': 'grid',
+    'gridAutoFlow': 'grid',
+    'gridAutoColumns': 'grid',
+    'gridAutoRows': 'grid',
+    'gridColumn': 'grid',
+    'gridRow': 'grid',
+    'gridColumnStart': 'grid',
+    'gridColumnEnd': 'grid',
+    'gridRowStart': 'grid',
+    'gridRowEnd': 'grid',
+    'gridArea': 'grid',
+    'justifySelf': 'grid',
+    'placeSelf': 'grid',
+    'placeItems': 'grid',
+    'placeContent': 'grid',
+    
+    // Interaction properties
+    'cursor': 'interaction',
+    'pointerEvents': 'interaction',
+    'userSelect': 'interaction',
+    'touchAction': 'interaction',
+    
+    // Object properties
+    'objectFit': 'object',
+    'objectPosition': 'object',
+    
+    // Transform properties
+    'transform': 'transform',
+    'transformOrigin': 'transform',
+    'transition': 'transform',
+    'animation': 'transform',
+    
+    // List properties
+    'listStyleType': 'lists',
+    'listStylePosition': 'lists',
+    'listStyleImage': 'lists',
+    
+    // Table properties
+    'tableLayout': 'tables',
+    'captionSide': 'tables',
+    'emptyCells': 'tables',
+    'borderCollapse': 'tables',
+    'borderSpacing': 'tables',
+    
+    // Content properties
+    'content': 'content',
+    'quotes': 'content',
+    'counterReset': 'content',
+    'counterIncrement': 'content',
+    
+    // Scroll properties
+    'scrollSnapType': 'scroll',
+    'scrollSnapAlign': 'scroll',
+    
+    // Attribute properties
+    'disabled': 'attributes',
+    'required': 'attributes',
+    'readonly': 'attributes',
+    'multiple': 'attributes',
+    'checked': 'attributes',
+    'selected': 'attributes',
+    'hidden': 'attributes',
+    'tabIndex': 'attributes',
+    'accessKey': 'attributes',
+    'contentEditable': 'attributes',
+    'draggable': 'attributes',
+    'spellCheck': 'attributes',
+    'translate': 'attributes',
+    'dir': 'attributes',
+    'lang': 'attributes',
+    'role': 'attributes',
+    'ariaLabel': 'attributes',
+    'ariaDescribedBy': 'attributes',
+    'ariaLabelledBy': 'attributes'
+  };
+  
+  // If it's an individual property, check if its parent section is supported
+  if (propertyToSectionMap[section]) {
+    return propsToCheck.includes(propertyToSectionMap[section]);
+  }
+  
+  // Check if any individual property in this section is supported
+  const sectionProperties = Object.entries(propertyToSectionMap)
+    .filter(([prop, sect]) => sect === section)
+    .map(([prop]) => prop);
+  
+  return sectionProperties.some(prop => propsToCheck.includes(prop));
+}, [selected?.supportedProps, supportedProps]);
+
+
+//  // Check if a specific property should be shown, considering fallbacks
+const shouldShowProperty = useCallback((property, fallbackSection) => {
+  const propsToCheck = selected?.supportedProps || supportedProps;
+  
+  // If no restrictions, show everything
+  if (propsToCheck.length === 0) return true;
+  
+  // Check if the individual property is directly supported
+  if (propsToCheck.includes(property)) return true;
+  
+  // Check if the fallback section is supported
+  if (propsToCheck.includes(fallbackSection)) return true;
+  
+  return false;
+}, [selected?.supportedProps, supportedProps]);
+
 
   // Shared styles
   const sharedStyles = useMemo(() => ({
@@ -818,923 +1073,2087 @@ export function StyleMenu({
 
     // Basic Properties
     if (shouldShow('basic')) {
-      items.push({
-        key: 'basic',
-        label: <span><SettingOutlined /> Basic Properties</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            {shouldShow('src') && (
-              <Form.Item label="Image Source" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("src")} placeholder="https://example.com/image.jpg" size="small" />
-              </Form.Item>
-            )}
-            {shouldShow('alt') && (
-              <Form.Item label="Alt Text" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("alt")} placeholder="Image description" size="small" />
-              </Form.Item>
-            )}
-            {shouldShow('href') && (
-              <Form.Item label="Link URL" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("href")} placeholder="https://example.com" size="small" />
-              </Form.Item>
-            )}
-            {shouldShow('placeholder') && (
-              <Form.Item label="Placeholder" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("placeholder")} placeholder="Enter placeholder text" size="small" />
-              </Form.Item>
-            )}
-            {shouldShow('title') && (
-              <Form.Item label="Title" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("title")} placeholder="Tooltip text" size="small" />
-              </Form.Item>
-            )}
-            {shouldShow('id') && (
-              <Form.Item label="ID" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("id")} placeholder="unique-id" size="small" />
-              </Form.Item>
-            )}
-            {shouldShow('className') && (
-              <Form.Item label="CSS Classes" style={sharedStyles.formItem}>
-                <Input {...handleInputChange("className")} placeholder="class1 class2" size="small" />
-              </Form.Item>
-            )}
-          </div>
-        )
-      });
-    }
+  const basicItems = [];
+  
+  if (shouldShowProperty('src', 'basic')) {
+    basicItems.push(
+      <Form.Item key="src" label="Image Source" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("src")} placeholder="https://example.com/image.jpg" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('alt', 'basic')) {
+    basicItems.push(
+      <Form.Item key="alt" label="Alt Text" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("alt")} placeholder="Image description" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('href', 'basic')) {
+    basicItems.push(
+      <Form.Item key="href" label="Link URL" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("href")} placeholder="https://example.com" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('placeholder', 'basic')) {
+    basicItems.push(
+      <Form.Item key="placeholder" label="Placeholder" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("placeholder")} placeholder="Enter placeholder text" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('title', 'basic')) {
+    basicItems.push(
+      <Form.Item key="title" label="Title" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("title")} placeholder="Tooltip text" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('id', 'basic')) {
+    basicItems.push(
+      <Form.Item key="id" label="ID" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("id")} placeholder="unique-id" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('className', 'basic')) {
+    basicItems.push(
+      <Form.Item key="className" label="CSS Classes" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("className")} placeholder="class1 class2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (basicItems.length > 0) {
+    items.push({
+      key: 'basic',
+      label: <span><SettingOutlined /> Basic Properties</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {basicItems}
+        </div>
+      )
+    });
+  }
+}
 
     // Layout & Position
-    if (shouldShow('layout')) {
-      items.push({
-        key: "layout",
-        label: <span><AppstoreOutlined /> Layout & Position</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Display" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("display")} options={displays} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Position" style={sharedStyles.formItem}>
-              <IconButtonGroup options={positions} {...handleButtonGroupChange("position")} />
-            </Form.Item>
-            <Form.Item label="Visibility" style={sharedStyles.formItem}>
-              <IconButtonGroup options={visibilities} {...handleButtonGroupChange("visibility")} />
-            </Form.Item>
-            <Form.Item label="Float" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("float")} options={floats} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Clear" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("clear")} options={clears} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Dimensions</Divider>
-            <Form.Item label={<span><ColumnWidthOutlined /> Width</span>} style={sharedStyles.formItem}>
-              <Input {...handleInputChange("width")} placeholder="e.g. 100px, 50%, auto" size="small" />
-            </Form.Item>
-            <Form.Item label={<span><ColumnHeightOutlined /> Height</span>} style={sharedStyles.formItem}>
-              <Input {...handleInputChange("height")} placeholder="e.g. 100px, 50%, auto" size="small" />
-            </Form.Item>
-            <Form.Item label="Min Width" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("minWidth")} placeholder="e.g. 100px" size="small" />
-            </Form.Item>
-            <Form.Item label="Max Width" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("maxWidth")} placeholder="e.g. 500px" size="small" />
-            </Form.Item>
-            <Form.Item label="Min Height" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("minHeight")} placeholder="e.g. 100px" size="small" />
-            </Form.Item>
-            <Form.Item label="Max Height" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("maxHeight")} placeholder="e.g. 500px" size="small" />
-            </Form.Item>
-            <Form.Item label="Box Sizing" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("boxSizing")} options={boxSizings} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Position Values</Divider>
-            <Form.Item label="Top" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("top")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Right" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("right")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Bottom" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("bottom")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Left" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("left")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label={<span><VerticalAlignMiddleOutlined /> Z-index</span>} style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("zIndex")} min={-100} max={100} />
-            </Form.Item>
-          </div>
-        ),
-      });
-    }
+    // Replace the layout section:
+
+// Layout & Position
+if (shouldShow('layout')) {
+  const layoutItems = [];
+  
+  if (shouldShowProperty('display', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="display" label="Display" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("display")} options={displays} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('position', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="position" label="Position" style={sharedStyles.formItem}>
+        <IconButtonGroup options={positions} {...handleButtonGroupChange("position")} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('visibility', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="visibility" label="Visibility" style={sharedStyles.formItem}>
+        <IconButtonGroup options={visibilities} {...handleButtonGroupChange("visibility")} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('float', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="float" label="Float" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("float")} options={floats} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('clear', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="clear" label="Clear" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("clear")} options={clears} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Add dimensions divider if any dimension property exists
+  const hasDimensions = shouldShowProperty('width', 'layout') || shouldShowProperty('height', 'layout') || 
+                       shouldShowProperty('minWidth', 'layout') || shouldShowProperty('maxWidth', 'layout') ||
+                       shouldShowProperty('minHeight', 'layout') || shouldShowProperty('maxHeight', 'layout') ||
+                       shouldShowProperty('boxSizing', 'layout');
+  
+  if (hasDimensions) {
+    layoutItems.push(
+      <Divider key="dimensions-divider" orientation="left" plain>Dimensions</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('width', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="width" label={<span><ColumnWidthOutlined /> Width</span>} style={sharedStyles.formItem}>
+        <Input {...handleInputChange("width")} placeholder="e.g. 100px, 50%, auto" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('height', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="height" label={<span><ColumnHeightOutlined /> Height</span>} style={sharedStyles.formItem}>
+        <Input {...handleInputChange("height")} placeholder="e.g. 100px, 50%, auto" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('minWidth', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="minWidth" label="Min Width" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("minWidth")} placeholder="e.g. 100px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('maxWidth', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="maxWidth" label="Max Width" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("maxWidth")} placeholder="e.g. 500px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('minHeight', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="minHeight" label="Min Height" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("minHeight")} placeholder="e.g. 100px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('maxHeight', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="maxHeight" label="Max Height" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("maxHeight")} placeholder="e.g. 500px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('boxSizing', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="boxSizing" label="Box Sizing" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("boxSizing")} options={boxSizings} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Add position values divider if any position property exists
+  const hasPositionValues = shouldShowProperty('top', 'layout') || shouldShowProperty('right', 'layout') || 
+                           shouldShowProperty('bottom', 'layout') || shouldShowProperty('left', 'layout') ||
+                           shouldShowProperty('zIndex', 'layout');
+  
+  if (hasPositionValues) {
+    layoutItems.push(
+      <Divider key="position-divider" orientation="left" plain>Position Values</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('top', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="top" label="Top" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("top")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('right', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="right" label="Right" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("right")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('bottom', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="bottom" label="Bottom" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("bottom")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('left', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="left" label="Left" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("left")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('zIndex', 'layout')) {
+    layoutItems.push(
+      <Form.Item key="zIndex" label={<span><VerticalAlignMiddleOutlined /> Z-index</span>} style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("zIndex")} min={-100} max={100} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (layoutItems.length > 0) {
+    items.push({
+      key: 'layout',
+      label: <span><AppstoreOutlined /> Layout & Position</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {layoutItems}
+        </div>
+      )
+    });
+  }
+}
 
     // Overflow & Scroll
-    if (shouldShow('overflow')) {
-      items.push({
-        key: 'overflow',
-        label: <span><EyeOutlined /> Overflow & Scroll</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Overflow" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("overflow")} options={overflows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Overflow X" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("overflowX")} options={overflows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Overflow Y" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("overflowY")} options={overflows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Resize" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("resize")} options={resizes} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Scroll Behavior" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("scrollBehavior")} options={[
-                { value: "auto", label: "Auto" },
-                { value: "smooth", label: "Smooth" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+    // Replace the overflow section:
 
-    // Typography
-    if (shouldShow('typography')) {
-      items.push({
-        key: 'typography',
-        label: <span><FontColorsOutlined /> Typography</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Font Family" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("fontFamily")} options={fontFamilies.map(font => ({ value: font, label: font }))} size="small" showSearch styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Font Size" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("fontSize")} min={6} max={120} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            <Form.Item label="Font Weight" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("fontWeight")} options={fontWeights} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Font Style" style={sharedStyles.formItem}>
-              <IconButtonGroup options={fontStyles} {...handleButtonGroupChange("fontStyle")} />
-            </Form.Item>
-            <Form.Item label="Line Height" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("lineHeight")} min={0.5} max={4} step={0.1} tooltip={{ formatter: (val) => `${val}` }} />
-            </Form.Item>
-            <Form.Item label="Letter Spacing" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("letterSpacing")} min={-5} max={20} step={0.1} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            <Form.Item label="Word Spacing" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("wordSpacing")} min={-10} max={50} step={0.5} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Text Alignment</Divider>
-            <Form.Item label="Text Align" style={sharedStyles.formItem}>
-              <IconButtonGroup options={textAligns} {...handleButtonGroupChange("textAlign")} />
-            </Form.Item>
-            <Form.Item label="Vertical Align" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("verticalAlign")} options={verticalAligns} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Text Indent" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("textIndent")} min={-100} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Text Decoration</Divider>
-            <Form.Item label="Text Decoration" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("textDecoration")} options={textDecorations} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Text Transform" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("textTransform")} options={textTransforms} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="White Space" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("whiteSpace")} options={whiteSpaces} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Word Break" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("wordBreak")} options={wordBreaks} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Text Shadow" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("textShadow")} placeholder="e.g. 2px 2px 4px rgba(0,0,0,0.5)" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+// Overflow & Scroll
+if (shouldShow('overflow')) {
+  const overflowItems = [];
+  
+  if (shouldShowProperty('overflow', 'overflow')) {
+    overflowItems.push(
+      <Form.Item key="overflow" label="Overflow" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("overflow")} options={overflows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('overflowX', 'overflow')) {
+    overflowItems.push(
+      <Form.Item key="overflowX" label="Overflow X" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("overflowX")} options={overflows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('overflowY', 'overflow')) {
+    overflowItems.push(
+      <Form.Item key="overflowY" label="Overflow Y" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("overflowY")} options={overflows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('resize', 'overflow')) {
+    overflowItems.push(
+      <Form.Item key="resize" label="Resize" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("resize")} options={resizes} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('scrollBehavior', 'overflow')) {
+    overflowItems.push(
+      <Form.Item key="scrollBehavior" label="Scroll Behavior" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("scrollBehavior")} options={[
+          { value: "auto", label: "Auto" },
+          { value: "smooth", label: "Smooth" }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (overflowItems.length > 0) {
+    items.push({
+      key: 'overflow',
+      label: <span><EyeOutlined /> Overflow & Scroll</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {overflowItems}
+        </div>
+      )
+    });
+  }
+}
 
-    // Colors & Backgrounds
-    if (shouldShow('colors')) {
-      items.push({
-        key: 'colors',
-        label: <span><BgColorsOutlined /> Colors & Backgrounds</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Text Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("color")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Background Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("backgroundColor")} size="small" showText allowClear getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Background Image</Divider>
-            <Form.Item label="Background Image" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("backgroundImage")} placeholder="url(image.jpg) or linear-gradient(...)" size="small" />
-            </Form.Item>
-            <Form.Item label="Background Size" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("backgroundSize")} options={backgroundSizes} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Background Repeat" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("backgroundRepeat")} options={backgroundRepeats} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Background Position" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("backgroundPosition")} placeholder="e.g. center, 50% 50%" size="small" />
-            </Form.Item>
-            <Form.Item label="Background Attachment" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("backgroundAttachment")} options={backgroundAttachments} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+
+// Typography
+
+if (shouldShow('typography')) {
+  const typographyItems = [];
+
+  if (shouldShowProperty('fontFamily', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="fontFamily" label="Font Family" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("fontFamily")} options={fontFamilies.map(font => ({ value: font, label: font }))} size="small" showSearch styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('fontSize', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="fontSize" label="Font Size" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("fontSize")} min={6} max={120} tooltip={{ formatter: (val) => `${val}px` }} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('fontWeight', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="fontWeight" label="Font Weight" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("fontWeight")} options={fontWeights} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('fontStyle', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="fontStyle" label="Font Style" style={sharedStyles.formItem}>
+        <IconButtonGroup options={fontStyles} {...handleButtonGroupChange("fontStyle")} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('lineHeight', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="lineHeight" label="Line Height" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("lineHeight")} min={0.5} max={4} step={0.1} tooltip={{ formatter: (val) => `${val}` }} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('letterSpacing', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="letterSpacing" label="Letter Spacing" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("letterSpacing")} min={-5} max={20} step={0.1} tooltip={{ formatter: (val) => `${val}px` }} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('wordSpacing', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="wordSpacing" label="Word Spacing" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("wordSpacing")} min={-10} max={50} step={0.5} tooltip={{ formatter: (val) => `${val}px` }} />
+      </Form.Item>
+    );
+  }
+  
+  // Text Alignment section
+  const hasTextAlignment = shouldShowProperty('textAlign', 'typography') || shouldShowProperty('verticalAlign', 'typography') || shouldShowProperty('textIndent', 'typography');
+  
+  if (hasTextAlignment) {
+    typographyItems.push(
+      <Divider key="text-alignment-divider" orientation="left" plain>Text Alignment</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('textAlign', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="textAlign" label="Text Align" style={sharedStyles.formItem}>
+        <IconButtonGroup options={textAligns} {...handleButtonGroupChange("textAlign")} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('verticalAlign', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="verticalAlign" label="Vertical Align" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("verticalAlign")} options={verticalAligns} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('textIndent', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="textIndent" label="Text Indent" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("textIndent")} min={-100} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
+      </Form.Item>
+    );
+  }
+  
+  // Text Decoration section
+  const hasTextDecoration = shouldShowProperty('textDecoration', 'typography') || shouldShowProperty('textTransform', 'typography') || 
+                           shouldShowProperty('whiteSpace', 'typography') || shouldShowProperty('wordBreak', 'typography') || 
+                           shouldShowProperty('textShadow', 'typography');
+  
+  if (hasTextDecoration) {
+    typographyItems.push(
+      <Divider key="text-decoration-divider" orientation="left" plain>Text Decoration</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('textDecoration', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="textDecoration" label="Text Decoration" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("textDecoration")} options={textDecorations} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('textTransform', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="textTransform" label="Text Transform" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("textTransform")} options={textTransforms} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('whiteSpace', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="whiteSpace" label="White Space" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("whiteSpace")} options={whiteSpaces} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('wordBreak', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="wordBreak" label="Word Break" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("wordBreak")} options={wordBreaks} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('textShadow', 'typography')) {
+    typographyItems.push(
+      <Form.Item key="textShadow" label="Text Shadow" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("textShadow")} placeholder="e.g. 2px 2px 4px rgba(0,0,0,0.5)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (typographyItems.length > 0) {
+    items.push({
+      key: 'typography',
+      label: <span><FontColorsOutlined /> Typography</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {typographyItems}
+        </div>
+      )
+    });
+  }
+}
+
+// Colors & Backgrounds
+if (shouldShow('colors')) {
+  const colorsItems = [];
+  
+  if (shouldShowProperty('color', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="color" label="Text Color" style={sharedStyles.formItem}>
+        <ColorPicker {...handleColorChange("color")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundColor', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="backgroundColor" label="Background Color" style={sharedStyles.formItem}>
+        <ColorPicker {...handleColorChange("backgroundColor")} size="small" showText allowClear getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Background Image section
+  const hasBackgroundImage = shouldShowProperty('backgroundImage', 'colors') || shouldShowProperty('backgroundSize', 'colors') || 
+                             shouldShowProperty('backgroundRepeat', 'colors') || shouldShowProperty('backgroundPosition', 'colors') || 
+                             shouldShowProperty('backgroundAttachment', 'colors');
+  
+  if (hasBackgroundImage) {
+    colorsItems.push(
+      <Divider key="background-image-divider" orientation="left" plain>Background Image</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundImage', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="backgroundImage" label="Background Image" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("backgroundImage")} placeholder="url(image.jpg) or linear-gradient(...)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundSize', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="backgroundSize" label="Background Size" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("backgroundSize")} options={backgroundSizes} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundRepeat', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="backgroundRepeat" label="Background Repeat" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("backgroundRepeat")} options={backgroundRepeats} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundPosition', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="backgroundPosition" label="Background Position" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("backgroundPosition")} placeholder="e.g. center, 50% 50%" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundAttachment', 'colors')) {
+    colorsItems.push(
+      <Form.Item key="backgroundAttachment" label="Background Attachment" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("backgroundAttachment")} options={backgroundAttachments} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (colorsItems.length > 0) {
+    items.push({
+      key: 'colors',
+      label: <span><BgColorsOutlined /> Colors & Backgrounds</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {colorsItems}
+        </div>
+      )
+    });
+  }
+}
 
     // Spacing (Margin & Padding)
     if (shouldShow('spacing')) {
-      items.push({
-        key: 'spacing',
-        label: <span><BorderOuterOutlined /> Spacing</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Divider orientation="left" plain>Margin</Divider>
-            <Space>
-              {spacingSides.map(opt => (
-                <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-                  <Button
-                    type={localStyle.marginMode === opt.value ? "primary" : "default"}
-                    icon={opt.icon}
-                    size="small"
-                    onClick={() => {
-                      setLocalStyle(prev => ({ ...prev, marginMode: opt.value }));
-                      debouncedSync("marginMode", opt.value);
-                    }}
-                  />
-                </Tooltip>
-              ))}
-            </Space>
-            <Form.Item style={sharedStyles.formItem}>
-              {localStyle.marginMode === "all" ? (
-                <Input {...handleInputChange("margin")} placeholder="e.g. 10px" size="small" />
-              ) : (
-                <Input
-                  value={localStyle.marginSidesVals[localStyle.marginMode]}
-                  onChange={e => setLocalStyle(prev => ({
-                    ...prev,
-                    marginSidesVals: { ...prev.marginSidesVals, [localStyle.marginMode]: e.target.value }
-                  }))}
-                  onBlur={e => debouncedSync(`marginSidesVals.${localStyle.marginMode}`, e.target.value)}
-                  placeholder={`${localStyle.marginMode} margin`}
-                  size="small"
-                />
-              )}
-            </Form.Item>
-
-            <Divider orientation="left" plain>Padding</Divider>
-            <Space>
-              {spacingSides.map(opt => (
-                <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-                  <Button
-                    type={localStyle.paddingMode === opt.value ? "primary" : "default"}
-                    icon={opt.icon}
-                    size="small"
-                    onClick={() => {
-                      setLocalStyle(prev => ({ ...prev, paddingMode: opt.value }));
-                      debouncedSync("paddingMode", opt.value);
-                    }}
-                  />
-                </Tooltip>
-              ))}
-            </Space>
-            <Form.Item style={sharedStyles.formItem}>
-              {localStyle.paddingMode === "all" ? (
-                <Input {...handleInputChange("padding")} placeholder="e.g. 10px" size="small" />
-              ) : (
-                <Input
-                  value={localStyle.paddingSidesVals[localStyle.paddingMode]}
-                  onChange={e => setLocalStyle(prev => ({
-                    ...prev,
-                    paddingSidesVals: { ...prev.paddingSidesVals, [localStyle.paddingMode]: e.target.value }
-                  }))}
-                  onBlur={e => debouncedSync(`paddingSidesVals.${localStyle.paddingMode}`, e.target.value)}
-                  placeholder={`${localStyle.paddingMode} padding`}
-                  size="small"
-                />
-              )}
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+  const spacingItems = [];
+  
+  // Margin section
+  const hasMargin = shouldShowProperty('margin', 'spacing') || shouldShowProperty('marginTop', 'spacing') || 
+                   shouldShowProperty('marginRight', 'spacing') || shouldShowProperty('marginBottom', 'spacing') || 
+                   shouldShowProperty('marginLeft', 'spacing');
+  
+  if (hasMargin) {
+    spacingItems.push(
+      <Divider key="margin-divider" orientation="left" plain>Margin</Divider>
+    );
+    
+    spacingItems.push(
+      <Space key="margin-modes">
+        {spacingSides.map(opt => (
+          <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
+            <Button
+              type={localStyle.marginMode === opt.value ? "primary" : "default"}
+              icon={opt.icon}
+              size="small"
+              onClick={() => {
+                setLocalStyle(prev => ({ ...prev, marginMode: opt.value }));
+                debouncedSync("marginMode", opt.value);
+              }}
+            />
+          </Tooltip>
+        ))}
+      </Space>
+    );
+    
+    spacingItems.push(
+      <Form.Item key="margin-input" style={sharedStyles.formItem}>
+        {localStyle.marginMode === "all" ? (
+          <Input {...handleInputChange("margin")} placeholder="e.g. 10px" size="small" />
+        ) : (
+          <Input
+            value={localStyle.marginSidesVals[localStyle.marginMode]}
+            onChange={e => setLocalStyle(prev => ({
+              ...prev,
+              marginSidesVals: { ...prev.marginSidesVals, [localStyle.marginMode]: e.target.value }
+            }))}
+            onBlur={e => debouncedSync(`marginSidesVals.${localStyle.marginMode}`, e.target.value)}
+            placeholder={`${localStyle.marginMode} margin`}
+            size="small"
+          />
+        )}
+      </Form.Item>
+    );
+  }
+  
+  // Padding section
+  const hasPadding = shouldShowProperty('padding', 'spacing') || shouldShowProperty('paddingTop', 'spacing') || 
+                    shouldShowProperty('paddingRight', 'spacing') || shouldShowProperty('paddingBottom', 'spacing') || 
+                    shouldShowProperty('paddingLeft', 'spacing');
+  
+  if (hasPadding) {
+    spacingItems.push(
+      <Divider key="padding-divider" orientation="left" plain>Padding</Divider>
+    );
+    
+    spacingItems.push(
+      <Space key="padding-modes">
+        {spacingSides.map(opt => (
+          <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
+            <Button
+              type={localStyle.paddingMode === opt.value ? "primary" : "default"}
+              icon={opt.icon}
+              size="small"
+              onClick={() => {
+                setLocalStyle(prev => ({ ...prev, paddingMode: opt.value }));
+                debouncedSync("paddingMode", opt.value);
+              }}
+            />
+          </Tooltip>
+        ))}
+      </Space>
+    );
+    
+    spacingItems.push(
+      <Form.Item key="padding-input" style={sharedStyles.formItem}>
+        {localStyle.paddingMode === "all" ? (
+          <Input {...handleInputChange("padding")} placeholder="e.g. 10px" size="small" />
+        ) : (
+          <Input
+            value={localStyle.paddingSidesVals[localStyle.paddingMode]}
+            onChange={e => setLocalStyle(prev => ({
+              ...prev,
+              paddingSidesVals: { ...prev.paddingSidesVals, [localStyle.paddingMode]: e.target.value }
+            }))}
+            onBlur={e => debouncedSync(`paddingSidesVals.${localStyle.paddingMode}`, e.target.value)}
+            placeholder={`${localStyle.paddingMode} padding`}
+            size="small"
+          />
+        )}
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (spacingItems.length > 0) {
+    items.push({
+      key: 'spacing',
+      label: <span><BorderOuterOutlined /> Spacing</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {spacingItems}
+        </div>
+      )
+    });
+  }
+}
 
     // Border & Radius
     if (shouldShow('border')) {
-      items.push({
-        key: 'border',
-        label: <span><BorderOutlined /> Border & Radius</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Divider orientation="left" plain>Border</Divider>
-            <Space>
-              {sides.map(opt => (
-                <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-                  <Button
-                    type={localStyle.borderMode === opt.value ? "primary" : "default"}
-                    icon={opt.icon}
-                    size="small"
-                    onClick={() => {
-                      setLocalStyle(prev => ({ ...prev, borderMode: opt.value }));
-                      debouncedSync("borderMode", opt.value);
-                    }}
-                  />
-                </Tooltip>
-              ))}
-            </Space>
-            
-            <Form.Item label="Border Width" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("borderWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            <Form.Item label="Border Style" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Border Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("borderColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-
-
-
-            <Divider orientation="left" plain>Individual Sides</Divider>
-            <Form.Item label="Top Border Width" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("borderTopWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            <Form.Item label="Right Border Width" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("borderRightWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            <Form.Item label="Bottom Border Width" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("borderBottomWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-            <Form.Item label="Left Border Width" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("borderLeftWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-            </Form.Item>
-
-            <Divider orientation="left" plain>Individual Border Styles</Divider>
-            <Form.Item label="Top Border Style" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderTopStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Right Border Style" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderRightStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Bottom Border Style" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderBottomStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Left Border Style" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderLeftStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-
-            <Divider orientation="left" plain>Individual Border Colors</Divider>
-            <Form.Item label="Top Border Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("borderTopColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Right Border Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("borderRightColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Bottom Border Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("borderBottomColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Left Border Color" style={sharedStyles.formItem}>
-              <ColorPicker {...handleColorChange("borderLeftColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-
-            <Divider orientation="left" plain>Border Radius</Divider>
-            <Space>
-              {radiusCorners.map(opt => (
-                <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-                  <Button
-                    type={localStyle.radiusMode === opt.value ? "primary" : "default"}
-                    icon={opt.icon}
-                    size="small"
-                    onClick={() => {
-                      setLocalStyle(prev => ({ ...prev, radiusMode: opt.value }));
-                      debouncedSync("radiusMode", opt.value);
-                    }}
-                  />
-                </Tooltip>
-              ))}
-            </Space>
-            
-            {localStyle.radiusMode === "all" ? (
-              <Form.Item label="Border Radius" style={sharedStyles.formItem}>
-                <Slider {...handleSliderChange("borderRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-              </Form.Item>
-            ) : (
-              <>
-                <Form.Item label="Top Left Radius" style={sharedStyles.formItem}>
-                  <Slider {...handleSliderChange("borderTopLeftRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-                </Form.Item>
-                <Form.Item label="Top Right Radius" style={sharedStyles.formItem}>
-                  <Slider {...handleSliderChange("borderTopRightRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-                </Form.Item>
-                <Form.Item label="Bottom Left Radius" style={sharedStyles.formItem}>
-                  <Slider {...handleSliderChange("borderBottomLeftRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-                </Form.Item>
-                <Form.Item label="Bottom Right Radius" style={sharedStyles.formItem}>
-                  <Slider {...handleSliderChange("borderBottomRightRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-                </Form.Item>
-              </>
-            )}
-            
-            <Divider orientation="left" plain>Table Borders</Divider>
-            <Form.Item label="Border Collapse" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderCollapse")} options={borderCollapses} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Border Spacing" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("borderSpacing")} placeholder="e.g. 2px" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+  const borderItems = [];
+  
+  // Main border controls
+  const hasMainBorder = shouldShowProperty('borderWidth', 'border') || shouldShowProperty('borderStyle', 'border') || 
+                       shouldShowProperty('borderColor', 'border');
+  
+  if (hasMainBorder) {
+    borderItems.push(
+      <Divider key="border-divider" orientation="left" plain>Border</Divider>
+    );
+    
+    borderItems.push(
+      <Space key="border-modes">
+        {sides.map(opt => (
+          <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
+            <Button
+              type={localStyle.borderMode === opt.value ? "primary" : "default"}
+              icon={opt.icon}
+              size="small"
+              onClick={() => {
+                setLocalStyle(prev => ({ ...prev, borderMode: opt.value }));
+                debouncedSync("borderMode", opt.value);
+              }}
+            />
+          </Tooltip>
+        ))}
+      </Space>
+    );
+    
+    if (shouldShowProperty('borderWidth', 'border')) {
+      borderItems.push(
+        <Form.Item key="borderWidth" label="Border Width" style={sharedStyles.formItem}>
+          <Slider {...handleSliderChange("borderWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+        </Form.Item>
+      );
     }
-
-    // Flexbox
-    if (shouldShow('flexbox')) {
-      items.push({
-        key: 'flexbox',
-        label: <span><AppstoreOutlined /> Flexbox</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Flex Direction" style={sharedStyles.formItem}>
-              <IconButtonGroup options={flexDirections} {...handleButtonGroupChange("flexDirection")} />
-            </Form.Item>
-            <Form.Item label="Flex Wrap" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("flexWrap")} options={flexWraps} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Justify Content" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("justifyContent")} options={justifyContents} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Align Items" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("alignItems")} options={alignItems} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Align Content" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("alignContent")} options={alignContents} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Flex Items</Divider>
-            <Form.Item label="Flex" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("flex")} placeholder="e.g. 1, 1 1 auto" size="small" />
-            </Form.Item>
-            <Form.Item label="Flex Grow" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("flexGrow")} min={0} max={10} tooltip={{ formatter: (val) => val }} />
-            </Form.Item>
-            <Form.Item label="Flex Shrink" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("flexShrink")} min={0} max={10} tooltip={{ formatter: (val) => val }} />
-            </Form.Item>
-            <Form.Item label="Flex Basis" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("flexBasis")} placeholder="e.g. auto, 200px, 50%" size="small" />
-            </Form.Item>
-            <Form.Item label="Align Self" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("alignSelf")} options={alignSelfs} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Order" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("order")} min={-10} max={10} tooltip={{ formatter: (val) => val }} />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Gap</Divider>
-            <Form.Item label="Gap" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gap")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Row Gap" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("rowGap")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Column Gap" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("columnGap")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+    
+    if (shouldShowProperty('borderStyle', 'border')) {
+      borderItems.push(
+        <Form.Item key="borderStyle" label="Border Style" style={sharedStyles.formItem}>
+          <Select {...handleSelectChange("borderStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+        </Form.Item>
+      );
     }
-
-    // Grid
-    if (shouldShow('grid')) {
-      items.push({
-        key: 'grid',
-        label: <span><BorderlessTableOutlined /> CSS Grid</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Divider orientation="left" plain>Grid Container</Divider>
-            <Form.Item label="Grid Template Columns" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridTemplateColumns")} placeholder="e.g. 1fr 2fr 1fr, repeat(3, 1fr)" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Template Rows" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridTemplateRows")} placeholder="e.g. 100px auto 200px" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Template Areas" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridTemplateAreas")} placeholder='e.g. "header header" "sidebar main"' size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Auto Flow" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("gridAutoFlow")} options={gridAutoFlows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Grid Auto Columns" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridAutoColumns")} placeholder="e.g. minmax(100px, auto)" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Auto Rows" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridAutoRows")} placeholder="e.g. minmax(100px, auto)" size="small" />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Grid Items</Divider>
-            <Form.Item label="Grid Column" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridColumn")} placeholder="e.g. 1 / 3, span 2" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Row" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridRow")} placeholder="e.g. 1 / 3, span 2" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Column Start" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridColumnStart")} placeholder="e.g. 1, span 2" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Column End" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridColumnEnd")} placeholder="e.g. 3, span 2" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Row Start" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridRowStart")} placeholder="e.g. 1, span 2" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Row End" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridRowEnd")} placeholder="e.g. 3, span 2" size="small" />
-            </Form.Item>
-            <Form.Item label="Grid Area" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gridArea")} placeholder="e.g. header, 1 / 1 / 2 / 3" size="small" />
-            </Form.Item>
-            <Form.Item label="Justify Self" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("justifySelf")} options={justifySelfs} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Place Self" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("placeSelf")} placeholder="e.g. center, start end" size="small" />
-            </Form.Item>
-            <Form.Item label="Place Items" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("placeItems")} placeholder="e.g. center, start end" size="small" />
-            </Form.Item>
-            <Form.Item label="Place Content" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("placeContent")} placeholder="e.g. center, start end" size="small" />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Grid Gap</Divider>
-            <Form.Item label="Gap" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("gap")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Row Gap" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("rowGap")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-            <Form.Item label="Column Gap" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("columnGap")} placeholder="e.g. 10px" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+    
+    if (shouldShowProperty('borderColor', 'border')) {
+      borderItems.push(
+        <Form.Item key="borderColor" label="Border Color" style={sharedStyles.formItem}>
+          <ColorPicker {...handleColorChange("borderColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+        </Form.Item>
+      );
     }
-
-    // Lists
-    if (shouldShow('lists')) {
-      items.push({
-        key: 'lists',
-        label: <span><MenuOutlined /> Lists</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="List Style Type" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("listStyleType")} options={listStyleTypes} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="List Style Position" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("listStylePosition")} options={listStylePositions} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="List Style Image" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("listStyleImage")} placeholder="url(bullet.png)" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+  }
+  
+  // Individual sides
+  const hasIndividualSides = shouldShowProperty('borderTopWidth', 'border') || shouldShowProperty('borderRightWidth', 'border') || 
+                            shouldShowProperty('borderBottomWidth', 'border') || shouldShowProperty('borderLeftWidth', 'border') ||
+                            shouldShowProperty('borderTopStyle', 'border') || shouldShowProperty('borderRightStyle', 'border') ||
+                            shouldShowProperty('borderBottomStyle', 'border') || shouldShowProperty('borderLeftStyle', 'border') ||
+                            shouldShowProperty('borderTopColor', 'border') || shouldShowProperty('borderRightColor', 'border') ||
+                            shouldShowProperty('borderBottomColor', 'border') || shouldShowProperty('borderLeftColor', 'border');
+  
+  if (hasIndividualSides) {
+    // Individual widths
+    const hasIndividualWidths = shouldShowProperty('borderTopWidth', 'border') || shouldShowProperty('borderRightWidth', 'border') || 
+                               shouldShowProperty('borderBottomWidth', 'border') || shouldShowProperty('borderLeftWidth', 'border');
+    
+    if (hasIndividualWidths) {
+      borderItems.push(
+        <Divider key="individual-sides-divider" orientation="left" plain>Individual Sides</Divider>
+      );
+      
+      if (shouldShowProperty('borderTopWidth', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderTopWidth" label="Top Border Width" style={sharedStyles.formItem}>
+            <Slider {...handleSliderChange("borderTopWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderRightWidth', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderRightWidth" label="Right Border Width" style={sharedStyles.formItem}>
+            <Slider {...handleSliderChange("borderRightWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderBottomWidth', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderBottomWidth" label="Bottom Border Width" style={sharedStyles.formItem}>
+            <Slider {...handleSliderChange("borderBottomWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderLeftWidth', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderLeftWidth" label="Left Border Width" style={sharedStyles.formItem}>
+            <Slider {...handleSliderChange("borderLeftWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+          </Form.Item>
+        );
+      }
     }
-
-    // Tables
-    if (shouldShow('tables')) {
-      items.push({
-        key: 'tables',
-        label: <span><TableOutlined /> Tables</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Table Layout" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("tableLayout")} options={tableLayouts} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Caption Side" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("captionSide")} options={captionSides} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Empty Cells" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("emptyCells")} options={emptyCells} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Border Collapse" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("borderCollapse")} options={borderCollapses} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Border Spacing" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("borderSpacing")} placeholder="e.g. 2px" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+    
+    // Individual styles
+    const hasIndividualStyles = shouldShowProperty('borderTopStyle', 'border') || shouldShowProperty('borderRightStyle', 'border') ||
+                               shouldShowProperty('borderBottomStyle', 'border') || shouldShowProperty('borderLeftStyle', 'border');
+    
+    if (hasIndividualStyles) {
+      borderItems.push(
+        <Divider key="individual-styles-divider" orientation="left" plain>Individual Border Styles</Divider>
+      );
+      
+      if (shouldShowProperty('borderTopStyle', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderTopStyle" label="Top Border Style" style={sharedStyles.formItem}>
+            <Select {...handleSelectChange("borderTopStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderRightStyle', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderRightStyle" label="Right Border Style" style={sharedStyles.formItem}>
+            <Select {...handleSelectChange("borderRightStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderBottomStyle', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderBottomStyle" label="Bottom Border Style" style={sharedStyles.formItem}>
+            <Select {...handleSelectChange("borderBottomStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderLeftStyle', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderLeftStyle" label="Left Border Style" style={sharedStyles.formItem}>
+            <Select {...handleSelectChange("borderLeftStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
     }
-
-    // Transform & Animation
-    if (shouldShow('transform')) {
-      items.push({
-        key: 'transform',
-        label: <span><ExpandOutlined /> Transform & Animation</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Transform" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("transform")} placeholder="e.g. rotate(45deg) scale(1.2)" size="small" />
-            </Form.Item>
-            <Form.Item label="Transform Origin" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("transformOrigin")} placeholder="e.g. center, top left, 50% 50%" size="small" />
-            </Form.Item>
-            <Form.Item label="Transition" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("transition")} placeholder="e.g. all 0.3s ease" size="small" />
-            </Form.Item>
-            <Form.Item label="Animation" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("animation")} placeholder="e.g. slideIn 0.5s ease-in-out" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+    
+    // Individual colors
+    const hasIndividualColors = shouldShowProperty('borderTopColor', 'border') || shouldShowProperty('borderRightColor', 'border') ||
+                               shouldShowProperty('borderBottomColor', 'border') || shouldShowProperty('borderLeftColor', 'border');
+    
+    if (hasIndividualColors) {
+      borderItems.push(
+        <Divider key="individual-colors-divider" orientation="left" plain>Individual Border Colors</Divider>
+      );
+      
+      if (shouldShowProperty('borderTopColor', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderTopColor" label="Top Border Color" style={sharedStyles.formItem}>
+            <ColorPicker {...handleColorChange("borderTopColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderRightColor', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderRightColor" label="Right Border Color" style={sharedStyles.formItem}>
+            <ColorPicker {...handleColorChange("borderRightColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderBottomColor', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderBottomColor" label="Bottom Border Color" style={sharedStyles.formItem}>
+            <ColorPicker {...handleColorChange("borderBottomColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
+      
+      if (shouldShowProperty('borderLeftColor', 'border')) {
+        borderItems.push(
+          <Form.Item key="borderLeftColor" label="Left Border Color" style={sharedStyles.formItem}>
+            <ColorPicker {...handleColorChange("borderLeftColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+          </Form.Item>
+        );
+      }
     }
+  }
+  
+// Border Radius Section (separate from border)
+if (shouldShow('borderRadius')) {
+  const borderRadiusItems = [];
+  
+  // Radius mode toggle
+  borderRadiusItems.push(
+    <Form.Item key="radiusMode" label="Radius Mode" style={sharedStyles.formItem}>
+      <Radio.Group 
+        value={localStyle.radiusMode || "all"} 
+        onChange={(e) => setLocalStyle(prev => ({ ...prev, radiusMode: e.target.value }))}
+        size="small"
+      >
+        <Radio.Button value="all">All</Radio.Button>
+        <Radio.Button value="individual">Individual</Radio.Button>
+      </Radio.Group>
+    </Form.Item>
+  );
 
-    // Effects & Filters
-    if (shouldShow('effects')) {
-      items.push({
-        key: 'effects',
-        label: <span><PictureOutlined /> Effects & Filters</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Opacity" style={sharedStyles.formItem}>
-              <Slider {...handleSliderChange("opacity")} min={0} max={1} step={0.01} tooltip={{ formatter: (val) => `${(val * 100).toFixed(0)}%` }} />
-            </Form.Item>
-            <Form.Item label="Filter" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("filter")} placeholder="e.g. blur(5px) brightness(1.2)" size="small" />
-            </Form.Item>
-            <Form.Item label="Backdrop Filter" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("backdropFilter")} placeholder="e.g. blur(10px)" size="small" />
-            </Form.Item>
-            <Form.Item label="Box Shadow" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("boxShadow")} placeholder="e.g. 0 4px 8px rgba(0,0,0,0.1)" size="small" />
-            </Form.Item>
-            <Form.Item label="Text Shadow" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("textShadow")} placeholder="e.g. 2px 2px 4px rgba(0,0,0,0.5)" size="small" />
-            </Form.Item>
-            <Form.Item label="Clip Path" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("clipPath")} placeholder="e.g. circle(50%)" size="small" />
-            </Form.Item>
-            <Form.Item label="Mask" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("mask")} placeholder="e.g. url(mask.svg)" size="small" />
-            </Form.Item>
-            <Form.Item label="Mix Blend Mode" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("mixBlendMode")} options={[
-                { value: "normal", label: "Normal" },
-                { value: "multiply", label: "Multiply" },
-                { value: "screen", label: "Screen" },
-                { value: "overlay", label: "Overlay" },
-                { value: "darken", label: "Darken" },
-                { value: "lighten", label: "Lighten" },
-                { value: "color-dodge", label: "Color Dodge" },
-                { value: "color-burn", label: "Color Burn" },
-                { value: "hard-light", label: "Hard Light" },
-                { value: "soft-light", label: "Soft Light" },
-                { value: "difference", label: "Difference" },
-                { value: "exclusion", label: "Exclusion" },
-                { value: "hue", label: "Hue" },
-                { value: "saturation", label: "Saturation" },
-                { value: "color", label: "Color" },
-                { value: "luminosity", label: "Luminosity" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Background Blend Mode" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("backgroundBlendMode")} options={[
-                { value: "normal", label: "Normal" },
-                { value: "multiply", label: "Multiply" },
-                { value: "screen", label: "Screen" },
-                { value: "overlay", label: "Overlay" },
-                { value: "darken", label: "Darken" },
-                { value: "lighten", label: "Lighten" },
-                { value: "color-dodge", label: "Color Dodge" },
-                { value: "color-burn", label: "Color Burn" },
-                { value: "hard-light", label: "Hard Light" },
-                { value: "soft-light", label: "Soft Light" },
-                { value: "difference", label: "Difference" },
-                { value: "exclusion", label: "Exclusion" },
-                { value: "hue", label: "Hue" },
-                { value: "saturation", label: "Saturation" },
-                { value: "color", label: "Color" },
-                { value: "luminosity", label: "Luminosity" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-          </div>
-        )
-      });
+  if (localStyle.radiusMode === "all" && shouldShowProperty('borderRadius', 'borderRadius')) {
+    borderRadiusItems.push(
+      <Form.Item key="borderRadius" label="Border Radius" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("borderRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
+      </Form.Item>
+    );
+  } else if (localStyle.radiusMode !== "all") {
+    if (shouldShowProperty('borderTopLeftRadius', 'borderRadius')) {
+      borderRadiusItems.push(
+        <Form.Item key="borderTopLeftRadius" label="Top Left" style={sharedStyles.formItem}>
+          <Slider {...handleSliderChange("borderTopLeftRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
+        </Form.Item>
+      );
     }
+    if (shouldShowProperty('borderTopRightRadius', 'borderRadius')) {
+      borderRadiusItems.push(
+        <Form.Item key="borderTopRightRadius" label="Top Right" style={sharedStyles.formItem}>
+          <Slider {...handleSliderChange("borderTopRightRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
+        </Form.Item>
+      );
+    }
+    if (shouldShowProperty('borderBottomLeftRadius', 'borderRadius')) {
+      borderRadiusItems.push(
+        <Form.Item key="borderBottomLeftRadius" label="Bottom Left" style={sharedStyles.formItem}>
+          <Slider {...handleSliderChange("borderBottomLeftRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
+        </Form.Item>
+      );
+    }
+    if (shouldShowProperty('borderBottomRightRadius', 'borderRadius')) {
+      borderRadiusItems.push(
+        <Form.Item key="borderBottomRightRadius" label="Bottom Right" style={sharedStyles.formItem}>
+          <Slider {...handleSliderChange("borderBottomRightRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
+        </Form.Item>
+      );
+    }
+  }
 
-    // Interaction
-    if (shouldShow('interaction')) {
-      items.push({
-        key: 'interaction',
-        label: <span><LinkOutlined /> Interaction</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Cursor" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("cursor")} options={cursors} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Pointer Events" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("pointerEvents")} options={pointerEvents} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="User Select" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("userSelect")} options={userSelects} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Touch Action" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("touchAction")} placeholder="e.g. auto, manipulation" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+  if (borderRadiusItems.length > 0) {
+    items.push({
+      key: 'borderRadius',
+      label: <span><BorderOutlined /> Border Radius</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {borderRadiusItems}
+        </div>
+      )
+    });
+  }
+}
+  // Table borders
+  const hasTableBorders = shouldShowProperty('borderCollapse', 'border') || shouldShowProperty('borderSpacing', 'border');
+  
+  if (hasTableBorders) {
+    borderItems.push(
+      <Divider key="table-borders-divider" orientation="left" plain>Table Borders</Divider>
+    );
+    
+    if (shouldShowProperty('borderCollapse', 'border')) {
+      borderItems.push(
+        <Form.Item key="borderCollapse" label="Border Collapse" style={sharedStyles.formItem}>
+          <Select {...handleSelectChange("borderCollapse")} options={borderCollapses} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+        </Form.Item>
+      );
     }
+    
+    if (shouldShowProperty('borderSpacing', 'border')) {
+      borderItems.push(
+        <Form.Item key="borderSpacing" label="Border Spacing" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("borderSpacing")} placeholder="e.g. 2px" size="small" />
+        </Form.Item>
+      );
+    }
+  }
+  
+  // Only add the section if it has items to show
+  if (borderItems.length > 0) {
+    items.push({
+      key: 'border',
+      label: <span><BorderOutlined /> Border</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {borderItems}
+        </div>
+      )
+    });
+  }
+}
 
-    // Content & Generated Content
-    if (shouldShow('content')) {
-      items.push({
-        key: 'content',
-        label: <span><FontColorsOutlined /> Content & Generated</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Content" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("content")} placeholder='e.g. "text", attr(title)' size="small" />
-            </Form.Item>
-            <Form.Item label="Quotes" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("quotes")} placeholder='e.g. text' size="small" />
-            </Form.Item>
-            <Form.Item label="Counter Reset" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("counterReset")} placeholder="e.g. counter-name 0" size="small" />
-            </Form.Item>
-            <Form.Item label="Counter Increment" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("counterIncrement")} placeholder="e.g. counter-name 1" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+// Flexbox
+if (shouldShow('flexbox')) {
+  const flexboxItems = [];
+  
+  // Main flex container properties
+  const hasContainerProps = shouldShowProperty('flexDirection', 'flexbox') || shouldShowProperty('flexWrap', 'flexbox') ||
+                            shouldShowProperty('justifyContent', 'flexbox') || shouldShowProperty('alignItems', 'flexbox') ||
+                            shouldShowProperty('alignContent', 'flexbox');
+  
+  if (hasContainerProps) {
+    flexboxItems.push(
+      <Divider key="flex-container-divider" orientation="left" plain>Flex Container</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('flexDirection', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="flexDirection" label="Flex Direction" style={sharedStyles.formItem}>
+        <IconButtonGroup options={flexDirections} {...handleButtonGroupChange("flexDirection")} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('flexWrap', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="flexWrap" label="Flex Wrap" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("flexWrap")} options={flexWraps} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('justifyContent', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="justifyContent" label="Justify Content" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("justifyContent")} options={justifyContents} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('alignItems', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="alignItems" label="Align Items" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("alignItems")} options={alignItems} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('alignContent', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="alignContent" label="Align Content" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("alignContent")} options={alignContents} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Flex items properties
+  const hasItemProps = shouldShowProperty('flex', 'flexbox') || shouldShowProperty('flexGrow', 'flexbox') ||
+                       shouldShowProperty('flexShrink', 'flexbox') || shouldShowProperty('flexBasis', 'flexbox') ||
+                       shouldShowProperty('alignSelf', 'flexbox') || shouldShowProperty('order', 'flexbox');
+  
+  if (hasItemProps) {
+    flexboxItems.push(
+      <Divider key="flex-items-divider" orientation="left" plain>Flex Items</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('flex', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="flex" label="Flex" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("flex")} placeholder="e.g. 1, 1 1 auto" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('flexGrow', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="flexGrow" label="Flex Grow" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("flexGrow")} min={0} max={10} tooltip={{ formatter: (val) => val }} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('flexShrink', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="flexShrink" label="Flex Shrink" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("flexShrink")} min={0} max={10} tooltip={{ formatter: (val) => val }} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('flexBasis', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="flexBasis" label="Flex Basis" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("flexBasis")} placeholder="e.g. auto, 200px, 50%" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('alignSelf', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="alignSelf" label="Align Self" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("alignSelf")} options={alignSelfs} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('order', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="order" label="Order" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("order")} min={-10} max={10} tooltip={{ formatter: (val) => val }} />
+      </Form.Item>
+    );
+  }
+  
+  // Gap properties
+  const hasGap = shouldShowProperty('gap', 'flexbox') || shouldShowProperty('rowGap', 'flexbox') || shouldShowProperty('columnGap', 'flexbox');
+  
+  if (hasGap) {
+    flexboxItems.push(
+      <Divider key="gap-divider" orientation="left" plain>Gap</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('gap', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="gap" label="Gap" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gap")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('rowGap', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="rowGap" label="Row Gap" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("rowGap")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('columnGap', 'flexbox')) {
+    flexboxItems.push(
+      <Form.Item key="columnGap" label="Column Gap" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("columnGap")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (flexboxItems.length > 0) {
+    items.push({
+      key: 'flexbox',
+      label: <span><AppstoreOutlined /> Flexbox</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {flexboxItems}
+        </div>
+      )
+    });
+  }
+}
 
-    // Object Fitting (for images/videos)
-    if (shouldShow('object')) {
-      items.push({
-        key: 'object',
-        label: <span><PictureOutlined /> Object Fitting</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Object Fit" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("objectFit")} options={objectFits} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Object Position" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("objectPosition")} options={objectPositions} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+// Grid
+if (shouldShow('grid')) {
+  const gridItems = [];
+  
+  // Grid container properties
+  const hasContainerProps = shouldShowProperty('gridTemplateColumns', 'grid') || shouldShowProperty('gridTemplateRows', 'grid') ||
+                            shouldShowProperty('gridTemplateAreas', 'grid') || shouldShowProperty('gridAutoFlow', 'grid') ||
+                            shouldShowProperty('gridAutoColumns', 'grid') || shouldShowProperty('gridAutoRows', 'grid');
+  
+  if (hasContainerProps) {
+    gridItems.push(
+      <Divider key="grid-container-divider" orientation="left" plain>Grid Container</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('gridTemplateColumns', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridTemplateColumns" label="Grid Template Columns" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridTemplateColumns")} placeholder="e.g. 1fr 2fr 1fr, repeat(3, 1fr)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridTemplateRows', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridTemplateRows" label="Grid Template Rows" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridTemplateRows")} placeholder="e.g. 100px auto 200px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridTemplateAreas', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridTemplateAreas" label="Grid Template Areas" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridTemplateAreas")} placeholder='e.g. "header header" "sidebar main"' size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridAutoFlow', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridAutoFlow" label="Grid Auto Flow" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("gridAutoFlow")} options={gridAutoFlows} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridAutoColumns', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridAutoColumns" label="Grid Auto Columns" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridAutoColumns")} placeholder="e.g. minmax(100px, auto)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridAutoRows', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridAutoRows" label="Grid Auto Rows" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridAutoRows")} placeholder="e.g. minmax(100px, auto)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Grid items properties
+  const hasItemProps = shouldShowProperty('gridColumn', 'grid') || shouldShowProperty('gridRow', 'grid') ||
+                       shouldShowProperty('gridColumnStart', 'grid') || shouldShowProperty('gridColumnEnd', 'grid') ||
+                       shouldShowProperty('gridRowStart', 'grid') || shouldShowProperty('gridRowEnd', 'grid') ||
+                       shouldShowProperty('gridArea', 'grid');
+  
+  if (hasItemProps) {
+    gridItems.push(
+      <Divider key="grid-items-divider" orientation="left" plain>Grid Items</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('gridColumn', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridColumn" label="Grid Column" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridColumn")} placeholder="e.g. 1 / 3, span 2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridRow', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridRow" label="Grid Row" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridRow")} placeholder="e.g. 1 / 3, span 2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridColumnStart', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridColumnStart" label="Grid Column Start" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridColumnStart")} placeholder="e.g. 1, span 2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridColumnEnd', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridColumnEnd" label="Grid Column End" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridColumnEnd")} placeholder="e.g. 3, span 2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridRowStart', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridRowStart" label="Grid Row Start" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridRowStart")} placeholder="e.g. 1, span 2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridRowEnd', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridRowEnd" label="Grid Row End" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridRowEnd")} placeholder="e.g. 3, span 2" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('gridArea', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gridArea" label="Grid Area" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gridArea")} placeholder="e.g. header, 1 / 1 / 2 / 3" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Grid alignment properties
+  const hasAlignment = shouldShowProperty('justifySelf', 'grid') || shouldShowProperty('placeSelf', 'grid') ||
+                       shouldShowProperty('placeItems', 'grid') || shouldShowProperty('placeContent', 'grid');
+  
+  if (hasAlignment) {
+    gridItems.push(
+      <Divider key="grid-alignment-divider" orientation="left" plain>Grid Alignment</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('justifySelf', 'grid')) {
+    gridItems.push(
+      <Form.Item key="justifySelf" label="Justify Self" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("justifySelf")} options={justifySelfs} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('placeSelf', 'grid')) {
+    gridItems.push(
+      <Form.Item key="placeSelf" label="Place Self" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("placeSelf")} placeholder="e.g. center, start end" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('placeItems', 'grid')) {
+    gridItems.push(
+      <Form.Item key="placeItems" label="Place Items" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("placeItems")} placeholder="e.g. center, start end" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('placeContent', 'grid')) {
+    gridItems.push(
+      <Form.Item key="placeContent" label="Place Content" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("placeContent")} placeholder="e.g. center, start end" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Grid gap properties
+  const hasGap = shouldShowProperty('gap', 'grid') || shouldShowProperty('rowGap', 'grid') || shouldShowProperty('columnGap', 'grid');
+  
+  if (hasGap) {
+    gridItems.push(
+      <Divider key="grid-gap-divider" orientation="left" plain>Grid Gap</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('gap', 'grid')) {
+    gridItems.push(
+      <Form.Item key="gap" label="Gap" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("gap")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('rowGap', 'grid')) {
+    gridItems.push(
+      <Form.Item key="rowGap" label="Row Gap" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("rowGap")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('columnGap', 'grid')) {
+    gridItems.push(
+      <Form.Item key="columnGap" label="Column Gap" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("columnGap")} placeholder="e.g. 10px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (gridItems.length > 0) {
+    items.push({
+      key: 'grid',
+      label: <span><BorderlessTableOutlined /> CSS Grid</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {gridItems}
+        </div>
+      )
+    });
+  }
+}
 
-    // Scroll Behavior
-    if (shouldShow('scroll')) {
-      items.push({
-        key: 'scroll',
-        label: <span><MenuOutlined /> Scroll Behavior</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Form.Item label="Scroll Behavior" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("scrollBehavior")} options={[
-                { value: "auto", label: "Auto" },
-                { value: "smooth", label: "Smooth" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Scroll Snap Type" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("scrollSnapType")} placeholder="e.g. x mandatory, y proximity" size="small" />
-            </Form.Item>
-            <Form.Item label="Scroll Snap Align" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("scrollSnapAlign")} options={[
-                { value: "none", label: "None" },
-                { value: "start", label: "Start" },
-                { value: "end", label: "End" },
-                { value: "center", label: "Center" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-          </div>
-        )
-      });
-    }
+// Lists
+if (shouldShow('lists')) {
+  const listsItems = [];
+  
+  if (shouldShowProperty('listStyleType', 'lists')) {
+    listsItems.push(
+      <Form.Item key="listStyleType" label="List Style Type" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("listStyleType")} options={listStyleTypes} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('listStylePosition', 'lists')) {
+    listsItems.push(
+      <Form.Item key="listStylePosition" label="List Style Position" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("listStylePosition")} options={listStylePositions} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('listStyleImage', 'lists')) {
+    listsItems.push(
+      <Form.Item key="listStyleImage" label="List Style Image" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("listStyleImage")} placeholder="url(bullet.png)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (listsItems.length > 0) {
+    items.push({
+      key: 'lists',
+      label: <span><MenuOutlined /> Lists</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {listsItems}
+        </div>
+      )
+    });
+  }
+}
 
-    // HTML Attributes
-    if (shouldShow('attributes')) {
-      items.push({
-        key: 'attributes',
-        label: <span><SettingOutlined /> HTML Attributes</span>,
-        children: (
-          <div style={{ padding: '0 20px 16px 20px' }}>
-            <Divider orientation="left" plain>Form Attributes</Divider>
-            <Form.Item label="Type" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("type")} placeholder="e.g. text, email, password" size="small" />
-            </Form.Item>
-            <Form.Item label="Value" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("value")} placeholder="Default value" size="small" />
-            </Form.Item>
-            <Form.Item label="Name" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("name")} placeholder="Form field name" size="small" />
-            </Form.Item>
-            <Form.Item label="Target" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("target")} options={[
-                { value: "_self", label: "_self" },
-                { value: "_blank", label: "_blank" },
-                { value: "_parent", label: "_parent" },
-                { value: "_top", label: "_top" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Rel" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("rel")} placeholder="e.g. noopener, noreferrer" size="small" />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Boolean Attributes</Divider>
-            <Form.Item label="Disabled" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("disabled")} size="small" />
-            </Form.Item>
-            <Form.Item label="Required" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("required")} size="small" />
-            </Form.Item>
-            <Form.Item label="Readonly" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("readonly")} size="small" />
-            </Form.Item>
-            <Form.Item label="Multiple" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("multiple")} size="small" />
-            </Form.Item>
-            <Form.Item label="Checked" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("checked")} size="small" />
-            </Form.Item>
-            <Form.Item label="Selected" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("selected")} size="small" />
-            </Form.Item>
-            <Form.Item label="Hidden" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("hidden")} size="small" />
-            </Form.Item>
-            <Form.Item label="Content Editable" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("contentEditable")} size="small" />
-            </Form.Item>
-            <Form.Item label="Draggable" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("draggable")} size="small" />
-            </Form.Item>
-            <Form.Item label="Spell Check" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("spellCheck")} size="small" />
-            </Form.Item>
-            <Form.Item label="Translate" style={sharedStyles.formItem}>
-              <Switch {...handleSwitchChange("translate")} size="small" />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>Other Attributes</Divider>
-            <Form.Item label="Tab Index" style={sharedStyles.formItem}>
-              <InputNumber {...handleNumberChange("tabIndex")} size="small" style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item label="Access Key" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("accessKey")} placeholder="Single character" size="small" maxLength={1} />
-            </Form.Item>
-            <Form.Item label="Dir" style={sharedStyles.formItem}>
-              <Select {...handleSelectChange("dir")} options={[
-                { value: "auto", label: "Auto" },
-                { value: "ltr", label: "Left to Right" },
-                { value: "rtl", label: "Right to Left" }
-              ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-            </Form.Item>
-            <Form.Item label="Lang" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("lang")} placeholder="e.g. en, en-US, fr" size="small" />
-            </Form.Item>
-            
-            <Divider orientation="left" plain>ARIA Attributes</Divider>
-            <Form.Item label="Role" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("role")} placeholder="e.g. button, navigation" size="small" />
-            </Form.Item>
-            <Form.Item label="ARIA Label" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("ariaLabel")} placeholder="Accessibility label" size="small" />
-            </Form.Item>
-            <Form.Item label="ARIA Described By" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("ariaDescribedBy")} placeholder="ID of describing element" size="small" />
-            </Form.Item>
-            <Form.Item label="ARIA Labelled By" style={sharedStyles.formItem}>
-              <Input {...handleInputChange("ariaLabelledBy")} placeholder="ID of labelling element" size="small" />
-            </Form.Item>
-          </div>
-        )
-      });
+// Tables
+if (shouldShow('tables')) {
+  const tablesItems = [];
+  
+  if (shouldShowProperty('tableLayout', 'tables')) {
+    tablesItems.push(
+      <Form.Item key="tableLayout" label="Table Layout" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("tableLayout")} options={tableLayouts} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('captionSide', 'tables')) {
+    tablesItems.push(
+      <Form.Item key="captionSide" label="Caption Side" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("captionSide")} options={captionSides} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('emptyCells', 'tables')) {
+    tablesItems.push(
+      <Form.Item key="emptyCells" label="Empty Cells" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("emptyCells")} options={emptyCells} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('borderCollapse', 'tables')) {
+    tablesItems.push(
+      <Form.Item key="borderCollapse" label="Border Collapse" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("borderCollapse")} options={borderCollapses} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('borderSpacing', 'tables')) {
+    tablesItems.push(
+      <Form.Item key="borderSpacing" label="Border Spacing" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("borderSpacing")} placeholder="e.g. 2px" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (tablesItems.length > 0) {
+    items.push({
+      key: 'tables',
+      label: <span><TableOutlined /> Tables</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {tablesItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Transform & Animation
+if (shouldShow('transform')) {
+  const transformItems = [];
+  
+  if (shouldShowProperty('transform', 'transform')) {
+    transformItems.push(
+      <Form.Item key="transform" label="Transform" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("transform")} placeholder="e.g. rotate(45deg) scale(1.2)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('transformOrigin', 'transform')) {
+    transformItems.push(
+      <Form.Item key="transformOrigin" label="Transform Origin" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("transformOrigin")} placeholder="e.g. center, top left, 50% 50%" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('transition', 'transform')) {
+    transformItems.push(
+      <Form.Item key="transition" label="Transition" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("transition")} placeholder="e.g. all 0.3s ease" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('animation', 'transform')) {
+    transformItems.push(
+      <Form.Item key="animation" label="Animation" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("animation")} placeholder="e.g. slideIn 0.5s ease-in-out" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (transformItems.length > 0) {
+    items.push({
+      key: 'transform',
+      label: <span><ExpandOutlined /> Transform & Animation</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {transformItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Effects & Filters
+if (shouldShow('effects')) {
+  const effectsItems = [];
+  
+  if (shouldShowProperty('opacity', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="opacity" label="Opacity" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("opacity")} min={0} max={1} step={0.01} tooltip={{ formatter: (val) => `${(val * 100).toFixed(0)}%` }} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('filter', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="filter" label="Filter" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("filter")} placeholder="e.g. blur(5px) brightness(1.2)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backdropFilter', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="backdropFilter" label="Backdrop Filter" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("backdropFilter")} placeholder="e.g. blur(10px)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('boxShadow', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="boxShadow" label="Box Shadow" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("boxShadow")} placeholder="e.g. 0 4px 8px rgba(0,0,0,0.1)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('textShadow', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="textShadow" label="Text Shadow" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("textShadow")} placeholder="e.g. 2px 2px 4px rgba(0,0,0,0.5)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('clipPath', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="clipPath" label="Clip Path" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("clipPath")} placeholder="e.g. circle(50%)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('mask', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="mask" label="Mask" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("mask")} placeholder="e.g. url(mask.svg)" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('mixBlendMode', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="mixBlendMode" label="Mix Blend Mode" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("mixBlendMode")} options={[
+          { value: "normal", label: "Normal" },
+          { value: "multiply", label: "Multiply" },
+          { value: "screen", label: "Screen" },
+          { value: "overlay", label: "Overlay" },
+          { value: "darken", label: "Darken" },
+          { value: "lighten", label: "Lighten" },
+          { value: "color-dodge", label: "Color Dodge" },
+          { value: "color-burn", label: "Color Burn" },
+          { value: "hard-light", label: "Hard Light" },
+          { value: "soft-light", label: "Soft Light" },
+          { value: "difference", label: "Difference" },
+          { value: "exclusion", label: "Exclusion" },
+          { value: "hue", label: "Hue" },
+          { value: "saturation", label: "Saturation" },
+          { value: "color", label: "Color" },
+          { value: "luminosity", label: "Luminosity" }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('backgroundBlendMode', 'effects')) {
+    effectsItems.push(
+      <Form.Item key="backgroundBlendMode" label="Background Blend Mode" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("backgroundBlendMode")} options={[
+          { value: "normal", label: "Normal" },
+          { value: "multiply", label: "Multiply" },
+          { value: "screen", label: "Screen" },
+          { value: "overlay", label: "Overlay" },
+          { value: "darken", label: "Darken" },
+          { value: "lighten", label: "Lighten" },
+          { value: "color-dodge", label: "Color Dodge" },
+          { value: "color-burn", label: "Color Burn" },
+          { value: "hard-light", label: "Hard Light" },
+          { value: "soft-light", label: "Soft Light" },
+          { value: "difference", label: "Difference" },
+          { value: "exclusion", label: "Exclusion" },
+          { value: "hue", label: "Hue" },
+          { value: "saturation", label: "Saturation" },
+          { value: "color", label: "Color" },
+          { value: "luminosity", label: "Luminosity" }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (effectsItems.length > 0) {
+    items.push({
+      key: 'effects',
+      label: <span><PictureOutlined /> Effects & Filters</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {effectsItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Interaction
+if (shouldShow('interaction')) {
+  const interactionItems = [];
+  
+  if (shouldShowProperty('cursor', 'interaction')) {
+    interactionItems.push(
+      <Form.Item key="cursor" label="Cursor" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("cursor")} options={cursors} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('pointerEvents', 'interaction')) {
+    interactionItems.push(
+      <Form.Item key="pointerEvents" label="Pointer Events" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("pointerEvents")} options={pointerEvents} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('userSelect', 'interaction')) {
+    interactionItems.push(
+      <Form.Item key="userSelect" label="User Select" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("userSelect")} options={userSelects} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('touchAction', 'interaction')) {
+    interactionItems.push(
+      <Form.Item key="touchAction" label="Touch Action" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("touchAction")} placeholder="e.g. auto, manipulation" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (interactionItems.length > 0) {
+    items.push({
+      key: 'interaction',
+      label: <span><LinkOutlined /> Interaction</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {interactionItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Content & Generated Content
+if (shouldShow('content')) {
+  const contentItems = [];
+  
+  if (shouldShowProperty('content', 'content')) {
+    contentItems.push(
+      <Form.Item key="content" label="Content" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("content")} placeholder='e.g. "text", attr(title)' size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('quotes', 'content')) {
+    contentItems.push(
+      <Form.Item key="quotes" label="Quotes" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("quotes")} placeholder='e.g. text' size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('counterReset', 'content')) {
+    contentItems.push(
+      <Form.Item key="counterReset" label="Counter Reset" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("counterReset")} placeholder="e.g. counter-name 0" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('counterIncrement', 'content')) {
+    contentItems.push(
+      <Form.Item key="counterIncrement" label="Counter Increment" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("counterIncrement")} placeholder="e.g. counter-name 1" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (contentItems.length > 0) {
+    items.push({
+      key: 'content',
+      label: <span><FontColorsOutlined /> Content & Generated</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {contentItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Object Fitting (for images/videos)
+if (shouldShow('object')) {
+  const objectItems = [];
+  
+  if (shouldShowProperty('objectFit', 'object')) {
+    objectItems.push(
+      <Form.Item key="objectFit" label="Object Fit" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("objectFit")} options={objectFits} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('objectPosition', 'object')) {
+    objectItems.push(
+      <Form.Item key="objectPosition" label="Object Position" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("objectPosition")} options={objectPositions} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (objectItems.length > 0) {
+    items.push({
+      key: 'object',
+      label: <span><PictureOutlined /> Object Fitting</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {objectItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Scroll Behavior
+if (shouldShow('scroll')) {
+  const scrollItems = [];
+  
+  if (shouldShowProperty('scrollBehavior', 'scroll')) {
+    scrollItems.push(
+      <Form.Item key="scrollBehavior" label="Scroll Behavior" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("scrollBehavior")} options={[
+          { value: "auto", label: "Auto" },
+          { value: "smooth", label: "Smooth" }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('scrollSnapType', 'scroll')) {
+    scrollItems.push(
+      <Form.Item key="scrollSnapType" label="Scroll Snap Type" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("scrollSnapType")} placeholder="e.g. x mandatory, y proximity" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('scrollSnapAlign', 'scroll')) {
+    scrollItems.push(
+      <Form.Item key="scrollSnapAlign" label="Scroll Snap Align" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("scrollSnapAlign")} options={[
+          { value: "none", label: "None" },
+          { value: "start", label: "Start" },
+          { value: "end", label: "End" },
+          { value: "center", label: "Center" }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (scrollItems.length > 0) {
+    items.push({
+      key: 'scroll',
+      label: <span><MenuOutlined /> Scroll Behavior</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {scrollItems}
+        </div>
+      )
+    });
+  }
+}
+
+// HTML Attributes
+if (shouldShow('attributes')) {
+  const attributesItems = [];
+  
+  // Form Attributes section
+  const hasFormAttributes = shouldShowProperty('type', 'attributes') || shouldShowProperty('value', 'attributes') ||
+                            shouldShowProperty('name', 'attributes') || shouldShowProperty('target', 'attributes') ||
+                            shouldShowProperty('rel', 'attributes');
+  
+  if (hasFormAttributes) {
+    attributesItems.push(
+      <Divider key="form-attributes-divider" orientation="left" plain>Form Attributes</Divider>
+    );
+    
+    if (shouldShowProperty('type', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="type" label="Type" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("type")} placeholder="e.g. text, email, password" size="small" />
+        </Form.Item>
+      );
     }
+    
+    if (shouldShowProperty('value', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="value" label="Value" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("value")} placeholder="Default value" size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('name', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="name" label="Name" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("name")} placeholder="Form field name" size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('target', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="target" label="Target" style={sharedStyles.formItem}>
+          <Select {...handleSelectChange("target")} options={[
+            { value: "_self", label: "_self" },
+            { value: "_blank", label: "_blank" },
+            { value: "_parent", label: "_parent" },
+            { value: "_top", label: "_top" }
+          ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('rel', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="rel" label="Rel" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("rel")} placeholder="e.g. noopener, noreferrer" size="small" />
+        </Form.Item>
+      );
+    }
+  }
+  
+  // Boolean Attributes section
+  const hasBooleanAttributes = shouldShowProperty('disabled', 'attributes') || shouldShowProperty('required', 'attributes') ||
+                              shouldShowProperty('readonly', 'attributes') || shouldShowProperty('multiple', 'attributes') ||
+                              shouldShowProperty('checked', 'attributes') || shouldShowProperty('selected', 'attributes') ||
+                              shouldShowProperty('hidden', 'attributes') || shouldShowProperty('contentEditable', 'attributes') ||
+                              shouldShowProperty('draggable', 'attributes') || shouldShowProperty('spellCheck', 'attributes') ||
+                              shouldShowProperty('translate', 'attributes');
+  
+  if (hasBooleanAttributes) {
+    attributesItems.push(
+      <Divider key="boolean-attributes-divider" orientation="left" plain>Boolean Attributes</Divider>
+    );
+    
+    if (shouldShowProperty('disabled', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="disabled" label="Disabled" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("disabled")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('required', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="required" label="Required" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("required")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('readonly', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="readonly" label="Readonly" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("readonly")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('multiple', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="multiple" label="Multiple" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("multiple")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('checked', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="checked" label="Checked" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("checked")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('selected', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="selected" label="Selected" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("selected")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('hidden', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="hidden" label="Hidden" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("hidden")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('contentEditable', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="contentEditable" label="Content Editable" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("contentEditable")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('draggable', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="draggable" label="Draggable" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("draggable")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('spellCheck', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="spellCheck" label="Spell Check" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("spellCheck")} size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('translate', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="translate" label="Translate" style={sharedStyles.formItem}>
+          <Switch {...handleSwitchChange("translate")} size="small" />
+        </Form.Item>
+      );
+    }
+  }
+  
+  // Other Attributes section
+  const hasOtherAttributes = shouldShowProperty('tabIndex', 'attributes') || shouldShowProperty('accessKey', 'attributes') ||
+                            shouldShowProperty('dir', 'attributes') || shouldShowProperty('lang', 'attributes');
+  
+  if (hasOtherAttributes) {
+    attributesItems.push(
+      <Divider key="other-attributes-divider" orientation="left" plain>Other Attributes</Divider>
+    );
+    
+    if (shouldShowProperty('tabIndex', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="tabIndex" label="Tab Index" style={sharedStyles.formItem}>
+          <InputNumber {...handleNumberChange("tabIndex")} size="small" style={{ width: '100%' }} />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('accessKey', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="accessKey" label="Access Key" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("accessKey")} placeholder="Single character" size="small" maxLength={1} />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('dir', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="dir" label="Dir" style={sharedStyles.formItem}>
+          <Select {...handleSelectChange("dir")} options={[
+            { value: "auto", label: "Auto" },
+            { value: "ltr", label: "Left to Right" },
+            { value: "rtl", label: "Right to Left" }
+          ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('lang', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="lang" label="Lang" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("lang")} placeholder="e.g. en, en-US, fr" size="small" />
+        </Form.Item>
+      );
+    }
+  }
+  
+  // ARIA Attributes section
+  const hasAriaAttributes = shouldShowProperty('role', 'attributes') || shouldShowProperty('ariaLabel', 'attributes') ||
+                           shouldShowProperty('ariaDescribedBy', 'attributes') || shouldShowProperty('ariaLabelledBy', 'attributes');
+  
+  if (hasAriaAttributes) {
+    attributesItems.push(
+      <Divider key="aria-attributes-divider" orientation="left" plain>ARIA Attributes</Divider>
+    );
+    
+    if (shouldShowProperty('role', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="role" label="Role" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("role")} placeholder="e.g. button, navigation" size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('ariaLabel', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="ariaLabel" label="ARIA Label" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("ariaLabel")} placeholder="Accessibility label" size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('ariaDescribedBy', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="ariaDescribedBy" label="ARIA Described By" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("ariaDescribedBy")} placeholder="ID of describing element" size="small" />
+        </Form.Item>
+      );
+    }
+    
+    if (shouldShowProperty('ariaLabelledBy', 'attributes')) {
+      attributesItems.push(
+        <Form.Item key="ariaLabelledBy" label="ARIA Labelled By" style={sharedStyles.formItem}>
+          <Input {...handleInputChange("ariaLabelledBy")} placeholder="ID of labelling element" size="small" />
+        </Form.Item>
+      );
+    }
+  }
+  
+  // Only add the section if it has items to show
+  if (attributesItems.length > 0) {
+    items.push({
+      key: 'attributes',
+      label: <span><SettingOutlined /> HTML Attributes</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {attributesItems}
+        </div>
+      )
+    });
+  }
+}
 
     return items;
   }, [localStyle, shouldShow, handleInputChange, handleSelectChange, handleSliderChange, handleColorChange, handleButtonGroupChange, handleNumberChange, handleSwitchChange, sharedStyles, debouncedSync]);

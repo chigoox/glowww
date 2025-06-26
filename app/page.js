@@ -7,14 +7,14 @@ import { Topbar } from './Components/TopBar';
 import { Editor, Element, Frame } from "@craftjs/core";
 import { Box } from './Components/user/Box';
 import { StyleMenu } from './Components/StyleMenu';
+import { FlexBox } from './Components/user/FlexBox';
 
 export default function App() {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
 
-
   return (
     <div className="mx-auto  p-4">
-      <Editor resolver={{Box}}> 
+      <Editor resolver={{Box, FlexBox}}> 
       <div className="pt-2 space-y-2">
         <Topbar />
 
