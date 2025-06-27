@@ -5,6 +5,8 @@ import { Button as ButtonAD, Typography } from "antd";
 import { useEffect, useRef } from "react";
 import { Box } from "./user/Box";
 import { FlexBox } from "./user/FlexBox";
+import { GridBox } from "./user/GridBox";
+import { Image } from "./user/Image";
 
 import { 
   AppstoreOutlined, 
@@ -14,8 +16,14 @@ import {
   MenuOutlined,
   TableOutlined,
   LayoutOutlined,
-  BgColorsOutlined
+  BgColorsOutlined,
+  AlignCenterOutlined,
+  LinkOutlined
 } from "@ant-design/icons";
+import { Text } from "./user/Text";
+import { Button } from "./user/Button";
+import { Link } from "./user/Link";
+import { TextArea } from "./user/TextArea";
 
 export const Toolbox = ({}) => {
   const { connectors } = useEditor();
@@ -25,7 +33,11 @@ export const Toolbox = ({}) => {
   const flexBoxRef = useRef(null);
   const gridBoxRef = useRef(null);
   const textRef = useRef(null);
+  const TextAreaRef = useRef(null);
   const imageRef = useRef(null);
+  const buttonRef = useRef(null);
+  const linkRef = useRef(null);
+
   const menuRef = useRef(null);
   const tableRef = useRef(null);
 
@@ -43,6 +55,54 @@ export const Toolbox = ({}) => {
         <Element is={FlexBox} padding={20} display="flex" flexDirection="row" canvas />
       );
     }
+
+    if (gridBoxRef.current) {
+      connectors.create(gridBoxRef.current, 
+        <Element is={GridBox} padding={20} display="grid" gridTemplateColumns="repeat(3, 1fr)" canvas />
+      );
+    }
+
+    if (textRef.current) {
+      connectors.create(textRef.current, 
+        <Element is={Text}  />
+        
+      );
+    }
+
+    if (TextAreaRef.current) {
+      connectors.create(TextAreaRef.current, 
+        <Element is={TextArea} placeholder="Type here..." />
+      );
+    }
+
+    if (buttonRef.current) {
+      connectors.create(buttonRef.current, 
+        <Element is={Button} type="primary" className="w-full">
+        
+        </Element>
+      );
+    }
+
+    if (imageRef.current) {
+      connectors.create(imageRef.current, 
+        <Element is={Image} src="https://via.placeholder.com/300x200?text=Click+to+Upload+Image" />
+      );
+    }
+
+    
+
+    if (linkRef.current) {
+      connectors.create(linkRef.current, 
+        <Element is={Link} href="https://example.com" target="_blank">
+          <span>Link</span>
+        </Element>
+      );
+    }
+
+
+
+
+    
    
   }, [connectors ]);
 
@@ -84,21 +144,53 @@ export const Toolbox = ({}) => {
           
           <ButtonAD 
             ref={textRef} 
-            type="primary" 
+            type="none" 
             className="w-20 h-16 flex  items-center justify-center text-xs"
             icon={<FontColorsOutlined />}
           >
             <div className="mt-1">Text</div>
           </ButtonAD>
+
+          <ButtonAD 
+            ref={TextAreaRef} 
+            type="none"
+            className="w-20 h-16 flex items-center justify-center text-xs"
+            icon={<AlignCenterOutlined />}
+          >
+            <div className="mt-1">Text Area</div>
+          </ButtonAD>
           
           <ButtonAD 
             ref={imageRef} 
-            type="primary" 
+            type="none" 
             className="w-20 h-16 flex items-center justify-center text-xs"
             icon={<PictureOutlined />}
           >
             <div className="mt-1">Image</div>
           </ButtonAD>
+
+          <ButtonAD 
+            ref={buttonRef} 
+            type="none"
+            className="w-20 h-16 flex items-center justify-center text-xs"
+            icon={<MenuOutlined />}
+          >
+            <div className="mt-1">Button</div>
+          </ButtonAD>
+
+          <ButtonAD 
+            ref={linkRef} 
+            type="none"
+            className="w-20 h-16 flex items-center justify-center text-xs"
+            icon={<LinkOutlined />}
+          >
+            <div className="mt-1">Link</div>
+          </ButtonAD>
+
+
+
+          
+          
         </div>
       </div>
     </div>

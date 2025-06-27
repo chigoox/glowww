@@ -242,17 +242,20 @@ export const Text = ({
   const { actions } = useEditor();
 
   const textRef = useRef(null);
-  const dragHandleRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [localText, setLocalText] = useState(text);
 
   useEffect(() => {
-    if (textRef.current) {
-      connect(textRef.current);
-    }
-    if (dragHandleRef.current) {
-      drag(dragHandleRef.current);
-    }
-  }, [connect, drag]);
+  if (!isEditing) {
+    setLocalText(text);
+  }
+}, [text, isEditing]);
+
+useEffect(() => {
+  if (textRef.current) {
+    connect(drag(textRef.current));
+  }
+}, [connect, drag]);
 
   // Helper function to process values (add px to numbers where appropriate)
   const processValue = (value, property) => {
@@ -449,113 +452,118 @@ export const Text = ({
     dataAttrs[`data-${key}`] = value;
   });
 
-  // Handle text editing
-  const handleTextChange = (e) => {
-    setProp(props => props.text = e.target.innerText);
-  };
+const handleTextChange = (e) => {
+  const newText = e.target.textContent || e.target.innerText;
+  setLocalText(newText); // Only update local state, don't trigger React re-render
+};
 
-  const handleDoubleClick = () => {
-    setIsEditing(true);
-  };
-
-  const handleBlur = () => {
+const handleKeyDown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
     setIsEditing(false);
-  };
+    // Save to CraftJS when editing ends
+    setProp(props => {
+      props.text = localText;
+    });
+    textRef.current?.blur();
+  }
+  if (e.key === 'Escape') {
+    setIsEditing(false);
+    setLocalText(text); // Revert to original text
+    textRef.current?.blur();
+  }
+};
+
+const handleDoubleClick = () => {
+  setIsEditing(true);
+  setLocalText(text); // Initialize local text with current value
+};
+
+const handleBlur = () => {
+  setIsEditing(false);
+  // Save to CraftJS when editing ends
+  setProp(props => {
+    props.text = localText;
+  });
+};
 
   return (
-    <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className || ''}`}
-      ref={textRef}
-      style={{
-        position: 'relative',
-        ...computedStyles
-      }}
-      id={id}
-      title={title}
-      role={role}
-      aria-label={ariaLabel}
-      aria-describedby={ariaDescribedBy}
-      aria-labelledby={ariaLabelledBy}
-      tabIndex={tabIndex}
-      accessKey={accessKey}
+  <div
+    className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className || ''}`}
+    ref={textRef}
+    style={{
+      position: 'relative',
+      ...computedStyles
+    }}
+    id={id}
+    title={title}
+    role={role}
+    aria-label={ariaLabel}
+    aria-describedby={ariaDescribedBy}
+    aria-labelledby={ariaLabelledBy}
+    tabIndex={tabIndex}
+    accessKey={accessKey}
+    draggable={draggable}
+    spellCheck={spellCheck}
+    translate={translate ? 'yes' : 'no'}
+    dir={dir}
+    lang={lang}
+    hidden={hidden}
+    onDoubleClick={handleDoubleClick}
+    {...dataAttrs}
+    {...(disabled && { disabled: true })}
+    {...(required && { required: true })}
+    {...(readonly && { readonly: true })}
+    {...(multiple && { multiple: true })}
+    {...(checked && { checked: true })}
+    {...(selected && { selected: true })}
+  >
+    {/* Edit indicator - outside of contentEditable area */}
+    {isSelected && !isEditing && (
+      <div
+        style={{
+          position: "absolute",
+          top: -12,
+          left: -12,
+          width: 24,
+          height: 24,
+          background: "#52c41a",
+          borderRadius: "50%",
+          cursor: "pointer",
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "white",
+          fontSize: 12,
+          border: "2px solid white",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+        }}
+        onClick={handleDoubleClick}
+        title="Double-click to edit text"
+      >
+        <EditOutlined />
+      </div>
+    )}
+    
+    {/* Separate contentEditable span for text content */}
+    <span
       contentEditable={isEditing}
-      draggable={draggable}
-      spellCheck={spellCheck}
-      translate={translate ? 'yes' : 'no'}
-      dir={dir}
-      lang={lang}
-      hidden={hidden}
-      onDoubleClick={handleDoubleClick}
       onBlur={handleBlur}
       onInput={handleTextChange}
-      {...dataAttrs}
-      {...(disabled && { disabled: true })}
-      {...(required && { required: true })}
-      {...(readonly && { readOnly: true })}
-      {...(multiple && { multiple: true })}
-      {...(checked && { checked: true })}
-      {...(selected && { selected: true })}
+      onKeyDown={handleKeyDown}
+      style={{
+        outline: 'none',
+        display: 'block',
+        width: '100%',
+        minHeight: '1em'
+      }}
+      suppressContentEditableWarning={true}
     >
-      {/* Drag handle */}
-      {isSelected && (
-        <div
-          ref={dragHandleRef}
-          style={{
-            position: "absolute",
-            top: -12,
-            right: -12,
-            width: 24,
-            height: 24,
-            background: "#1890ff",
-            borderRadius: "50%",
-            cursor: "grab",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 12,
-            border: "2px solid white",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onMouseDown={e => e.stopPropagation()}
-          title="Drag Text"
-        >
-          <DragOutlined />
-        </div>
-      )}
-      
-      {/* Edit indicator */}
-      {isSelected && !isEditing && (
-        <div
-          style={{
-            position: "absolute",
-            top: -12,
-            left: -12,
-            width: 24,
-            height: 24,
-            background: "#52c41a",
-            borderRadius: "50%",
-            cursor: "pointer",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 12,
-            border: "2px solid white",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onClick={handleDoubleClick}
-          title="Double-click to edit text"
-        >
-          <EditOutlined />
-        </div>
-      )}
-      
       {text}
-    </div>
-  );
+    </span>
+  </div>
+);
 };
 
 // Define all supported props for the Text component
@@ -793,12 +801,42 @@ Text.craft = {
   },
   rules: {
     canDrag: () => true,
-    canDrop: () => false, // Text typically doesn't accept drops
+    canDrop: () => true, 
     canMoveIn: () => false,
+    canMoveOut: () => true, 
   },
   custom: {
     styleMenu: {
-      supportedProps: [] // Empty array means show ALL properties
+      supportedProps: [
+        // Essential Text Properties
+        "text",
+        
+        // Basic Typography
+        "fontSize",
+        "fontFamily", 
+        "fontWeight",
+        "color",
+        "textAlign",
+        
+        // Size & Position
+        "width",
+        "height",
+        "padding",
+        "margin",
+        
+        // Background & Border
+        "backgroundColor",
+        "border",
+        "borderRadius",
+        
+        // Basic Layout
+        "display",
+        
+        // Visual Effects
+        "opacity",
+        "boxShadow",
+        "transform"
+      ] // Empty array means show ALL properties
     }
   }
 };

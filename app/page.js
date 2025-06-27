@@ -8,13 +8,19 @@ import { Editor, Element, Frame } from "@craftjs/core";
 import { Box } from './Components/user/Box';
 import { StyleMenu } from './Components/StyleMenu';
 import { FlexBox } from './Components/user/FlexBox';
+import { Text } from './Components/user/Text';
+import { GridBox } from './Components/user/GridBox';
+import { Image } from './Components/user/Image';
+import { Button } from './Components/user/Button';
+import { TextArea } from './Components/user/TextArea';
+import { Link } from './Components/user/Link';
 
 export default function App() {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
 
   return (
     <div className="mx-auto  p-4">
-      <Editor resolver={{Box, FlexBox}}> 
+      <Editor resolver={{Box, FlexBox,GridBox, Text, Image, Button, TextArea, Link}}> 
       <div className="pt-2 space-y-2">
         <Topbar />
 

@@ -5,7 +5,7 @@ import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
 import { DragOutlined } from '@ant-design/icons';
 
-export const FlexBox = ({
+export const GridBox = ({
   // Layout & Position
   width = "auto",
   height = "auto",
@@ -401,7 +401,7 @@ placeContent,
 };
 
 // Define default props for Craft.js - these will be the initial values
-FlexBox.craft = {
+GridBox.craft = {
   props: {
     // Layout & Position
     width: "auto",
@@ -494,9 +494,9 @@ FlexBox.craft = {
     canMoveIn: () => true,
   },
    custom: {
-  styleMenu: {
-    supportedProps: [
-      // Layout & Position
+    styleMenu: {
+      supportedProps: [
+        // Layout & Position
       'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
       'display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
       'visibility', 'float', 'clear', 'boxSizing',
@@ -520,12 +520,15 @@ FlexBox.craft = {
       'wordBreak', 'wordWrap',
       
       // Flexbox Container Properties
-      'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent',
+      'justifyContent', 'alignItems', 'alignContent',
       'gap', 'rowGap', 'columnGap',
       
-      // Flexbox Item Properties
-      'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'order',
-      
+      //grid
+      'gridTemplateColumns', 'gridTemplateRows', 'gridTemplateAreas', 'gridAutoFlow',
+      'gridAutoColumns', 'gridAutoRows', 
+
+      //
+
       // Colors & Backgrounds
       'color', 'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
       'backgroundRepeat', 'backgroundPosition', 'backgroundAttachment', 'backgroundClip', 'backgroundOrigin',
@@ -537,9 +540,7 @@ FlexBox.craft = {
       'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',
       'contentEditable', 'draggable', 'spellCheck', 'translate', 'dir', 'lang',
       'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy'
-
-      
-    ]
+      ]
+    }
   }
-}
 };
