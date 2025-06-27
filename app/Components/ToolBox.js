@@ -76,12 +76,10 @@ export const Toolbox = ({}) => {
     }
 
     if (buttonRef.current) {
-      connectors.create(buttonRef.current, 
-        <Element is={Button} type="primary" className="w-full">
-        
-        </Element>
-      );
-    }
+  connectors.create(buttonRef.current, 
+    <Element is={Button} text="Click Me" canvas />
+  );
+}
 
     if (imageRef.current) {
       connectors.create(imageRef.current, 

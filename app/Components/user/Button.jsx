@@ -339,9 +339,22 @@ export const Button = ({
       )}
       
       {/* Button content - text and children */}
-      {text && (
-        <Element id={'text'} is={Text} text='Click me' />
-      )}
+      {text && !children?.length && (
+  <span
+    contentEditable={isEditing}
+    onBlur={handleBlur}
+    onInput={handleTextChange}
+    onKeyDown={handleKeyDown}
+    style={{
+      outline: 'none',
+      minHeight: '1em'
+    }}
+    suppressContentEditableWarning={true}
+  >
+    {isEditing ? localText : text}
+  </span>
+)}
+
       
       {/* Render children */}
       {children}
@@ -407,7 +420,7 @@ Button.craft = {
     canDrop: () => true,     // Now accepts children
     canMoveIn: () => true,   // Children can be moved in
     canMoveOut: () => true,
-    canResize: () => true, // Allow resizing
+    
     
   },
   custom: {
