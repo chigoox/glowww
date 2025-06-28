@@ -103,31 +103,25 @@ export const ShopImage = ({
   }));
 
   return (
-    <div
+    <img
       ref={(ref) => ref && connect(drag(ref))}
-      className={selected ? "selected-shop-image" : ""}
-      style={{ 
-        position: 'relative',
+      src={src}
+      alt={alt}
+      style={{
+        width,
+        height,
+        objectFit,
+        borderRadius,
+        display: 'block',
         outline: selected ? '2px solid #1890ff' : 'none',
-        outlineOffset: '2px'
+        outlineOffset: '2px',
+        ...props.style
       }}
-    >
-      <img
-        src={src}
-        alt={alt}
-        style={{
-          width,
-          height,
-          objectFit,
-          borderRadius,
-          display: 'block',
-          ...props.style
-        }}
-        {...props}
-      />
-    </div>
+      {...props}
+    />
   );
 };
+
 
 ShopImage.craft = {
   props: {
@@ -166,28 +160,22 @@ export const ShopText = ({
   }));
 
   return (
-    <div
+    <span
       ref={(ref) => ref && connect(drag(ref))}
-      className={selected ? "selected-shop-text" : ""}
-      style={{ 
+      style={{
+        fontSize,
+        fontWeight,
+        color,
+        textAlign,
+        lineHeight,
         outline: selected ? '2px solid #1890ff' : 'none',
-        outlineOffset: '2px'
+        outlineOffset: '2px',
+        ...props.style
       }}
+      {...props}
     >
-      <span
-        style={{
-          fontSize,
-          fontWeight,
-          color,
-          textAlign,
-          lineHeight,
-          ...props.style
-        }}
-        {...props}
-      >
-        {text}
-      </span>
-    </div>
+      {text}
+    </span>
   );
 };
 
@@ -232,32 +220,26 @@ export const ShopButton = ({
   }));
 
   return (
-    <div
+    <button
       ref={(ref) => ref && connect(drag(ref))}
-      className={selected ? "selected-shop-button" : ""}
-      style={{ 
+      style={{
+        backgroundColor,
+        color,
+        borderRadius,
+        padding,
+        fontSize,
+        fontWeight,
+        width,
+        border,
+        cursor: 'pointer',
         outline: selected ? '2px solid #1890ff' : 'none',
-        outlineOffset: '2px'
+        outlineOffset: '2px',
+        ...props.style
       }}
+      {...props}
     >
-      <button
-        style={{
-          backgroundColor,
-          color,
-          borderRadius,
-          padding,
-          fontSize,
-          fontWeight,
-          width,
-          border,
-          cursor: 'pointer',
-          ...props.style
-        }}
-        {...props}
-      >
-        🛒 Quick Add
-      </button>
-    </div>
+      🛒 Quick Add
+    </button>
   );
 };
 
@@ -423,24 +405,34 @@ const createProductItem = (product) => {
   const currentImg = currentImageIndex[product.id] || 0;
   const hasDiscount = product.originalPrice && product.originalPrice > product.price;
   const discountPercent = hasDiscount ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0;
-  console.log('FlexBox:', FlexBox);
-  console.log('ShopImage:', ShopImage);
-  console.log('ShopText:', ShopText);
-  console.log('ShopButton:', ShopButton);
+
   return (
     <Element
       key={product.id}
       id={`product-container-${product.id}`}
       is={FlexBox}
-   
+      flexDirection="column"
+      width="280px"
+      padding="16px"
+      backgroundColor="white"
+      borderRadius="8px"
+      boxShadow="0 2px 8px rgba(0,0,0,0.1)"
+      position="relative"
+      canvas
     >
       {/* Product Image Container */}
       <Element
         id={`image-container-${product.id}`}
         is={FlexBox}
-   
+        width="100%"
+        height="200px"
+        position="relative"
+        borderRadius="8px"
+        overflow="hidden"
+        marginBottom="12px"
+        canvas
       >
-        {/* Discount Badge - Using regular div instead of Element */}
+        {/* Discount Badge */}
         {showDiscount && hasDiscount && (
           <div
             style={{
@@ -460,7 +452,7 @@ const createProductItem = (product) => {
           </div>
         )}
 
-        {/* Wishlist Button - Using regular button instead of Element */}
+        {/* Wishlist Button */}
         {showWishlist && (
           <button
             style={{
@@ -496,10 +488,9 @@ const createProductItem = (product) => {
           width="100%"
           height="100%"
           objectFit="cover"
-          onClick={() => window.open(getProductLink(product), '_blank')}
         />
 
-        {/* Image Navigation - Using regular buttons instead of Elements */}
+        {/* Image Navigation */}
         {product.images.length > 1 && (
           <>
             <button
@@ -593,7 +584,10 @@ const createProductItem = (product) => {
       <Element
         id={`product-info-${product.id}`}
         is={FlexBox}
-    
+        flexDirection="column"
+        width="100%"
+        gap="8px"
+        canvas
       >
         {/* Product Name */}
         <Element
@@ -603,19 +597,17 @@ const createProductItem = (product) => {
           fontSize="16px"
           fontWeight="600"
           color="#333"
-          style={{ 
-            cursor: 'pointer',
-            textDecoration: 'none',
-            lineHeight: '1.4'
-          }}
-          onClick={() => window.open(getProductLink(product), '_blank')}
+          lineHeight="1.4"
         />
 
         {/* Price Container */}
         <Element 
           id={`price-container-${product.id}`}
           is={FlexBox} 
-        
+          flexDirection="row"
+          alignItems="center"
+          gap="8px"
+          canvas
         >
           <Element
             id={`current-price-${product.id}`}
@@ -632,7 +624,7 @@ const createProductItem = (product) => {
               text={formatPrice(product.originalPrice)}
               fontSize="14px"
               color="#999"
-              style={{ textDecoration: 'line-through' }}
+              textDecoration="line-through"
             />
           )}
         </Element>
@@ -649,11 +641,6 @@ const createProductItem = (product) => {
             fontSize="14px"
             fontWeight="500"
             width="100%"
-            style={{ marginTop: '8px' }}
-            onClick={(e) => {
-              e.preventDefault();
-              handleQuickAdd(product);
-            }}
           />
         )}
       </Element>
@@ -700,30 +687,35 @@ const createProductItem = (product) => {
 
         {/* Products Display */}
         {displayProducts.length > 0 ? (
-          displayProducts.map(product => createProductItem(product))
-        ) : (
-          <Element
-            id="empty-state-container"
-            is={FlexBox}
-            
-          >
-            <div style={{ fontSize: '48px' }}>🛍️</div>
-            <Element
-              id="empty-state-text-1"
-              is={ShopText}
-              text="No products selected"
-              fontSize="16px"
-              color="#999"
-            />
-            <Element
-              id="empty-state-text-2"
-              is={ShopText}
-              text="Click edit to configure your shop"
-              fontSize="14px"
-              color="#ccc"
-            />
-          </Element>
-        )}
+  displayProducts.map(product => createProductItem(product))
+) : (
+  <Element
+    id="empty-state-container"
+    is={FlexBox}
+    flexDirection="column"
+    alignItems="center"
+    justifyContent="center"
+    padding="40px"
+    width="100%"
+    canvas
+  >
+    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🛍️</div>
+    <Element
+      id="empty-state-text-1"
+      is={ShopText}
+      text="No products selected"
+      fontSize="16px"
+      color="#999"
+    />
+    <Element
+      id="empty-state-text-2"
+      is={ShopText}
+      text="Click edit to configure your shop"
+      fontSize="14px"
+      color="#ccc"
+    />
+  </Element>
+)}
 
         {children}
       </FlexBox>
