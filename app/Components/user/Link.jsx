@@ -476,7 +476,7 @@ Link.craft = {
   },
   rules: {
     canDrag: () => true,
-    canDrop: () => false,
+    canDrop: () => true,
     canMoveIn: () => false,
     canMoveOut: () => true,
   },

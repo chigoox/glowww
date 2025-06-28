@@ -10,15 +10,18 @@
   },
   "dependencies": {
     "@craftjs/core": "^0.2.12",
+    "@tinymce/tinymce-react": "^5.0.0",
     "antd": "^5.25.4",
     "firebase": "^11.8.1",
     "interactjs": "^1.10.27",
     "next": "15.3.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tinymce": "^7.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "raw-loader": "^4.0.2",
     "tailwindcss": "^4"
   }
 }

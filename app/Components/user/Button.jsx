@@ -447,6 +447,8 @@ Button.craft = {
         
         // Visual Effects
         "boxShadow", "opacity", "transform", "transition",
+
+        'overflow',
         
         // Flexbox Layout (for children)
         "flexDirection", "alignItems", "justifyContent", "gap",

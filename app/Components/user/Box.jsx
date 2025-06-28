@@ -406,6 +406,7 @@ Box.craft = {
     // Layout & Position
     width: "auto",
     height: "auto",
+    minHeight: "5rem",
     display: "block",
     position: "relative",
     zIndex: 1,
@@ -421,8 +422,8 @@ Box.craft = {
     resize: "none",
     
     // Spacing
-    margin: "5px 0",
-    padding: 20,
+    margin: "none",
+    padding: '2rem',
     
     // Border
     border: "none",
@@ -495,7 +496,7 @@ Box.craft = {
   },
    custom: {
     styleMenu: {
-      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border']
+      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border', 'overflow']
     }
   }
 };

@@ -14,13 +14,16 @@ import { Image } from './Components/user/Image';
 import { Button } from './Components/user/Button';
 import { TextArea } from './Components/user/TextArea';
 import { Link } from './Components/user/Link';
+import { Paragraph } from './Components/user/Paragraph';
+import { Video } from './Components/user/Video';
+import { ShopButton, ShopFlexBox, ShopImage, ShopText } from './Components/user/Advanced/ShopFlexBox';
 
 export default function App() {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
 
   return (
     <div className="mx-auto  p-4">
-      <Editor resolver={{Box, FlexBox,GridBox, Text, Image, Button, TextArea, Link}}> 
+      <Editor resolver={{Box, FlexBox,GridBox, Text, Image, Button, TextArea, Link, Paragraph, Video, ShopFlexBox, ShopButton, ShopImage, ShopText}}> 
       <div className="pt-2 space-y-2">
         <Topbar />
 

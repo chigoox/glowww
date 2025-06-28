@@ -17,13 +17,19 @@ import {
   TableOutlined,
   LayoutOutlined,
   BgColorsOutlined,
+  EditOutlined,
   AlignCenterOutlined,
-  LinkOutlined
+  LinkOutlined,
+  VideoCameraAddOutlined,
+  ShoppingTwoTone
 } from "@ant-design/icons";
 import { Text } from "./user/Text";
 import { Button } from "./user/Button";
 import { Link } from "./user/Link";
 import { TextArea } from "./user/TextArea";
+import { Paragraph } from "./user/Paragraph";
+import { Video } from "./user/Video";
+import { ShopFlexBox } from "./user/Advanced/ShopFlexBox";
 
 export const Toolbox = ({}) => {
   const { connectors } = useEditor();
@@ -37,6 +43,10 @@ export const Toolbox = ({}) => {
   const imageRef = useRef(null);
   const buttonRef = useRef(null);
   const linkRef = useRef(null);
+  const paragraphRef = useRef(null);
+  const videoRef = useRef(null);
+
+  const shopFlexBox = useRef(null);
 
   const menuRef = useRef(null);
   const tableRef = useRef(null);
@@ -44,8 +54,9 @@ export const Toolbox = ({}) => {
 
 
   useEffect(() => {
- 
+ console.log('ToolBox useEffect running');
     if (boxRef.current) {
+      console.log('ToolBox useEffect running box');
       connectors.create(boxRef.current, <Element is={Box} padding={20} canvas />);
     }
 
@@ -75,11 +86,17 @@ export const Toolbox = ({}) => {
       );
     }
 
-    if (buttonRef.current) {
-  connectors.create(buttonRef.current, 
-    <Element is={Button} text="Click Me" canvas />
-  );
+        if (buttonRef.current) {
+      connectors.create(buttonRef.current, 
+        <Element is={Button} text="Click Me" canvas />
+      );
 }
+
+    if (paragraphRef.current) {
+        connectors.create(paragraphRef.current, 
+          <Element is={Paragraph} />
+        );
+      }
 
     if (imageRef.current) {
       connectors.create(imageRef.current, 
@@ -97,12 +114,26 @@ export const Toolbox = ({}) => {
       );
     }
 
+    if (videoRef.current) {
+      connectors.create(videoRef.current, 
+        <Element is={Video} />
+         
+      );
+    }
+
+    if (shopFlexBox.current) {
+      connectors.create(shopFlexBox.current, 
+        <Element is={ShopFlexBox} />
+         
+      );
+    }
+
 
 
 
     
    
-  }, [connectors ]);
+  }, [connectors]);
 
   return (
     <div className="p-4">
@@ -150,6 +181,16 @@ export const Toolbox = ({}) => {
           </ButtonAD>
 
           <ButtonAD 
+            ref={paragraphRef} 
+            type="none" 
+            className="w-20 h-16 flex  items-center justify-center text-xs"
+            icon={<EditOutlined/>}
+          >
+            <div className="mt-1">Paragraph</div>
+          </ButtonAD>
+
+
+          <ButtonAD 
             ref={TextAreaRef} 
             type="none"
             className="w-20 h-16 flex items-center justify-center text-xs"
@@ -157,15 +198,25 @@ export const Toolbox = ({}) => {
           >
             <div className="mt-1">Text Area</div>
           </ButtonAD>
-          
-          <ButtonAD 
+          <h1></h1>
+          <div className="  border border-black">
+            <ButtonAD 
             ref={imageRef} 
             type="none" 
-            className="w-20 h-16 flex items-center justify-center text-xs"
+            className="w-20 h-16  items-center justify-center text-xs"
             icon={<PictureOutlined />}
           >
             <div className="mt-1">Image</div>
           </ButtonAD>
+          <ButtonAD 
+            ref={videoRef} 
+            type="none" 
+            className="w-20 h-16  items-center justify-center text-xs"
+            icon={<VideoCameraAddOutlined />}
+          >
+            <div className="mt-1">Video</div>
+          </ButtonAD>
+          </div>
 
           <ButtonAD 
             ref={buttonRef} 
@@ -183,6 +234,15 @@ export const Toolbox = ({}) => {
             icon={<LinkOutlined />}
           >
             <div className="mt-1">Link</div>
+          </ButtonAD>
+
+          <ButtonAD 
+            ref={shopFlexBox} 
+            type="none"
+            className="w-20 h-16 flex items-center justify-center text-xs"
+            icon={<ShoppingTwoTone />}
+          >
+            <div className="mt-1">Shop FlexBox</div>
           </ButtonAD>
 
 

@@ -6,9 +6,11 @@ import { EditOutlined, UploadOutlined } from '@ant-design/icons';
 import { Upload, message } from 'antd';
 import interact from 'interactjs';
 
+const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+
 export const Image = ({
   // Basic Image Properties
-  src = "https://via.placeholder.com/300x200?text=Click+to+Upload+Image",
+  src = placeholderURL,
   alt = "Image",
   
   // Layout & Dimensions
@@ -31,6 +33,9 @@ export const Image = ({
   
   // Visual Styling
   border = "none",
+  borderWidth = 0,
+  borderStyle = "solid", 
+  borderColor = "#000000",
   borderRadius = 0,
   boxShadow = "none",
   opacity = 1,
@@ -67,6 +72,17 @@ export const Image = ({
     width,
     height
   });
+
+   // Helper function to build border string
+  const getBorderStyle = () => {
+    if (border && border !== "none") {
+      return border;
+    }
+    if (borderWidth > 0) {
+      return `${borderWidth}px ${borderStyle} ${borderColor}`;
+    }
+    return "none";
+  };
 
   useEffect(() => {
     setIsClient(true);
@@ -181,7 +197,7 @@ export const Image = ({
         zIndex,
         margin: processValue(margin, 'margin'),
         padding: processValue(padding, 'padding'),
-        border,
+        border: getBorderStyle(), // Use the computed border
         borderRadius: processValue(borderRadius, 'borderRadius'),
         boxShadow,
         opacity,
@@ -204,11 +220,14 @@ export const Image = ({
           objectFit,
           objectPosition,
           display: 'block',
-          userSelect: 'none'
+          userSelect: 'none',
+          border: getBorderStyle(), // Use the computed border
+        borderRadius: processValue(borderRadius, 'borderRadius'),
+          
         }}
         draggable={false}
         onError={(e) => {
-          e.target.src = "https://via.placeholder.com/300x200?text=Image+Not+Found";
+          e.target.src = placeholderURL;
         }}
       />
 
@@ -229,7 +248,8 @@ export const Image = ({
             color: 'white',
             fontSize: '14px',
             textAlign: 'center',
-            padding: '20px'
+            padding: '20px',
+            border: getBorderStyle(), // Use the computed border
           }}
         >
           <Upload
@@ -305,7 +325,7 @@ export const Image = ({
 // CraftJS configuration
 Image.craft = {
   props: {
-    src: "https://via.placeholder.com/300x200?text=Click+to+Upload+Image",
+    src: placeholderURL,
     alt: "Image",
     width: 300,
     height: 200,
@@ -317,10 +337,13 @@ Image.craft = {
     top: 0,
     left: 0,
     zIndex: 1,
-    margin: "5px 0",
+    margin: "none",
     padding: 0,
     border: "none",
     borderRadius: 0,
+    borderWidth: 0,        // ADD THIS
+    borderStyle: "solid",  // ADD THIS
+    borderColor: "#000000", // ADD THIS
     boxShadow: "none",
     opacity: 1,
     objectFit: "cover",

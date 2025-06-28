@@ -13,7 +13,7 @@ import {
   RadiusBottomleftOutlined, RadiusBottomrightOutlined, RadiusUpleftOutlined,
   RadiusUprightOutlined, SettingOutlined, ShrinkOutlined, StrikethroughOutlined,
   TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,
-  VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined
+  VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined, ShoppingCartOutlined
 } from "@ant-design/icons";
 import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag, Radio } from "antd";
 import { useEditor } from "@craftjs/core";
@@ -1027,7 +1027,20 @@ console.log(selected?.supportedProps)
     'role': 'attributes',
     'ariaLabel': 'attributes',
     'ariaDescribedBy': 'attributes',
-    'ariaLabelledBy': 'attributes'
+    'ariaLabelledBy': 'attributes',
+
+    //shop
+    'selectedProducts': 'shop',
+'selectedCategories': 'shop',
+'selectedCollections': 'shop',
+'baseUrl': 'shop',
+'linkType': 'shop',
+'showDiscount': 'shop',
+'showQuickAdd': 'shop',
+'showWishlist': 'shop',
+'carouselImages': 'shop',
+'autoSlide': 'shop',
+'slideInterval': 'shop',
   };
   
   // If it's an individual property, check if its parent section is supported
@@ -1070,6 +1083,96 @@ const shouldShowProperty = useCallback((property, fallbackSection) => {
   // Complete collapse items with safety checks
   const collapseItems = useMemo(() => {
     const items = [];
+
+
+// Shop Configuration (Custom Section)
+if (shouldShow('selectedProducts') || shouldShow('selectedCategories') || shouldShow('selectedCollections')) {
+  const shopItems = [];
+  
+  if (shouldShowProperty('selectedProducts', 'shop')) {
+    shopItems.push(
+      <Form.Item key="selectedProducts" label="Selected Products" style={sharedStyles.formItem}>
+        <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+          Use the edit button on the component to configure products
+        </Typography.Text>
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('baseUrl', 'shop')) {
+    shopItems.push(
+      <Form.Item key="baseUrl" label="Base URL" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("baseUrl")} placeholder="shop.com/shop" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('linkType', 'shop')) {
+    shopItems.push(
+      <Form.Item key="linkType" label="Link Type" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("linkType")} options={[
+          { label: 'Product Name', value: 'name' },
+          { label: 'Product ID', value: 'id' }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('showDiscount', 'shop')) {
+    shopItems.push(
+      <Form.Item key="showDiscount" label="Show Discount Badges" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("showDiscount")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('showQuickAdd', 'shop')) {
+    shopItems.push(
+      <Form.Item key="showQuickAdd" label="Show Quick Add Button" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("showQuickAdd")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('showWishlist', 'shop')) {
+    shopItems.push(
+      <Form.Item key="showWishlist" label="Show Wishlist Button" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("showWishlist")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('autoSlide', 'shop')) {
+    shopItems.push(
+      <Form.Item key="autoSlide" label="Auto-slide Images" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("autoSlide")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('slideInterval', 'shop') && localStyle.autoSlide) {
+    shopItems.push(
+      <Form.Item key="slideInterval" label="Slide Interval (ms)" style={sharedStyles.formItem}>
+        <Slider {...handleSliderChange("slideInterval")} min={1000} max={10000} step={500} 
+          tooltip={{ formatter: (val) => `${val}ms` }} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (shopItems.length > 0) {
+    items.push({
+      key: 'shop',
+      label: <span><ShoppingCartOutlined /> Shop Configuration</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {shopItems}
+        </div>
+      )
+    });
+  }
+}
+
 
     // Basic Properties
     if (shouldShow('basic')) {
@@ -1144,6 +1247,11 @@ const shouldShowProperty = useCallback((property, fallbackSection) => {
     });
   }
 }
+
+
+
+
+
 
     // Layout & Position
     // Replace the layout section:

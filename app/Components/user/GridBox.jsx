@@ -421,8 +421,8 @@ GridBox.craft = {
     resize: "none",
     
     // Spacing
-    margin: "5px 0",
-    padding: 20,
+    margin: "none",
+    padding: '2rem',
     
     // Border
     border: "none",
@@ -535,6 +535,8 @@ GridBox.craft = {
       
       // Effects
       'boxShadow', 'opacity', 'transform',
+
+      'overflow',
       
       // HTML Attributes
       'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',

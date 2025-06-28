@@ -421,8 +421,8 @@ FlexBox.craft = {
     resize: "none",
     
     // Spacing
-    margin: "5px 0",
-    padding: 20,
+    margin: "none",
+    padding: '2rem',
     
     // Border
     border: "none",
@@ -492,6 +492,7 @@ FlexBox.craft = {
     canDrag: () => true,
     canDrop: () => true,
     canMoveIn: () => true,
+    canMoveOut: () => false
   },
    custom: {
   styleMenu: {
