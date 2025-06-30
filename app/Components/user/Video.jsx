@@ -16,6 +16,7 @@ export const Video = ({
   muted = false,
   preload = "metadata", // "none" | "metadata" | "auto"
   poster = "", // Thumbnail image
+  objectFit = "cover", // Add this new prop
   
   // Layout & Position
   width = "100%",
@@ -168,7 +169,7 @@ export const Video = ({
     setIsEditing(false);
   };
 
-  const getVideoElement = () => {
+const getVideoElement = () => {
   if (!videoSrc) return null;
 
   // Check if it's a YouTube/Vimeo/other embed URL
@@ -191,13 +192,12 @@ export const Video = ({
             height: '100%',
             border: 'none',
             borderRadius: 'inherit',
-            pointerEvents: isSelected ? 'none' : 'auto' // Disable pointer events when selected
+            pointerEvents: isSelected ? 'none' : 'auto'
           }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           title={title || "Video"}
         />
-        {/* Invisible overlay to capture drag events when selected */}
         {isSelected && (
           <div
             style={{
@@ -208,7 +208,7 @@ export const Video = ({
               bottom: 0,
               zIndex: 10,
               cursor: 'grab',
-              backgroundColor: 'rgba(0,0,0,0.1)', // Slight overlay to show it's selected
+              backgroundColor: 'rgba(0,0,0,0.1)',
               pointerEvents: 'auto'
             }}
             onMouseDown={e => e.stopPropagation()}
@@ -231,13 +231,12 @@ export const Video = ({
             height: '100%',
             border: 'none',
             borderRadius: 'inherit',
-            pointerEvents: isSelected ? 'none' : 'auto' // Disable pointer events when selected
+            pointerEvents: isSelected ? 'none' : 'auto'
           }}
           allow="autoplay; fullscreen; picture-in-picture"
           allowFullScreen
           title={title || "Video"}
         />
-        {/* Invisible overlay to capture drag events when selected */}
         {isSelected && (
           <div
             style={{
@@ -248,7 +247,7 @@ export const Video = ({
               bottom: 0,
               zIndex: 10,
               cursor: 'grab',
-              backgroundColor: 'rgba(0,0,0,0.1)', // Slight overlay to show it's selected
+              backgroundColor: 'rgba(0,0,0,0.1)',
               pointerEvents: 'auto'
             }}
             onMouseDown={e => e.stopPropagation()}
@@ -258,15 +257,15 @@ export const Video = ({
     );
   }
 
-  // Regular video element for direct video files
+  // Regular video element for direct video files - FILL CONTAINER
   return (
     <video
       style={{
         width: '100%',
         height: '100%',
-        objectFit: 'contain',
+        objectFit: objectFit, // Changed from 'contain' to 'cover' to fill container
         borderRadius: 'inherit',
-        pointerEvents: isSelected ? 'none' : 'auto' // Disable pointer events when selected
+        pointerEvents: isSelected ? 'none' : 'auto'
       }}
       autoPlay={autoplay}
       controls={controls}
@@ -451,30 +450,30 @@ export const Video = ({
 
       {/* Video Content */}
       <div style={{ 
-        width: '100%', 
-        height: height === 'auto' ? '300px' : '100%',
-        minHeight: processValue(minHeight, 'minHeight') || '200px',
-        position: 'relative',
-        overflow: 'hidden',
-        borderRadius: 'inherit'
-      }}>
-        {videoSrc ? getVideoElement() : (
-          // Placeholder when no video
-          <div style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#f5f5f5',
-            color: '#999',
-            fontSize: '48px',
-            borderRadius: 'inherit'
-          }}>
-            <PlayCircleOutlined />
-          </div>
-        )}
-      </div>
+  width: '100%', 
+  height: height === 'auto' ? '100%' : '100%', // Changed to always be 100%
+  minHeight: processValue(minHeight, 'minHeight') || '200px',
+  position: 'relative',
+  overflow: 'hidden',
+  borderRadius: 'inherit'
+}}>
+  {videoSrc ? getVideoElement() : (
+    // Placeholder when no video
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#f5f5f5',
+      color: '#999',
+      fontSize: '48px',
+      borderRadius: 'inherit'
+    }}>
+      <PlayCircleOutlined />
+    </div>
+  )}
+</div>
     </div>
   );
 };
@@ -490,6 +489,7 @@ Video.craft = {
     muted: false,
     preload: "metadata",
     poster: "",
+    objectFit: "cover",
     width: "100%",
     height: "auto",
     minWidth: "",

@@ -2,950 +2,1611 @@
 
 import { EditOutlined } from '@ant-design/icons';
 import { Element, useNode } from "@craftjs/core";
-import { Button, Divider, Input, Modal, Select, Slider, Switch } from "antd";
+import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
 import { useEffect, useState } from "react";
 import { FlexBox } from "../FlexBox";
 
 
 // Mock Stripe Products Data
 const mockStripeProducts = {
-  products: [
-    {
-      id: 'prod_1',
-      name: 'Vacay Vibes Crochet Button Up Shirt',
-      price: 2400,
-      originalPrice: 3999,
-      images: [
-        'https://via.placeholder.com/300x400/4F46E5/FFFFFF?text=Crochet+Shirt+1',
-        'https://via.placeholder.com/300x400/3B82F6/FFFFFF?text=Crochet+Shirt+2',
-        'https://via.placeholder.com/300x400/1E40AF/FFFFFF?text=Crochet+Shirt+3'
-      ],
-      category: 'clothing',
-      collection: 'summer-collection',
-      variants: [
-        { id: 'var_1_s', size: 'S', price: 2400 },
-        { id: 'var_1_m', size: 'M', price: 2400 },
-        { id: 'var_1_l', size: 'L', price: 2400 },
-        { id: 'var_1_xl', size: 'XL', price: 2400 },
-        { id: 'var_1_xxl', size: 'XXL', price: 2400 },
-        { id: 'var_1_xxxl', size: 'XXXL', price: 2400 }
-      ]
-    },
-    {
-      id: 'prod_2',
-      name: 'Summer Beach Shorts',
-      price: 1800,
-      originalPrice: 2999,
-      images: [
-        'https://via.placeholder.com/300x400/10B981/FFFFFF?text=Beach+Shorts+1',
-        'https://via.placeholder.com/300x400/059669/FFFFFF?text=Beach+Shorts+2'
-      ],
-      category: 'clothing',
-      collection: 'summer-collection',
-      variants: [
-        { id: 'var_2_s', size: 'S', price: 1800 },
-        { id: 'var_2_m', size: 'M', price: 1800 },
-        { id: 'var_2_l', size: 'L', price: 1800 }
-      ]
-    },
-    {
-      id: 'prod_3',
-      name: 'Vintage Sunglasses',
-      price: 1200,
-      images: [
-        'https://via.placeholder.com/300x400/F59E0B/FFFFFF?text=Sunglasses+1',
-        'https://via.placeholder.com/300x400/D97706/FFFFFF?text=Sunglasses+2',
-        'https://via.placeholder.com/300x400/B45309/FFFFFF?text=Sunglasses+3'
-      ],
-      category: 'accessories',
-      collection: 'vintage-collection',
-      variants: [
-        { id: 'var_3_one', size: 'One Size', price: 1200 }
-      ]
-    },
-    {
-      id: 'prod_4',
-      name: 'Canvas Tote Bag',
-      price: 899,
-      images: [
-        'https://via.placeholder.com/300x400/EF4444/FFFFFF?text=Tote+Bag'
-      ],
-      category: 'accessories',
-      collection: 'eco-friendly',
-      variants: [
-        { id: 'var_4_reg', size: 'Regular', price: 899 }
-      ]
-    }
-  ],
-  categories: [
-    { id: 'clothing', name: 'Clothing', count: 2 },
-    { id: 'accessories', name: 'Accessories', count: 2 }
-  ],
-  collections: [
-    { id: 'summer-collection', name: 'Summer Collection', count: 2 },
-    { id: 'vintage-collection', name: 'Vintage Collection', count: 1 },
-    { id: 'eco-friendly', name: 'Eco Friendly', count: 1 }
-  ]
+    products: [
+        {
+            id: 'prod_1',
+            name: 'Vacay Vibes Crochet Button Up Shirt',
+            price: 2400,
+            originalPrice: 3999,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-23-24_S1_27_232360067_Bluecombo_KS_AC_11-57-43_79373_PXF.jpg?v=1717000934&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-02-25_S3_29_ZDFNS1160_GreenCombo_RK_DO_11-38-29_17355_PXF.jpg?v=1746479430&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-23-24_S1_27_232360067_Bluecombo_KS_AC_11-57-43_79373_PXF.jpg?v=1717000934&width=600&height=900&crop=center'
+            ],
+            category: 'clothing',
+            collection: 'summer-collection',
+            variants: [
+                { id: 'var_1_s', size: 'S', price: 2400 },
+                { id: 'var_1_m', size: 'M', price: 2400 },
+                { id: 'var_1_l', size: 'L', price: 2400 },
+                { id: 'var_1_xl', size: 'XL', price: 2400 },
+                { id: 'var_1_xxl', size: 'XXL', price: 2400 },
+                { id: 'var_1_xxxl', size: 'XXXL', price: 2400 }
+            ]
+        },
+        {
+            id: 'prod_2',
+            name: 'Summer Beach Shorts',
+            price: 1800,
+            originalPrice: 2999,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-25-25_Swim-Set-1_32_ZD0718157_Pinkcombo_ZSR_TK_JR_11-27-52_18970_EH.jpg?v=1743100205&width=400&height=599&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/04-04-25_Swim-Set-1_4_ZDFNS1128_Pinkcombo_RA_JW_09-18-31_20593_PXF_MH.jpg?v=1744392643&width=400&height=599&crop=center'
+            ],
+            category: 'clothing',
+            collection: 'summer-collection',
+            variants: [
+                { id: 'var_2_s', size: 'S', price: 1800 },
+                { id: 'var_2_m', size: 'M', price: 1800 },
+                { id: 'var_2_l', size: 'L', price: 1800 }
+            ]
+        },
+        {
+            id: 'prod_3',
+            name: 'Vintage Sunglasses',
+            price: 1200,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/6-02-25__465_Kailani_2_Piece_Bikini_Hot_Pink-combo_JR.jpg?v=1750800427&width=400&height=599&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/4-7-25__463_Daphne_Evil_Eye_Charm_Beads_2_Piece_Bikini_Blue-combo_JR.jpg?v=1748385579&width=400&height=599&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/04-25-24_S2_1_444804FN_Blackcombo_P_KJ_RL_14-45-50_17582_EH.jpg?v=1714432086&width=400&height=599&crop=center'
+            ],
+            category: 'accessories',
+            collection: 'vintage-collection',
+            variants: [
+                { id: 'var_3_one', size: 'One Size', price: 1200 }
+            ]
+        },
+        {
+            id: 'prod_4',
+            name: 'Canvas Tote Bag',
+            price: 899,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-25-25_S2_31_24GWY4541_Leopard_JG_AP_13-34-14_16727_CM-Amira_PXF_WG.jpg?v=1743624791&width=400&height=599&crop=center'
+            ],
+            category: 'accessories',
+            collection: 'eco-friendly',
+            variants: [
+                { id: 'var_4_reg', size: 'Regular', price: 899 }
+            ]
+        }
+    ],
+    categories: [
+        { id: 'clothing', name: 'Clothing', count: 2 },
+        { id: 'accessories', name: 'Accessories', count: 2 }
+    ],
+    collections: [
+        { id: 'summer-collection', name: 'Summer Collection', count: 2 },
+        { id: 'vintage-collection', name: 'Vintage Collection', count: 1 },
+        { id: 'eco-friendly', name: 'Eco Friendly', count: 1 }
+    ]
 };
 
 // Custom Image component that doesn't allow src editing
-export const ShopImage = ({ 
-  src, 
-  alt = "",
-  width = "100%",
-  height = "100%",
-  objectFit = "cover",
-  borderRadius = 0,
-  ...props 
+export const ShopImage = ({
+    src,
+    alt = "",
+    width = "100%",
+    height = "100%",
+    objectFit = "cover",
+    borderRadius = 0,
+    ...props
 }) => {
-  const { connectors: { connect, drag }, selected } = useNode((state) => ({
-    selected: state.events.selected,
-  }));
+    const { connectors: { connect, drag }, selected } = useNode((state) => ({
+        selected: state.events.selected,
+    }));
 
-  return (
-    <img
-      ref={(ref) => ref && connect(drag(ref))}
-      src={src}
-      alt={alt}
-      style={{
-        width,
-        height,
-        objectFit,
-        borderRadius,
-        display: 'block',
-        outline: selected ? '2px solid #1890ff' : 'none',
-        outlineOffset: '2px',
-        ...props.style
-      }}
-      {...props}
-    />
-  );
+    return (
+        <div
+            ref={(ref) => ref && connect(drag(ref))}
+            className={selected ? "selected-shop-image" : ""}
+            style={{
+                position: 'relative',
+                outline: selected ? '2px solid #1890ff' : 'none',
+                outlineOffset: '2px'
+            }}
+        >
+            <img
+                src={src}
+                alt={alt}
+                style={{
+                    width,
+                    height,
+                    objectFit,
+                    borderRadius,
+                    display: 'block',
+                    ...props.style
+                }}
+                {...props}
+            />
+        </div>
+    );
 };
 
-
 ShopImage.craft = {
-  props: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    borderRadius: 0,
-  },
-  rules: {
-    canDrag: () => true,
-    canDrop: () => false,
-    canMoveIn: () => false,
-    canMoveOut: () => false,
-  },
-  related: {
-    styleMenu: {
-      supportedProps: [
-        'width', 'height', 'objectFit', 'borderRadius'
-      ]
+    props: {
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        borderRadius: 0,
+    },
+    rules: {
+        canDrag: () => true,
+        canDrop: () => false,
+        canMoveIn: () => false,
+        canMoveOut: () => false,
+    },
+    related: {
+        styleMenu: {
+            supportedProps: [
+                'width', 'height', 'objectFit', 'borderRadius'
+            ]
+        }
     }
-  }
 };
 
 // Custom Text component that doesn't allow content editing
-export const ShopText = ({ 
-  text = "",
-  fontSize = "16px",
-  fontWeight = "normal",
-  color = "#333",
-  textAlign = "left",
-  lineHeight = "1.4",
-  ...props 
+export const ShopText = ({
+    text = "",
+    fontSize = "16px",
+    fontWeight = "normal",
+    color = "#333",
+    textAlign = "left",
+    lineHeight = "1.4",
+    ...props
 }) => {
-  const { connectors: { connect, drag }, selected } = useNode((state) => ({
-    selected: state.events.selected,
-  }));
+    const { connectors: { connect, drag }, selected } = useNode((state) => ({
+        selected: state.events.selected,
+    }));
 
-  return (
-    <span
-      ref={(ref) => ref && connect(drag(ref))}
-      style={{
-        fontSize,
-        fontWeight,
-        color,
-        textAlign,
-        lineHeight,
-        outline: selected ? '2px solid #1890ff' : 'none',
-        outlineOffset: '2px',
-        ...props.style
-      }}
-      {...props}
-    >
-      {text}
-    </span>
-  );
+    return (
+        <div
+            ref={(ref) => ref && connect(drag(ref))}
+            className={selected ? "selected-shop-text" : ""}
+            style={{
+                outline: selected ? '2px solid #1890ff' : 'none',
+                outlineOffset: '2px'
+            }}
+        >
+            <span
+                style={{
+                    fontSize,
+                    fontWeight,
+                    color,
+                    textAlign,
+                    lineHeight,
+                    ...props.style
+                }}
+                {...props}
+            >
+                {text}
+            </span>
+        </div>
+    );
 };
 
 ShopText.craft = {
-  props: {
-    text: "",
-    fontSize: "16px",
-    fontWeight: "normal",
-    color: "#333",
-    textAlign: "left",
-    lineHeight: "1.4",
-  },
-  rules: {
-    canDrag: () => true,
-    canDrop: () => false,
-    canMoveIn: () => false,
-    canMoveOut: () => false,
-  },
-  related: {
-    styleMenu: {
-      supportedProps: [
-        'fontSize', 'fontWeight', 'color', 'textAlign', 'lineHeight'
-      ]
+    props: {
+        text: "",
+        fontSize: "16px",
+        fontWeight: "normal",
+        color: "#333",
+        textAlign: "left",
+        lineHeight: "1.4",
+    },
+    rules: {
+        canDrag: () => true,
+        canDrop: () => false,
+        canMoveIn: () => false,
+        canMoveOut: () => false,
+    },
+    related: {
+        styleMenu: {
+            supportedProps: [
+                'fontSize', 'fontWeight', 'color', 'textAlign', 'lineHeight'
+            ]
+        }
     }
-  }
 };
 
-// Custom Button component
-export const ShopButton = ({ 
-  backgroundColor = "#000",
-  color = "white",
-  borderRadius = "6px",
-  padding = "12px 16px",
-  fontSize = "14px",
-  fontWeight = "500",
-  width = "100%",
-  border = "none",
-  ...props 
-}) => {
-  const { connectors: { connect, drag }, selected } = useNode((state) => ({
-    selected: state.events.selected,
-  }));
 
-  return (
-    <button
-      ref={(ref) => ref && connect(drag(ref))}
-      style={{
-        backgroundColor,
-        color,
-        borderRadius,
-        padding,
-        fontSize,
-        fontWeight,
-        width,
-        border,
-        cursor: 'pointer',
-        outline: selected ? '2px solid #1890ff' : 'none',
-        outlineOffset: '2px',
-        ...props.style
-      }}
-      {...props}
-    >
-      🛒 Quick Add
-    </button>
-  );
-};
-
-ShopButton.craft = {
-  props: {
-    backgroundColor: "#000",
-    color: "white",
-    borderRadius: "6px",
-    padding: "12px 16px",
-    fontSize: "14px",
-    fontWeight: "500",
-    width: "100%",
-    border: "none",
-  },
-  rules: {
-    canDrag: () => true,
-    canDrop: () => false,
-    canMoveIn: () => false,
-    canMoveOut: () => false,
-  },
-  related: {
-    styleMenu: {
-      supportedProps: [
-        'backgroundColor', 'color', 'borderRadius', 'padding', 
-        'fontSize', 'fontWeight', 'width', 'border'
-      ]
-    }
-  }
-};
+// Replace the entire ShopFlexBox component with this fixed version:
 
 export const ShopFlexBox = ({
-  // Shop-specific props
-  selectedProducts = [],
-  selectedCategories = [],
-  selectedCollections = [],
-  baseUrl = "shop.com/shop",
-  linkType = "name",
-  showDiscount = true,
-  showQuickAdd = true,
-  showWishlist = true,
-  autoSlide = false,
-  slideInterval = 3000,
-  
-  // Layout props
-  width = "100%",
-  height = "auto",
-  display = "flex",
-  flexDirection = "row",
-  flexWrap = "wrap",
-  justifyContent = "flex-start",
-  alignItems = "stretch",
-  gap = 20,
-  padding = 20,
-  backgroundColor = "transparent",
-  borderRadius = 8,
-  
-  className = "",
-  children
+    // Shop-specific props
+    selectedProducts = [],
+    selectedCategories = [],
+    selectedCollections = [],
+    baseUrl = "shop.com/shop",
+    linkType = "name",
+    showDiscount = true,
+    showQuickAdd = true,
+    showWishlist = true,
+    autoSlide = false,
+    slideInterval = 3000,
+
+    // Layout props
+    width = "100%",
+    height = "auto",
+    display = "flex",
+    flexDirection = "row",
+    flexWrap = "wrap",
+    justifyContent = "flex-start",
+    alignItems = "stretch",
+    gap = 20,
+    padding = 20,
+    backgroundColor = "transparent",
+    borderRadius = 8,
+
+    // Product Item Styling Props
+    itemWidth = "280px",
+    itemBackgroundColor = "white",
+    itemBorderRadius = "8px",
+    itemBoxShadow = "0 2px 8px rgba(0,0,0,0.1)",
+    itemPadding = "16px",
+    itemGap = "8px",
+    itemBorder = "none",
+
+    // Image Styling Props
+    imageHeight = "200px",
+    imageBorderRadius = "8px",
+    imageObjectFit = "cover",
+    imageMarginBottom = "12px",
+
+    // Title Styling Props
+    titleFontSize = "16px",
+    titleFontWeight = "600",
+    titleFontFamily = "Arial, sans-serif",
+    titleColor = "#333",
+    titleLineHeight = "1.4",
+    titleMarginBottom = "8px",
+
+    // Price Styling Props
+    priceFontSize = "18px",
+    priceFontFamily = "Arial, sans-serif",
+    priceColor = "#ff4d4f",
+    priceFontWeight = "bold",
+    originalPriceFontSize = "14px",
+    originalPriceFontFamily = "Arial, sans-serif",
+    originalPriceColor = "#999",
+    priceGap = "8px",
+
+    // Button Styling Props
+    buttonBackgroundColor = "#000",
+    buttonColor = "white",
+    buttonFontFamily = "Arial, sans-serif",
+    buttonBorderRadius = "6px",
+    buttonPadding = "12px 16px",
+    buttonFontSize = "14px",
+    buttonFontWeight = "500",
+    buttonBorder = "none",
+    buttonMarginTop = "8px",
+
+    // Badge Styling Props
+    badgeBackgroundColor = "#ff4d4f",
+    badgeColor = "white",
+    badgeFontSize = "12px",
+    badgeFontFamily = "Arial, sans-serif",
+    badgePadding = "4px 8px",
+    badgeBorderRadius = "4px",
+
+    // Wishlist Button Styling Props
+    wishlistBackgroundColor = "rgba(255,255,255,0.9)",
+    wishlistSize = "32px",
+    wishlistColor = "#333",
+
+    className = "",
+    children
 }) => {
-  const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
-    selected: node.events.selected,
-  }));
+    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+        selected: node.events.selected,
+    }));
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState({});
-  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
-  const [currentProduct, setCurrentProduct] = useState(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState({});
+    const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
+    const [currentProduct, setCurrentProduct] = useState(null);
+    const [selectedElement, setSelectedElement] = useState('container');
+    const [isAdjusting, setIsAdjusting] = useState(false);
 
-
-  
-
-  // Auto-slide functionality
-  useEffect(() => {
-    if (!autoSlide) return;
-    
-    const interval = setInterval(() => {
-      setCurrentImageIndex(prev => {
-        const newIndex = { ...prev };
-        getDisplayProducts().forEach(product => {
-          if (product.images.length > 1) {
-            newIndex[product.id] = ((newIndex[product.id] || 0) + 1) % product.images.length;
-          }
-        });
-        return newIndex;
-      });
-    }, slideInterval);
-
-    return () => clearInterval(interval);
-  }, [autoSlide, slideInterval]);
-
-  // Get products to display based on selections
-  const getDisplayProducts = () => {
-    let products = [];
-    
-    selectedProducts.forEach(productId => {
-      const product = mockStripeProducts.products.find(p => p.id === productId);
-      if (product && !products.find(p => p.id === product.id)) {
-        products.push(product);
-      }
+    // Local editing state to prevent re-renders during adjustments
+    const [editingState, setEditingState] = useState({
+        activeSlider: null,
+        tempValues: {}
     });
-    
-    selectedCategories.forEach(categoryId => {
-      const categoryProducts = mockStripeProducts.products.filter(p => p.category === categoryId);
-      categoryProducts.forEach(product => {
-        if (!products.find(p => p.id === product.id)) {
-          products.push(product);
+
+    const formatPrice = (price) => {
+        return `$${(price / 100).toFixed(2)}`;
+    };
+
+    // Helper function to get products to display
+    const getDisplayProducts = () => {
+        let products = [];
+
+        if (selectedProducts.length > 0) {
+            const individualProducts = mockStripeProducts.products.filter(product => 
+                selectedProducts.includes(product.id)
+            );
+            products = [...products, ...individualProducts];
         }
-      });
-    });
-    
-    selectedCollections.forEach(collectionId => {
-      const collectionProducts = mockStripeProducts.products.filter(p => p.collection === collectionId);
-      collectionProducts.forEach(product => {
-        if (!products.find(p => p.id === product.id)) {
-          products.push(product);
+
+        if (selectedCategories.length > 0) {
+            const categoryProducts = mockStripeProducts.products.filter(product =>
+                selectedCategories.includes(product.category)
+            );
+            products = [...products, ...categoryProducts];
         }
-      });
-    });
-    
-    return products;
-  };
 
-  const formatPrice = (price) => {
-    return `$${(price / 100).toFixed(2)}`;
-  };
+        if (selectedCollections.length > 0) {
+            const collectionProducts = mockStripeProducts.products.filter(product =>
+                selectedCollections.includes(product.collection)
+            );
+            products = [...products, ...collectionProducts];
+        }
 
-  const getProductLink = (product) => {
-    const identifier = linkType === "id" ? product.id : product.name.toLowerCase().replace(/\s+/g, '-');
-    return `${baseUrl}/${identifier}`;
-  };
+        const uniqueProducts = products.filter((product, index, self) =>
+            index === self.findIndex(p => p.id === product.id)
+        );
 
-  const handleImageNav = (productId, direction) => {
-    const product = mockStripeProducts.products.find(p => p.id === productId);
-    if (!product || product.images.length <= 1) return;
-    
-    setCurrentImageIndex(prev => {
-      const currentIndex = prev[productId] || 0;
-      const newIndex = direction === 'prev' 
-        ? (currentIndex - 1 + product.images.length) % product.images.length
-        : (currentIndex + 1) % product.images.length;
-      
-      return { ...prev, [productId]: newIndex };
-    });
-  };
+        return uniqueProducts;
+    };
 
-  const handleQuickAdd = (product) => {
-    if (product.variants.length === 1) {
-      console.log('Adding to cart:', product.variants[0]);
-    } else {
-      setCurrentProduct(product);
-      setIsVariantModalOpen(true);
-    }
-  };
+    // Helper functions
+    const handleImageNav = (productId, direction) => {
+        const product = mockStripeProducts.products.find(p => p.id === productId);
+        if (!product) return;
 
-  const handleVariantSelect = (variant) => {
-    console.log('Adding variant to cart:', variant);
-    setIsVariantModalOpen(false);
-    setCurrentProduct(null);
-  };
+        const currentIndex = currentImageIndex[productId] || 0;
+        let newIndex;
 
-  // Create product item using Elements
-const createProductItem = (product) => {
-  const currentImg = currentImageIndex[product.id] || 0;
-  const hasDiscount = product.originalPrice && product.originalPrice > product.price;
-  const discountPercent = hasDiscount ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0;
+        if (direction === 'next') {
+            newIndex = (currentIndex + 1) % product.images.length;
+        } else {
+            newIndex = currentIndex === 0 ? product.images.length - 1 : currentIndex - 1;
+        }
 
-  return (
-    <Element
-      key={product.id}
-      id={`product-container-${product.id}`}
-      is={FlexBox}
-      flexDirection="column"
-      width="280px"
-      padding="16px"
-      backgroundColor="white"
-      borderRadius="8px"
-      boxShadow="0 2px 8px rgba(0,0,0,0.1)"
-      position="relative"
-      canvas
-    >
-      {/* Product Image Container */}
-      <Element
-        id={`image-container-${product.id}`}
-        is={FlexBox}
-        width="100%"
-        height="200px"
-        position="relative"
-        borderRadius="8px"
-        overflow="hidden"
-        marginBottom="12px"
-        canvas
-      >
-        {/* Discount Badge */}
-        {showDiscount && hasDiscount && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 8,
-              left: 8,
-              background: '#ff4d4f',
-              color: 'white',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              zIndex: 10
-            }}
-          >
-            {discountPercent}% OFF
-          </div>
-        )}
+        setCurrentImageIndex(prev => ({ ...prev, [productId]: newIndex }));
+    };
 
-        {/* Wishlist Button */}
-        {showWishlist && (
-          <button
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.9)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10,
-              cursor: 'pointer'
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              console.log('Add to wishlist:', product.id);
-            }}
-          >
-            ♡
-          </button>
-        )}
+    const handleQuickAdd = (product) => {
+        if (product.variants && product.variants.length > 1) {
+            setCurrentProduct(product);
+            setIsVariantModalOpen(true);
+        } else {
+            console.log('Adding to cart:', product.id);
+        }
+    };
 
-        {/* Product Image */}
-        <Element
-          id={`product-image-${product.id}`}
-          is={ShopImage}
-          src={product.images[currentImg]}
-          alt={product.name}
-          width="100%"
-          height="100%"
-          objectFit="cover"
-        />
+    const handleVariantSelect = (variant) => {
+        console.log('Adding variant to cart:', variant);
+        setIsVariantModalOpen(false);
+        setCurrentProduct(null);
+    };
 
-        {/* Image Navigation */}
-        {product.images.length > 1 && (
-          <>
-            <button
-              style={{
-                position: 'absolute',
-                left: 8,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: 'rgba(0,0,0,0.5)',
-                color: 'white',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 10,
-                fontSize: '12px'
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                handleImageNav(product.id, 'prev');
-              }}
-            >
-              ‹
-            </button>
-            
-            <button
-              style={{
-                position: 'absolute',
-                right: 8,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: 'rgba(0,0,0,0.5)',
-                color: 'white',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 10,
-                fontSize: '12px'
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                handleImageNav(product.id, 'next');
-              }}
-            >
-              ›
-            </button>
+    // Auto-slide effect
+    useEffect(() => {
+        if (!autoSlide) return;
 
-            {/* Image Dots */}
+        const interval = setInterval(() => {
+            const displayProducts = getDisplayProducts();
+            displayProducts.forEach(product => {
+                if (product.images.length > 1) {
+                    handleImageNav(product.id, 'next');
+                }
+            });
+        }, slideInterval);
+
+        return () => clearInterval(interval);
+    }, [autoSlide, slideInterval, currentImageIndex]);
+
+    // Create product item
+    const createProductItem = (product) => {
+        const currentImg = currentImageIndex[product.id] || 0;
+        const hasDiscount = product.originalPrice && product.originalPrice > product.price;
+        const discountPercent = hasDiscount ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0;
+
+        return (
             <div
-              style={{
-                position: 'absolute',
-                bottom: 8,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                gap: '4px',
-                zIndex: 10
-              }}
+                key={product.id}
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    width: itemWidth,
+                    padding: itemPadding,
+                    backgroundColor: itemBackgroundColor,
+                    borderRadius: itemBorderRadius,
+                    boxShadow: itemBoxShadow,
+                    border: itemBorder,
+                    position: 'relative',
+                    marginBottom: '16px',
+                    gap: itemGap
+                }}
             >
-              {product.images.map((_, index) => (
+                {/* Image Container */}
                 <div
-                  key={index}
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: index === currentImg ? 'white' : 'rgba(255,255,255,0.5)',
-                    cursor: 'pointer'
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setCurrentImageIndex(prev => ({ ...prev, [product.id]: index }));
-                  }}
-                />
-              ))}
+                    style={{
+                        width: '100%',
+                        height: imageHeight,
+                        position: 'relative',
+                        borderRadius: imageBorderRadius,
+                        overflow: 'hidden',
+                        marginBottom: imageMarginBottom
+                    }}
+                >
+                    {/* Discount Badge */}
+                    {showDiscount && hasDiscount && (
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: 8,
+                                left: 8,
+                                background: badgeBackgroundColor,
+                                color: badgeColor,
+                                padding: badgePadding,
+                                borderRadius: badgeBorderRadius,
+                                fontSize: badgeFontSize,
+                                fontFamily: badgeFontFamily,
+                                fontWeight: 'bold',
+                                zIndex: 10
+                            }}
+                        >
+                            {discountPercent}% OFF
+                        </div>
+                    )}
+
+                    {/* Wishlist Button */}
+                    {showWishlist && (
+                        <button
+                            style={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                width: wishlistSize,
+                                height: wishlistSize,
+                                borderRadius: '50%',
+                                background: wishlistBackgroundColor,
+                                border: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 10,
+                                cursor: 'pointer',
+                                color: wishlistColor
+                            }}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                console.log('Add to wishlist:', product.id);
+                            }}
+                        >
+                            ♡
+                        </button>
+                    )}
+
+                    {/* Product Image */}
+                    <img
+                        src={product.images[currentImg]}
+                        alt={product.name}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: imageObjectFit
+                        }}
+                    />
+
+                    {/* Image Navigation */}
+                    {product.images.length > 1 && (
+                        <>
+                            <button
+                                style={{
+                                    position: 'absolute',
+                                    left: 8,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    background: 'rgba(0,0,0,0.5)',
+                                    color: 'white',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    zIndex: 10,
+                                    fontSize: '12px'
+                                }}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    handleImageNav(product.id, 'prev');
+                                }}
+                            >
+                                ‹
+                            </button>
+
+                            <button
+                                style={{
+                                    position: 'absolute',
+                                    right: 8,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    background: 'rgba(0,0,0,0.5)',
+                                    color: 'white',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    zIndex: 10,
+                                    fontSize: '12px'
+                                }}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    handleImageNav(product.id, 'next');
+                                }}
+                            >
+                                ›
+                            </button>
+
+                            {/* Image Dots */}
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    bottom: 8,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    display: 'flex',
+                                    gap: '4px',
+                                    zIndex: 10
+                                }}
+                            >
+                                {product.images.map((_, index) => (
+                                    <div
+                                        key={index}
+                                        style={{
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: '50%',
+                                            background: index === currentImg ? 'white' : 'rgba(255,255,255,0.5)',
+                                            cursor: 'pointer'
+                                        }}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setCurrentImageIndex(prev => ({ ...prev, [product.id]: index }));
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Product Info */}
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    {/* Product Name */}
+                    <span
+                        style={{
+                            fontSize: titleFontSize,
+                            fontFamily: titleFontFamily,
+                            fontWeight: titleFontWeight,
+                            color: titleColor,
+                            lineHeight: titleLineHeight,
+                            marginBottom: titleMarginBottom
+                        }}
+                    >
+                        {product.name}
+                    </span>
+
+                    {/* Price Container */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: priceGap }}>
+                        <span
+                            style={{
+                                fontSize: priceFontSize,
+                                fontFamily: priceFontFamily,
+                                fontWeight: priceFontWeight,
+                                color: priceColor
+                            }}
+                        >
+                            {formatPrice(product.price)}
+                        </span>
+                        {hasDiscount && (
+                            <span
+                                style={{
+                                    fontSize: originalPriceFontSize,
+                                    fontFamily: originalPriceFontFamily,
+                                    color: originalPriceColor,
+                                    textDecoration: 'line-through'
+                                }}
+                            >
+                                {formatPrice(product.originalPrice)}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Quick Add Button */}
+                    {showQuickAdd && (
+                        <button
+                            style={{
+                                backgroundColor: buttonBackgroundColor,
+                                color: buttonColor,
+                                fontFamily: buttonFontFamily,
+                                borderRadius: buttonBorderRadius,
+                                padding: buttonPadding,
+                                fontSize: buttonFontSize,
+                                fontWeight: buttonFontWeight,
+                                width: '100%',
+                                border: buttonBorder,
+                                cursor: 'pointer',
+                                marginTop: buttonMarginTop
+                            }}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleQuickAdd(product);
+                            }}
+                        >
+                            🛒 Quick Add
+                        </button>
+                    )}
+                </div>
             </div>
-          </>
-        )}
-      </Element>
+        );
+    };
 
-      {/* Product Info */}
-      <Element
-        id={`product-info-${product.id}`}
-        is={FlexBox}
-        flexDirection="column"
-        width="100%"
-        gap="8px"
-        canvas
-      >
-        {/* Product Name */}
-        <Element
-          id={`product-name-${product.id}`}
-          is={ShopText}
-          text={product.name}
-          fontSize="16px"
-          fontWeight="600"
-          color="#333"
-          lineHeight="1.4"
-        />
+    const displayProducts = getDisplayProducts();
 
-        {/* Price Container */}
-        <Element 
-          id={`price-container-${product.id}`}
-          is={FlexBox} 
-          flexDirection="row"
-          alignItems="center"
-          gap="8px"
-          canvas
-        >
-          <Element
-            id={`current-price-${product.id}`}
-            is={ShopText}
-            text={formatPrice(product.price)}
-            fontSize="18px"
-            fontWeight="bold"
-            color="#ff4d4f"
-          />
-          {hasDiscount && (
-            <Element
-              id={`original-price-${product.id}`}
-              is={ShopText}
-              text={formatPrice(product.originalPrice)}
-              fontSize="14px"
-              color="#999"
-              textDecoration="line-through"
-            />
-          )}
-        </Element>
+    return (
+        <>
+            <FlexBox
+                ref={(ref) => ref && connect(drag(ref))}
+                width={width}
+                height={height}
+                display={display}
+                flexDirection={flexDirection}
+                flexWrap={flexWrap}
+                justifyContent={justifyContent}
+                alignItems={alignItems}
+                gap={gap}
+                padding={padding}
+                backgroundColor={backgroundColor}
+                borderRadius={borderRadius}
+                className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className} shop-flexbox`}
+                style={{
+                    position: 'relative',
+                    minHeight: displayProducts.length === 0 ? '200px' : 'auto'
+                }}
+            >
+                {/* Edit Button */}
+                {isSelected && (
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: -12,
+                            left: -12,
+                            width: 24,
+                            height: 24,
+                            background: "#52c41a",
+                            borderRadius: "50%",
+                            cursor: "pointer",
+                            zIndex: 1000,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "white",
+                            fontSize: 12,
+                            border: "2px solid white",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                        }}
+                        onClick={() => setIsEditModalOpen(true)}
+                        onMouseDown={e => e.stopPropagation()}
+                        title="Configure shop items"
+                    >
+                        <EditOutlined />
+                    </div>
+                )}
 
-        {/* Quick Add Button */}
-        {showQuickAdd && (
-          <Element
-            id={`quick-add-${product.id}`}
-            is={ShopButton}
-            backgroundColor="#000"
-            color="white"
-            borderRadius="6px"
-            padding="12px 16px"
-            fontSize="14px"
-            fontWeight="500"
-            width="100%"
-          />
-        )}
-      </Element>
-    </Element>
-  );
+                {/* Products Display */}
+                {displayProducts.length > 0 ? (
+                    displayProducts.map(product => createProductItem(product))
+                ) : (
+                    <Element
+                        id="empty-state-container"
+                        is={FlexBox}
+                        width="100%"
+                        height="200px"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        flexDirection="column"
+                        gap={8}
+                        color="#999"
+                        backgroundColor="#f9f9f9"
+                        borderRadius={8}
+                        border="2px dashed #ddd"
+                        canvas
+                    >
+                        <div style={{ fontSize: '48px' }}>🛍️</div>
+                        <Element
+                            id="empty-state-text-1"
+                            is={ShopText}
+                            text="No products selected"
+                            fontSize="16px"
+                            color="#999"
+                        />
+                        <Element
+                            id="empty-state-text-2"
+                            is={ShopText}
+                            text="Click edit to configure your shop"
+                            fontSize="14px"
+                            color="#ccc"
+                        />
+                    </Element>
+                )}
+
+                {children}
+            </FlexBox>
+
+            {/* Edit Modal */}
+            <Modal
+                title="Configure Shop Items & Styling"
+                open={isEditModalOpen}
+                onCancel={() => setIsEditModalOpen(false)}
+                width={1400}
+                style={{ top: 20 }}
+                footer={[
+                    <Button key="cancel" onClick={() => setIsEditModalOpen(false)}>
+                        Cancel
+                    </Button>,
+                    <Button key="save" type="primary" onClick={() => setIsEditModalOpen(false)}>
+                        Save Changes
+                    </Button>
+                ]}
+            >
+                <StyleEditorModal 
+                    selectedElement={selectedElement}
+                    setSelectedElement={setSelectedElement}
+                    setProp={setProp}
+                    editingState={editingState}
+                    setEditingState={setEditingState}
+                    setIsAdjusting={setIsAdjusting}
+                    isAdjusting={isAdjusting}
+                    createProductItem={createProductItem}
+                    formatPrice={formatPrice}
+                    // Pass all style props
+                    itemWidth={itemWidth}
+                    itemPadding={itemPadding}
+                    itemGap={itemGap}
+                    itemBackgroundColor={itemBackgroundColor}
+                    itemBorderRadius={itemBorderRadius}
+                    itemBoxShadow={itemBoxShadow}
+                    imageHeight={imageHeight}
+                    imageBorderRadius={imageBorderRadius}
+                    imageMarginBottom={imageMarginBottom}
+                    imageObjectFit={imageObjectFit}
+                    titleFontSize={titleFontSize}
+                    titleFontFamily={titleFontFamily}
+                    titleLineHeight={titleLineHeight}
+                    titleColor={titleColor}
+                    titleMarginBottom={titleMarginBottom}
+                    titleFontWeight={titleFontWeight}
+                    priceFontSize={priceFontSize}
+                    priceFontFamily={priceFontFamily}
+                    priceColor={priceColor}
+                    priceGap={priceGap}
+                    originalPriceFontSize={originalPriceFontSize}
+                    originalPriceFontFamily={originalPriceFontFamily}
+                    originalPriceColor={originalPriceColor}
+                    priceFontWeight={priceFontWeight}
+                    buttonBackgroundColor={buttonBackgroundColor}
+                    buttonBorderRadius={buttonBorderRadius}
+                    buttonFontSize={buttonFontSize}
+                    buttonFontFamily={buttonFontFamily}
+                    buttonColor={buttonColor}
+                    buttonMarginTop={buttonMarginTop}
+                    buttonPadding={buttonPadding}
+                    buttonFontWeight={buttonFontWeight}
+                    badgeBackgroundColor={badgeBackgroundColor}
+                    badgeFontSize={badgeFontSize}
+                    badgeFontFamily={badgeFontFamily}
+                    badgeColor={badgeColor}
+                    badgeBorderRadius={badgeBorderRadius}
+                    badgePadding={badgePadding}
+                    wishlistBackgroundColor={wishlistBackgroundColor}
+                    wishlistSize={wishlistSize}
+                    wishlistColor={wishlistColor}
+                    selectedProducts={selectedProducts}
+                    selectedCategories={selectedCategories}
+                    selectedCollections={selectedCollections}
+                />
+            </Modal>
+
+            {/* Variant Selection Modal */}
+            <Modal
+                title="Select Size"
+                open={isVariantModalOpen}
+                onCancel={() => setIsVariantModalOpen(false)}
+                footer={null}
+                width={400}
+            >
+                {currentProduct && (
+                    <div>
+                        <div style={{ marginBottom: 16, textAlign: 'center' }}>
+                            <ShopText text={currentProduct.name} fontSize="16px" fontWeight="600" />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                            {currentProduct.variants.map(variant => (
+                                <Button
+                                    key={variant.id}
+                                    style={{
+                                        height: 40,
+                                        border: '1px solid #d9d9d9',
+                                        borderRadius: 4
+                                    }}
+                                    onClick={() => handleVariantSelect(variant)}
+                                >
+                                    {variant.size}
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </Modal>
+        </>
+    );
 };
 
-  const displayProducts = getDisplayProducts();
+// Separate StyleEditor component to prevent recreation
+const StyleEditorModal = ({ 
+    selectedElement, 
+    setSelectedElement, 
+    setProp, 
+    editingState, 
+    setEditingState, 
+    setIsAdjusting,
+    isAdjusting,
+    createProductItem,
+    formatPrice,
+    // All style props passed as props
+    ...styleProps
+}) => {
+    // Get current value for any prop
+    const getCurrentValue = (prop) => {
+        return editingState.tempValues[prop] !== undefined 
+            ? editingState.tempValues[prop] 
+            : styleProps[prop];
+    };
 
-  return (
-    <>
-      <FlexBox
-        ref={(ref) => ref && connect(drag(ref))}
-        
-      >
-        {/* Edit Button */}
-        {isSelected && (
-          <div
-            style={{
-              position: "absolute",
-              top: -12,
-              left: -12,
-              width: 24,
-              height: 24,
-              background: "#52c41a",
-              borderRadius: "50%",
-              cursor: "pointer",
-              zIndex: 1000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: 12,
-              border: "2px solid white",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-            }}
-            onClick={() => setIsEditModalOpen(true)}
-            onMouseDown={e => e.stopPropagation()}
-            title="Configure shop items"
-          >
-            <EditOutlined />
-          </div>
-        )}
+    const parsePixelValue = (value) => {
+        if (typeof value === 'string' && value.endsWith('px')) {
+            return parseInt(value.slice(0, -2)) || 0;
+        }
+        return parseInt(value) || 0;
+    };
 
-        {/* Products Display */}
-        {displayProducts.length > 0 ? (
-  displayProducts.map(product => createProductItem(product))
-) : (
-  <Element
-    id="empty-state-container"
-    is={FlexBox}
-    flexDirection="column"
-    alignItems="center"
-    justifyContent="center"
-    padding="40px"
-    width="100%"
-    canvas
-  >
-    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🛍️</div>
-    <Element
-      id="empty-state-text-1"
-      is={ShopText}
-      text="No products selected"
-      fontSize="16px"
-      color="#999"
-    />
-    <Element
-      id="empty-state-text-2"
-      is={ShopText}
-      text="Click edit to configure your shop"
-      fontSize="14px"
-      color="#ccc"
-    />
-  </Element>
-)}
+    const fontOptions = [
+        { label: 'Arial', value: 'Arial, sans-serif' },
+        { label: 'Helvetica', value: 'Helvetica, sans-serif' },
+        { label: 'Times New Roman', value: 'Times New Roman, serif' },
+        { label: 'Georgia', value: 'Georgia, serif' },
+        { label: 'Courier New', value: 'Courier New, monospace' },
+        { label: 'Verdana', value: 'Verdana, sans-serif' },
+        { label: 'Trebuchet MS', value: 'Trebuchet MS, sans-serif' },
+        { label: 'Impact', value: 'Impact, sans-serif' },
+        { label: 'Comic Sans MS', value: 'Comic Sans MS, cursive' },
+        { label: 'Palatino', value: 'Palatino, serif' },
+        { label: 'Lucida Console', value: 'Lucida Console, monospace' },
+        { label: 'Tahoma', value: 'Tahoma, sans-serif' }
+    ];
 
-        {children}
-      </FlexBox>
+    const handleSliderStart = (prop) => {
+        setEditingState(prev => ({
+            ...prev,
+            activeSlider: prop
+        }));
+        setIsAdjusting(true);
+    };
 
-      {/* Edit Modal */}
-      <Modal
-        title="Configure Shop Items"
-        open={isEditModalOpen}
-        onCancel={() => setIsEditModalOpen(false)}
-        width={800}
-        footer={[
-          <Button key="cancel" onClick={() => setIsEditModalOpen(false)}>
-            Cancel
-          </Button>,
-          <Button key="save" type="primary" onClick={() => setIsEditModalOpen(false)}>
-            Save Changes
-          </Button>
-        ]}
-      >
-        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          {/* Individual Products */}
-          <div style={{ marginBottom: 24 }}>
-            <h3>Individual Products</h3>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder="Select individual products"
-              value={selectedProducts}
-              onChange={(value) => setProp(props => props.selectedProducts = value)}
-              options={mockStripeProducts.products.map(product => ({
-                label: `${product.name} - ${formatPrice(product.price)}`,
-                value: product.id
-              }))}
-            />
-          </div>
+    const handleSliderChange = (prop, value) => {
+        setEditingState(prev => ({
+            ...prev,
+            tempValues: {
+                ...prev.tempValues,
+                [prop]: value
+            }
+        }));
+    };
 
-          {/* Categories */}
-          <div style={{ marginBottom: 24 }}>
-            <h3>Categories</h3>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder="Select categories"
-              value={selectedCategories}
-              onChange={(value) => setProp(props => props.selectedCategories = value)}
-              options={mockStripeProducts.categories.map(category => ({
-                label: `${category.name} (${category.count} items)`,
-                value: category.id
-              }))}
-            />
-          </div>
+    const handleSliderEnd = (prop, value) => {
+        setProp(props => props[prop] = value);
+        setEditingState(prev => ({
+            ...prev,
+            activeSlider: null,
+            tempValues: {
+                ...prev.tempValues,
+                [prop]: undefined
+            }
+        }));
+        setIsAdjusting(false);
+    };
 
-          {/* Collections */}
-          <div style={{ marginBottom: 24 }}>
-            <h3>Collections</h3>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder="Select collections"
-              value={selectedCollections}
-              onChange={(value) => setProp(props => props.selectedCollections = value)}
-              options={mockStripeProducts.collections.map(collection => ({
-                label: `${collection.name} (${collection.count} items)`,
-                value: collection.id
-              }))}
-            />
-          </div>
+    const handleColorChange = (prop, value) => {
+        setProp(props => props[prop] = value);
+    };
 
-          <Divider />
+    const renderSlider = (label, prop, min = 0, max = 500, step = 1, suffix = 'px') => {
+        const currentValue = getCurrentValue(prop);
+        const numericValue = parsePixelValue(currentValue);
 
-          {/* Link Configuration */}
-          <div style={{ marginBottom: 24 }}>
-            <h3>Link Configuration</h3>
-            <div style={{ marginBottom: 16 }}>
-              <label>Base URL:</label>
-              <Input
-                style={{ marginTop: 8 }}
-                value={baseUrl}
-                onChange={(e) => setProp(props => props.baseUrl = e.target.value)}
-                placeholder="e.g., shop.com/shop"
-              />
+        return (
+            <div style={{ marginBottom: 16 }} key={`slider-${prop}`}>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 8
+                }}>
+                    <label style={{ fontSize: '13px', fontWeight: '500', color: '#333' }}>
+                        {label}
+                    </label>
+                    <span style={{
+                        fontSize: '12px',
+                        color: '#666',
+                        backgroundColor: '#f5f5f5',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        minWidth: '50px',
+                        textAlign: 'center'
+                    }}>
+                        {numericValue}{suffix}
+                    </span>
+                </div>
+                <div onMouseDown={(e) => e.stopPropagation()}>
+                    <Slider
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={numericValue}
+                        onChangeStart={() => handleSliderStart(prop)}
+                        onChange={(value) => handleSliderChange(prop, `${value}${suffix}`)}
+                        onChangeComplete={(value) => handleSliderEnd(prop, `${value}${suffix}`)}
+                        tooltip={{ formatter: (value) => `${value}${suffix}` }}
+                        style={{ margin: '0 4px' }}
+                    />
+                </div>
             </div>
-            <div>
-              <label>Link Type:</label>
-              <Select
-                style={{ width: '100%', marginTop: 8 }}
-                value={linkType}
-                onChange={(value) => setProp(props => props.linkType = value)}
-                options={[
-                  { label: 'Product Name (shop.com/shop/product-name)', value: 'name' },
-                  { label: 'Product ID (shop.com/shop/prod_123)', value: 'id' }
-                ]}
-              />
-            </div>
-          </div>
+        );
+    };
 
-          <Divider />
+    const renderColorPicker = (label, prop) => {
+        const currentValue = getCurrentValue(prop);
 
-          {/* Display Options */}
-          <div style={{ marginBottom: 24 }}>
-            <h3>Display Options</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Show Discount Badges</span>
-                <Switch
-                  checked={showDiscount}
-                  onChange={(checked) => setProp(props => props.showDiscount = checked)}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Show Quick Add Button</span>
-                <Switch
-                  checked={showQuickAdd}
-                  onChange={(checked) => setProp(props => props.showQuickAdd = checked)}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Show Wishlist Button</span>
-                <Switch
-                  checked={showWishlist}
-                  onChange={(checked) => setProp(props => props.showWishlist = checked)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <Divider />
-
-          {/* Carousel Settings */}
-          <div style={{ marginBottom: 24 }}>
-            <h3>Carousel Settings</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span>Auto-slide Images</span>
-              <Switch
-                checked={autoSlide}
-                onChange={(checked) => setProp(props => props.autoSlide = checked)}
-              />
-            </div>
-            {autoSlide && (
-              <div>
-                <label>Slide Interval (ms):</label>
-                <Slider
-                  style={{ marginTop: 8 }}
-                  min={1000}
-                  max={10000}
-                  step={500}
-                  value={slideInterval}
-                  onChange={(value) => setProp(props => props.slideInterval = value)}
-                  marks={{ 1000: '1s', 3000: '3s', 5000: '5s', 10000: '10s' }}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </Modal>
-
-      {/* Variant Selection Modal */}
-      <Modal
-        title="Select Size"
-        open={isVariantModalOpen}
-        onCancel={() => setIsVariantModalOpen(false)}
-        footer={null}
-        width={400}
-      >
-        {currentProduct && (
-          <div>
-            <div style={{ marginBottom: 16, textAlign: 'center' }}>
-              <ShopText text={currentProduct.name} fontSize="16px" fontWeight="600" />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              {currentProduct.variants.map(variant => (
-                <Button
-                  key={variant.id}
-                  style={{
-                    height: 40,
-                    border: '1px solid #d9d9d9',
-                    borderRadius: 4
-                  }}
-                  onClick={() => handleVariantSelect(variant)}
+        return (
+            <div style={{ marginBottom: 16 }} key={`color-${prop}`}>
+                <label style={{
+                    display: 'block',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#333',
+                    marginBottom: 8
+                }}>
+                    {label}
+                </label>
+                <div 
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: '6px',
+                        backgroundColor: '#fff'
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
                 >
-                  {variant.size}
-                </Button>
-              ))}
+                    <input
+                        type="color"
+                        value={currentValue}
+                        onChange={(e) => handleColorChange(prop, e.target.value)}
+                        style={{
+                            width: 32,
+                            height: 32,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                        }}
+                    />
+                    <span style={{
+                        fontSize: '12px',
+                        color: '#666',
+                        fontFamily: 'monospace'
+                    }}>
+                        {currentValue}
+                    </span>
+                </div>
             </div>
-          </div>
-        )}
-      </Modal>
-    </>
-  );
+        );
+    };
+
+    const renderFontDropdown = (label, prop) => {
+        const currentValue = getCurrentValue(prop);
+
+        return (
+            <div style={{ marginBottom: 16 }} key={`font-${prop}`}>
+                <label style={{
+                    display: 'block',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#333',
+                    marginBottom: 8
+                }}>
+                    {label}
+                </label>
+                <div onMouseDown={(e) => e.stopPropagation()}>
+                    <Select
+                        size="middle"
+                        style={{ width: '100%' }}
+                        value={currentValue}
+                        onChange={(value) => setProp(props => props[prop] = value)}
+                        options={fontOptions}
+                        getPopupContainer={(trigger) => trigger.parentElement}
+                    />
+                </div>
+            </div>
+        );
+    };
+
+    const renderDropdown = (label, prop, options) => {
+        const currentValue = getCurrentValue(prop);
+
+        return (
+            <div style={{ marginBottom: 16 }} key={`dropdown-${prop}`}>
+                <label style={{
+                    display: 'block',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#333',
+                    marginBottom: 8
+                }}>
+                    {label}
+                </label>
+                <div onMouseDown={(e) => e.stopPropagation()}>
+                    <Select
+                        size="middle"
+                        style={{ width: '100%' }}
+                        value={currentValue}
+                        onChange={(value) => setProp(props => props[prop] = value)}
+                        options={options}
+                        getPopupContainer={(trigger) => trigger.parentElement}
+                    />
+                </div>
+            </div>
+        );
+    };
+
+    const renderButtonGroup = (label, prop, options) => {
+        const currentValue = getCurrentValue(prop);
+
+        return (
+            <div style={{ marginBottom: 16 }} key={`buttongroup-${prop}`}>
+                <label style={{
+                    display: 'block',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#333',
+                    marginBottom: 8
+                }}>
+                    {label}
+                </label>
+                <div 
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
+                        gap: 6
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                >
+                    {options.map(option => (
+                        <Button
+                            key={option.value}
+                            size="small"
+                            type={currentValue === option.value ? 'primary' : 'default'}
+                            onClick={() => setProp(props => props[prop] = option.value)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            style={{
+                                fontSize: '11px',
+                                height: '28px'
+                            }}
+                        >
+                            {option.label}
+                        </Button>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr 350px', gap: 24, height: '70vh' }}>
+            {/* Left Panel - Configuration */}
+            <div style={{ borderRight: '1px solid #e8e8e8', paddingRight: 24 }}>
+                <div style={{ height: '100%', overflowY: 'auto', paddingRight: 8 }}>
+                    {/* Products Selection */}
+                    <div style={{ marginBottom: 24 }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
+                            Products
+                        </h3>
+                        <Select
+                            mode="multiple"
+                            style={{ width: '100%' }}
+                            placeholder="Select individual products"
+                            value={styleProps.selectedProducts}
+                            onChange={(value) => setProp(props => props.selectedProducts = value)}
+                            options={mockStripeProducts.products.map(product => ({
+                                label: `${product.name} - ${formatPrice(product.price)}`,
+                                value: product.id
+                            }))}
+                        />
+                    </div>
+
+                    {/* Categories */}
+                    <div style={{ marginBottom: 24 }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
+                            Categories
+                        </h3>
+                        <Select
+                            mode="multiple"
+                            style={{ width: '100%' }}
+                            placeholder="Select categories"
+                            value={styleProps.selectedCategories}
+                            onChange={(value) => setProp(props => props.selectedCategories = value)}
+                            options={mockStripeProducts.categories.map(category => ({
+                                label: `${category.name} (${category.count} items)`,
+                                value: category.id
+                            }))}
+                        />
+                    </div>
+
+                    {/* Collections */}
+                    <div style={{ marginBottom: 24 }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
+                            Collections
+                        </h3>
+                        <Select
+                            mode="multiple"
+                            style={{ width: '100%' }}
+                            placeholder="Select collections"
+                            value={styleProps.selectedCollections}
+                            onChange={(value) => setProp(props => props.selectedCollections = value)}
+                            options={mockStripeProducts.collections.map(collection => ({
+                                label: `${collection.name} (${collection.count} items)`,
+                                value: collection.id
+                            }))}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Center Panel - Live Preview */}
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                borderRight: '1px solid #e8e8e8',
+                paddingRight: 24
+            }}>
+                <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    textAlign: 'center'
+                }}>
+                    Live Preview
+                </h3>
+                <div style={{
+                    flex: 1,
+                    border: '1px solid #e8e8e8',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    backgroundColor: '#f9f9f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'auto'
+                }}>
+                    <div style={{ transform: 'scale(0.8)', transformOrigin: 'center' }}>
+                        {!isAdjusting && createProductItem(mockStripeProducts.products[0])}
+                        {isAdjusting && (
+                            <div style={{
+                                width: styleProps.itemWidth,
+                                height: '400px',
+                                backgroundColor: '#f0f0f0',
+                                borderRadius: styleProps.itemBorderRadius,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '14px',
+                                color: '#666'
+                            }}>
+                                Adjusting...
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Panel - Style Editor */}
+            <div>
+                <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '16px',
+                    fontWeight: '600'
+                }}>
+                    Style Controls
+                </h3>
+                <div style={{ height: '100%', overflowY: 'auto', padding: '0 4px' }}>
+                    {/* Element Selector */}
+                    <div style={{ marginBottom: 24 }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
+                            Edit Element
+                        </h3>
+                        <div onMouseDown={(e) => e.stopPropagation()}>
+                            <Select
+                                style={{ width: '100%' }}
+                                size="large"
+                                value={selectedElement}
+                                onChange={setSelectedElement}
+                                getPopupContainer={(trigger) => trigger.parentElement}
+                                options={[
+                                    { label: '📦 Container', value: 'container' },
+                                    { label: '🖼️ Image', value: 'image' },
+                                    { label: '📝 Title', value: 'title' },
+                                    { label: '💰 Price', value: 'price' },
+                                    { label: '🛒 Button', value: 'button' },
+                                    { label: '🏷️ Badge', value: 'badge' },
+                                    { label: '♡ Wishlist', value: 'wishlist' }
+                                ]}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Style Sections */}
+                    {selectedElement === 'container' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                📦 Container Styles
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    {renderSlider('Width', 'itemWidth', 200, 500, 10)}
+                                    {renderSlider('Padding', 'itemPadding', 0, 50, 2)}
+                                    {renderSlider('Gap', 'itemGap', 0, 30, 2)}
+                                </div>
+                                <div>
+                                    {renderColorPicker('Background', 'itemBackgroundColor')}
+                                    {renderSlider('Border Radius', 'itemBorderRadius', 0, 50, 1)}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedElement === 'image' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                🖼️ Image Styles
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    {renderSlider('Height', 'imageHeight', 150, 400, 10)}
+                                    {renderSlider('Border Radius', 'imageBorderRadius', 0, 50, 1)}
+                                </div>
+                                <div>
+                                    {renderSlider('Margin Bottom', 'imageMarginBottom', 0, 30, 2)}
+                                    {renderDropdown('Object Fit', 'imageObjectFit', [
+                                        { label: 'Cover', value: 'cover' },
+                                        { label: 'Contain', value: 'contain' },
+                                        { label: 'Fill', value: 'fill' },
+                                        { label: 'Scale Down', value: 'scale-down' }
+                                    ])}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedElement === 'title' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                📝 Title Styles
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    {renderSlider('Font Size', 'titleFontSize', 10, 32, 1)}
+                                    {renderSlider('Line Height', 'titleLineHeight', 1, 3, 0.1, '')}
+                                    {renderColorPicker('Color', 'titleColor')}
+                                </div>
+                                <div>
+                                    {renderFontDropdown('Font Family', 'titleFontFamily')}
+                                    {renderSlider('Margin Bottom', 'titleMarginBottom', 0, 20, 1)}
+                                </div>
+                            </div>
+                            {renderButtonGroup('Font Weight', 'titleFontWeight', [
+                                { label: '300', value: '300' },
+                                { label: '400', value: '400' },
+                                { label: '500', value: '500' },
+                                { label: '600', value: '600' },
+                                { label: '700', value: '700' },
+                                { label: 'Bold', value: 'bold' }
+                            ])}
+                        </div>
+                    )}
+
+                    {selectedElement === 'price' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                💰 Price Styles
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    <h5 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '600', color: '#555' }}>
+                                        Current Price
+                                    </h5>
+                                    {renderSlider('Font Size', 'priceFontSize', 12, 28, 1)}
+                                    {renderFontDropdown('Font Family', 'priceFontFamily')}
+                                    {renderColorPicker('Color', 'priceColor')}
+                                    {renderSlider('Gap', 'priceGap', 4, 20, 1)}
+                                </div>
+                                <div>
+                                    <h5 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '600', color: '#555' }}>
+                                        Original Price
+                                    </h5>
+                                    {renderSlider('Font Size', 'originalPriceFontSize', 10, 20, 1)}
+                                    {renderFontDropdown('Font Family', 'originalPriceFontFamily')}
+                                    {renderColorPicker('Color', 'originalPriceColor')}
+                                </div>
+                            </div>
+                            {renderButtonGroup('Font Weight', 'priceFontWeight', [
+                                { label: 'Normal', value: 'normal' },
+                                { label: '500', value: '500' },
+                                { label: '600', value: '600' },
+                                { label: '700', value: '700' },
+                                { label: 'Bold', value: 'bold' }
+                            ])}
+                        </div>
+                    )}
+
+                    {selectedElement === 'button' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                🛒 Button Styles
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    {renderColorPicker('Background', 'buttonBackgroundColor')}
+                                    {renderSlider('Border Radius', 'buttonBorderRadius', 0, 25, 1)}
+                                    {renderSlider('Font Size', 'buttonFontSize', 10, 20, 1)}
+                                    {renderSlider('Margin Top', 'buttonMarginTop', 0, 20, 1)}
+                                </div>
+                                <div>
+                                    {renderColorPicker('Text Color', 'buttonColor')}
+                                    {renderFontDropdown('Font Family', 'buttonFontFamily')}
+                                </div>
+                            </div>
+                            <div>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '13px',
+                                    fontWeight: '500',
+                                    color: '#333',
+                                    marginBottom: 8
+                                }}>
+                                    Padding
+                                </label>
+                                <div 
+                                    style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    {[
+                                        { label: 'XS', value: '8px 12px' },
+                                        { label: 'SM', value: '10px 14px' },
+                                        { label: 'MD', value: '12px 16px' },
+                                        { label: 'LG', value: '14px 20px' }
+                                    ].map(option => (
+                                        <Button
+                                            key={option.value}
+                                            size="small"
+                                            type={styleProps.buttonPadding === option.value ? 'primary' : 'default'}
+                                            onClick={() => setProp(props => props.buttonPadding = option.value)}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            style={{ fontSize: '10px', height: '28px' }}
+                                        >
+                                            {option.label}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                            {renderButtonGroup('Font Weight', 'buttonFontWeight', [
+                                { label: 'Normal', value: 'normal' },
+                                { label: '500', value: '500' },
+                                { label: '600', value: '600' },
+                                { label: 'Bold', value: 'bold' }
+                            ])}
+                        </div>
+                    )}
+
+                    {selectedElement === 'badge' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                🏷️ Badge Styles
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    {renderColorPicker('Background', 'badgeBackgroundColor')}
+                                    {renderSlider('Font Size', 'badgeFontSize', 8, 16, 1)}
+                                    {renderSlider('Border Radius', 'badgeBorderRadius', 0, 15, 1)}
+                                </div>
+                                <div>
+                                    {renderColorPicker('Text Color', 'badgeColor')}
+                                    {renderFontDropdown('Font Family', 'badgeFontFamily')}
+                                </div>
+                            </div>
+                            <div>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '13px',
+                                    fontWeight: '500',
+                                    color: '#333',
+                                    marginBottom: 8
+                                }}>
+                                    Padding
+                                </label>
+                                <div 
+                                    style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    {[
+                                        { label: 'XS', value: '2px 6px' },
+                                        { label: 'SM', value: '4px 8px' },
+                                        { label: 'MD', value: '6px 10px' }
+                                    ].map(option => (
+                                        <Button
+                                            key={option.value}
+                                            size="small"
+                                            type={styleProps.badgePadding === option.value ? 'primary' : 'default'}
+                                            onClick={() => setProp(props => props.badgePadding = option.value)}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            style={{ fontSize: '10px', height: '28px' }}
+                                        >
+                                            {option.label}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedElement === 'wishlist' && (
+                        <div style={{ backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+                            <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                                ♡ Wishlist Button
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div>
+                                    {renderColorPicker('Background', 'wishlistBackgroundColor')}
+                                    {renderSlider('Size', 'wishlistSize', 24, 48, 2)}
+                                </div>
+                                <div>
+                                    {renderColorPicker('Icon Color', 'wishlistColor')}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // Craft.js configuration
 ShopFlexBox.craft = {
-  props: {
-    selectedProducts: [],
-    selectedCategories: [],
-    selectedCollections: [],
-    baseUrl: "shop.com/shop",
-    linkType: "name",
-    showDiscount: true,
-    showQuickAdd: true,
-    showWishlist: true,
-    autoSlide: false,
-    slideInterval: 3000,
-    width: "100%",
-    height: "auto",
-    display: "flex",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
-    alignItems: "stretch",
-    gap: 20,
-    padding: 20,
-    backgroundColor: "transparent",
-    borderRadius: 8,
-    className: ""
-  },
-  rules: {
-    canDrag: () => true,
-    canDrop: () => true,
-    canMoveIn: () => false,
-    canMoveOut: () => true,
-  },
-  related: {
-    styleMenu: {
-      supportedProps: [
-        'width', 'height', 'display', 'flexDirection', 'flexWrap', 
-        'justifyContent', 'alignItems', 'gap', 'padding', 
-        'backgroundColor', 'borderRadius', 'className'
-      ]
+    props: {
+        selectedProducts: [],
+        selectedCategories: [],
+        selectedCollections: [],
+        baseUrl: "shop.com/shop",
+        linkType: "name",
+        showDiscount: true,
+        showQuickAdd: true,
+        showWishlist: true,
+        autoSlide: false,
+        slideInterval: 3000,
+        width: "auto",
+        height: "auto",
+        display: "flex",
+        flexDirection: "row",
+        flexWrap: "wrap",
+        justifyContent: "flex-start",
+        alignItems: "stretch",
+        gap: 20,
+        padding: 20,
+        backgroundColor: "transparent",
+        borderRadius: 8,
+        className: "",
+
+        // Product Item Styling
+        itemWidth: "280px",
+        itemBackgroundColor: "white",
+        itemBorderRadius: "8px",
+        itemBoxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        itemPadding: "16px",
+        itemGap: "8px",
+        itemBorder: "none",
+
+        // Image Styling
+        imageHeight: "200px",
+        imageBorderRadius: "8px",
+        imageObjectFit: "cover",
+        imageMarginBottom: "12px",
+
+        // Title Styling
+        titleFontSize: "16px",
+        titleFontWeight: "600",
+        titleFontFamily: "Arial, sans-serif",
+        titleColor: "#333",
+        titleLineHeight: "1.4",
+        titleMarginBottom: "8px",
+
+        // Price Styling
+        priceFontSize: "18px",
+        priceFontFamily: "Arial, sans-serif",
+        priceColor: "#ff4d4f",
+        priceFontWeight: "bold",
+        originalPriceFontSize: "14px",
+        originalPriceFontFamily: "Arial, sans-serif",
+        originalPriceColor: "#999",
+        priceGap: "8px",
+
+        // Button Styling
+        buttonBackgroundColor: "#000",
+        buttonColor: "white",
+        buttonFontFamily: "Arial, sans-serif",
+        buttonBorderRadius: "6px",
+        buttonPadding: "12px 16px",
+        buttonFontSize: "14px",
+        buttonFontWeight: "500",
+        buttonBorder: "none",
+        buttonMarginTop: "8px",
+
+        // Badge Styling
+        badgeBackgroundColor: "#ff4d4f",
+        badgeColor: "white",
+        badgeFontSize: "12px",
+        badgeFontFamily: "Arial, sans-serif",
+        badgePadding: "4px 8px",
+        badgeBorderRadius: "4px",
+
+        // Wishlist Styling
+        wishlistBackgroundColor: "rgba(255,255,255,0.9)",
+        wishlistSize: "32px",
+        wishlistColor: "#333"
+    },
+    rules: {
+        canDrag: () => true,
+        canDrop: () => true,
+        canMoveIn: () => false,
+        canMoveOut: () => true,
+    },
+    related: {
+        styleMenu: {
+            supportedProps: [
+                'width', 'height', 'display', 'flexDirection', 'flexWrap',
+                'justifyContent', 'alignItems', 'gap', 'padding',
+                'backgroundColor', 'borderRadius', 'className'
+            ]
+        }
     }
-  }
 };

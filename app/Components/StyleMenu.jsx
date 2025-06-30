@@ -12,13 +12,14 @@ import {
   MenuOutlined, MinusOutlined, PictureOutlined, PlusOutlined, PushpinOutlined,
   RadiusBottomleftOutlined, RadiusBottomrightOutlined, RadiusUpleftOutlined,
   RadiusUprightOutlined, SettingOutlined, ShrinkOutlined, StrikethroughOutlined,
-  TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,
+  TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,FormOutlined  ,
   VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined, ShoppingCartOutlined
 } from "@ant-design/icons";
 import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag, Radio } from "antd";
 import { useEditor } from "@craftjs/core";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
+const { TextArea } = Input;
 // Debounce utility
 const debounce = (func, wait) => {
   let timeout;
@@ -836,6 +837,22 @@ console.log(selected?.supportedProps)
     'type': 'basic',
     'value': 'basic',
     'name': 'basic',
+
+    // Form properties
+'formTitle': 'form',
+'formDescription': 'form',
+'submitButtonText': 'form',
+'successMessage': 'form',
+'databaseName': 'form',
+'keyField': 'form',
+'resetAfterSubmit': 'form',
+'showSuccessMessage': 'form',
+'redirectAfterSubmit': 'form',
+'redirectUrl': 'form',
+'linkStyles': 'form',
+'submitButtonColor': 'form',
+'submitButtonSize': 'form',
+'submitButtonWidth': 'form',
     
     // Layout properties
     'display': 'layout',
@@ -894,6 +911,7 @@ console.log(selected?.supportedProps)
     'backgroundRepeat': 'colors',
     'backgroundPosition': 'colors',
     'backgroundAttachment': 'colors',
+
     
     // Border properties
     'border': 'border',
@@ -1167,6 +1185,158 @@ if (shouldShow('selectedProducts') || shouldShow('selectedCategories') || should
       children: (
         <div style={{ padding: '0 20px 16px 20px' }}>
           {shopItems}
+        </div>
+      )
+    });
+  }
+}
+
+
+// Form Configuration (Custom Section)
+if (shouldShow('formTitle') || shouldShow('formDescription') || shouldShow('submitButtonText') || shouldShow('databaseName')) {
+  const formItems = [];
+  
+  if (shouldShowProperty('formTitle', 'form')) {
+    formItems.push(
+      <Form.Item key="formTitle" label="Form Title" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("formTitle")} placeholder="Contact Form" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('formDescription', 'form')) {
+    formItems.push(
+      <Form.Item key="formDescription" label="Form Description" style={sharedStyles.formItem}>
+        <TextArea {...handleInputChange("formDescription")} placeholder="Please fill out the form below" rows={2} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('submitButtonText', 'form')) {
+    formItems.push(
+      <Form.Item key="submitButtonText" label="Submit Button Text" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("submitButtonText")} placeholder="Submit" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('successMessage', 'form')) {
+    formItems.push(
+      <Form.Item key="successMessage" label="Success Message" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("successMessage")} placeholder="Form submitted successfully!" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('databaseName', 'form')) {
+    formItems.push(
+      <Form.Item key="databaseName" label="Database Name" style={sharedStyles.formItem}>
+        <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+          Use the edit button on the component to configure database settings
+        </Typography.Text>
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('keyField', 'form')) {
+    formItems.push(
+      <Form.Item key="keyField" label="Key Field" style={sharedStyles.formItem}>
+        <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+          Configure in component edit menu
+        </Typography.Text>
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('resetAfterSubmit', 'form')) {
+    formItems.push(
+      <Form.Item key="resetAfterSubmit" label="Reset After Submit" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("resetAfterSubmit")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('showSuccessMessage', 'form')) {
+    formItems.push(
+      <Form.Item key="showSuccessMessage" label="Show Success Message" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("showSuccessMessage")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('redirectAfterSubmit', 'form')) {
+    formItems.push(
+      <Form.Item key="redirectAfterSubmit" label="Redirect After Submit" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("redirectAfterSubmit")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('redirectUrl', 'form') && localStyle.redirectAfterSubmit) {
+    formItems.push(
+      <Form.Item key="redirectUrl" label="Redirect URL" style={sharedStyles.formItem}>
+        <Input {...handleInputChange("redirectUrl")} placeholder="https://example.com/thank-you" size="small" />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('linkStyles', 'form')) {
+    formItems.push(
+      <Form.Item key="linkStyles" label="Link Input Styles" style={sharedStyles.formItem}>
+        <Switch {...handleSwitchChange("linkStyles")} size="small" />
+      </Form.Item>
+    );
+  }
+  
+  // Submit Button Styling
+  const hasSubmitButtonProps = shouldShowProperty('submitButtonColor', 'form') || shouldShowProperty('submitButtonSize', 'form') || shouldShowProperty('submitButtonWidth', 'form');
+  
+  if (hasSubmitButtonProps) {
+    formItems.push(
+      <Divider key="submit-button-divider" orientation="left" plain>Submit Button</Divider>
+    );
+  }
+  
+  if (shouldShowProperty('submitButtonColor', 'form')) {
+    formItems.push(
+      <Form.Item key="submitButtonColor" label="Button Color" style={sharedStyles.formItem}>
+        <ColorPicker {...handleColorChange("submitButtonColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('submitButtonSize', 'form')) {
+    formItems.push(
+      <Form.Item key="submitButtonSize" label="Button Size" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("submitButtonSize")} options={[
+          { label: 'Small', value: 'small' },
+          { label: 'Medium', value: 'middle' },
+          { label: 'Large', value: 'large' }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('submitButtonWidth', 'form')) {
+    formItems.push(
+      <Form.Item key="submitButtonWidth" label="Button Width" style={sharedStyles.formItem}>
+        <Select {...handleSelectChange("submitButtonWidth")} options={[
+          { label: 'Auto', value: 'auto' },
+          { label: '50%', value: '50%' },
+          { label: 'Full Width', value: '100%' }
+        ]} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+      </Form.Item>
+    );
+  }
+  
+  // Only add the section if it has items to show
+  if (formItems.length > 0) {
+    items.push({
+      key: 'form',
+      label: <span><FormOutlined /> Form Configuration</span>,
+      children: (
+        <div style={{ padding: '0 20px 16px 20px' }}>
+          {formItems}
         </div>
       )
     });
@@ -3302,8 +3472,8 @@ if (shouldShow('attributes')) {
       background: "#fff",
       boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
       borderRadius: 8,
-      minWidth: 320,
-      maxWidth: 450,
+      minWidth: 'auto',
+      maxWidth: 'auto',
       fontSize: 13,
       border: "1px solid #eee",
       height: "89vh", // Change from "100%" to "100vh"
