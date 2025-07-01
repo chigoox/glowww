@@ -11,6 +11,7 @@ export const FormInput = ({
     // Input properties
     inputType = "text",
     placeholder = "Enter value...",
+    inputValue = '',
     required = false,
     disabled = false,
     readOnly = false,
@@ -67,10 +68,8 @@ export const FormInput = ({
     }));
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [inputValue, setInputValue] = useState("");
     const [isFocused, setIsFocused] = useState(false);
     const [hasError, setHasError] = useState(false);
-
     // Input type options
     const inputTypeOptions = [
         { label: "Text", value: "text" },
@@ -98,7 +97,8 @@ export const FormInput = ({
     // Handle input change and notify parent form
     const handleInputChange = (e) => {
     const value = e.target ? e.target.value : e;
-    setInputValue(value);
+     // Update the Craft.js state 
+        setProp(props => props.inputValue = value);
     
     // Basic validation
     if (required && !value.trim()) {
@@ -148,6 +148,10 @@ export const FormInput = ({
         };
     };
 
+
+
+
+    //
     // Render the appropriate input based on type
     const renderInput = () => {
         const inputStyles = getInputStyles();
@@ -739,10 +743,12 @@ FormInput.craft = {
     props: {
         inputType: "text",
         placeholder: "Enter value...",
+        inputValue: '',
         required: false,
         disabled: false,
         readOnly: false,
         labelText: "Label",
+        
         showLabel: true,
         width: "100%",
         height: "auto",
