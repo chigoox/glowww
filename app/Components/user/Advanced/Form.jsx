@@ -112,25 +112,14 @@ export const Form = ({
   // Enhanced input detection using Craft.js tree traversal
 const detectFormInputs = useCallback(() => {
   if (!query?.getNodes) return [];
-  console.log('🔍 Detecting form inputs...');
+  
   try {
     const allNodes = query.getNodes();
     const inputs = [];
     const dropAreaId = `${id}_drop_area`;
     
-    console.log('🔍 Form Input Detection - Form ID:', id);
-    console.log('🔍 Drop Area ID:', dropAreaId);
-    console.log('🔍 All nodes:', Object.keys(allNodes));
-    
     Object.entries(allNodes).forEach(([nodeId, node]) => {
       const nodeData = node.data || {};
-      
-      console.log(`🔍 Checking node ${nodeId}:`, {
-        type: nodeData.type,
-        displayName: nodeData.displayName,
-        parent: nodeData.parent,
-        resolvedName: nodeData.type?.resolvedName
-      });
       
       // Enhanced detection for FormInput components
       const isFormInput = 
@@ -138,32 +127,27 @@ const detectFormInputs = useCallback(() => {
         nodeData.displayName === 'FormInput' ||
         (typeof nodeData.type === 'function' && nodeData.type.name === 'FormInput') ||
         nodeData.type?.resolvedName === 'FormInput' ||
-        (nodeData.type === FormInput); // Direct component comparison
+        (nodeData.type === FormInput);
       
       if (isFormInput) {
-        console.log(`✅ Found FormInput component: ${nodeId}`);
-        
-        // Check if this input is a child of our form or drop area
+        // Check if this input is a child of our form
         let currentParent = nodeData.parent;
         let isChildOfForm = false;
-        let depth = 0;
         
-        while (currentParent && allNodes[currentParent] && depth < 10) {
-          console.log(`🔗 Checking parent: ${currentParent}`);
-          
-          // Check if we've reached our form or its drop area
+        while (currentParent && allNodes[currentParent]) {
           if (currentParent === id || currentParent === dropAreaId) {
             isChildOfForm = true;
-            console.log(`🎯 Input ${nodeId} belongs to form ${id}`);
             break;
           }
-          
           currentParent = allNodes[currentParent].data?.parent;
-          depth++;
         }
         
         if (isChildOfForm) {
-          const props = nodeData.props || {};
+          // Get the current node to access live props
+          const currentNode = query.node(nodeId).get();
+          const props = currentNode?.data?.props || nodeData.props || {};
+          
+          // Use current props values, not initial ones
           const fieldName = props.labelText?.toLowerCase().replace(/[^a-z0-9]/g, '') || `field_${nodeId.slice(-6)}`;
           
           const input = {
@@ -173,24 +157,66 @@ const detectFormInputs = useCallback(() => {
             inputType: props.inputType || 'text',
             required: props.required || false,
             placeholder: props.placeholder || '',
-            disabled: props.disabled || false
+            disabled: props.disabled || false,
+            // Add timestamp to force updates
+            lastUpdated: Date.now()
           };
           
           inputs.push(input);
-          console.log(`📝 Added input:`, input);
-        } else {
-          console.log(`❌ Input ${nodeId} not child of form ${id}`);
         }
       }
     });
     
-    console.log(`🎯 Total inputs found: ${inputs.length}`);
     return inputs;
   } catch (error) {
     console.warn('Error in detectFormInputs:', error);
     return [];
   }
 }, [id, query, FormInput]);
+
+
+
+useEffect(() => {
+  if (!query?.subscribe) return;
+
+  const unsubscribe = query.subscribe((nodeMap) => {
+    // Debounce the detection
+    if (detectTimeoutRef.current) {
+      clearTimeout(detectTimeoutRef.current);
+    }
+    
+    detectTimeoutRef.current = setTimeout(() => {
+      const inputs = detectFormInputs();
+      setInputFields(prevInputs => {
+        // Check if inputs have actually changed
+        const inputsChanged = JSON.stringify(inputs.map(i => ({ 
+          id: i.id, 
+          labelText: i.labelText, 
+          inputType: i.inputType,
+          required: i.required 
+        }))) !== JSON.stringify(prevInputs.map(i => ({ 
+          id: i.id, 
+          labelText: i.labelText, 
+          inputType: i.inputType,
+          required: i.required 
+        })));
+        
+        if (inputsChanged) {
+          console.log(`📊 Form ${id} - Input fields updated:`, inputs.length);
+          return inputs;
+        }
+        return prevInputs;
+      });
+    }, 100);
+  });
+
+  return () => {
+    if (unsubscribe) unsubscribe();
+    if (detectTimeoutRef.current) {
+      clearTimeout(detectTimeoutRef.current);
+    }
+  };
+}, [query, detectFormInputs, id]);
 
   // Debounced input detection - FIXED
   useEffect(() => {
@@ -441,6 +467,13 @@ const detectFormInputs = useCallback(() => {
             style={{ marginTop: 16 }}
           />
         )}
+
+        {isSelected && (
+  <FormDataPreview 
+    inputFields={inputFields}
+    formData={formData}
+  />
+)}
       </form>
 
       {/* Configuration Modal */}
@@ -462,7 +495,10 @@ const detectFormInputs = useCallback(() => {
           setProp={setProp}
           databases={databases}
           createNewDatabase={createNewDatabase}
+          detectFormInputs={detectFormInputs} // Add this line
+          setInputFields={setInputFields}     // Add this line
           inputFields={inputFields}
+          formData={formData}
           formTitle={formTitle}
           formDescription={formDescription}
           submitButtonText={submitButtonText}
@@ -557,6 +593,9 @@ const FormConfigModal = ({
   createNewDatabase,
   inputFields,
   formTitle,
+  formData,
+  detectFormInputs,    
+  setInputFields,
   formDescription,
   submitButtonText,
   successMessage,
@@ -571,7 +610,7 @@ const FormConfigModal = ({
   submitButtonSize,
   submitButtonWidth
 }) => {
-  const [activeTab, setActiveTab] = useState('general');
+   const [activeTab, setActiveTab] = useState('general');
   const [newDatabaseName, setNewDatabaseName] = useState('');
   const [showCreateDatabase, setShowCreateDatabase] = useState(false);
 
@@ -582,6 +621,13 @@ const FormConfigModal = ({
       setShowCreateDatabase(false);
     }
   }, [newDatabaseName, createNewDatabase]);
+
+  // Add the refresh handler
+  const handleRefreshInputs = useCallback(() => {
+    const inputs = detectFormInputs();
+    setInputFields(inputs);
+    message.info(`Refreshed: ${inputs.length} fields found`);
+  }, [detectFormInputs, setInputFields]);
 
   return (
     <div style={{ height: '70vh' }}>
@@ -616,78 +662,93 @@ const FormConfigModal = ({
       <div style={{ height: 'calc(100% - 80px)', overflowY: 'auto', padding: '0 4px' }}>
         {/* General Tab */}
         {activeTab === 'general' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <h4>Form Information</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Form Title
-                </label>
-                <Input
-                  value={formTitle}
-                  onChange={(e) => setProp(props => props.formTitle = e.target.value)}
-                  placeholder="Enter form title"
-                />
-              </div>
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+    <div>
+      <h4>Form Information</h4>
+      
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+          Form Title
+        </label>
+        <Input
+          value={formTitle}
+          onChange={(e) => setProp(props => props.formTitle = e.target.value)}
+          placeholder="Enter form title"
+        />
+      </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Form Description
-                </label>
-                <TextArea
-                  value={formDescription}
-                  onChange={(e) => setProp(props => props.formDescription = e.target.value)}
-                  placeholder="Enter form description"
-                  rows={3}
-                />
-              </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+          Form Description
+        </label>
+        <TextArea
+          value={formDescription}
+          onChange={(e) => setProp(props => props.formDescription = e.target.value)}
+          placeholder="Enter form description"
+          rows={3}
+        />
+      </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Submit Button Text
-                </label>
-                <Input
-                  value={submitButtonText}
-                  onChange={(e) => setProp(props => props.submitButtonText = e.target.value)}
-                  placeholder="Submit"
-                />
-              </div>
-            </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+          Submit Button Text
+        </label>
+        <Input
+          value={submitButtonText}
+          onChange={(e) => setProp(props => props.submitButtonText = e.target.value)}
+          placeholder="Submit"
+        />
+      </div>
+    </div>
 
-            <div>
-              <h4>Form Fields ({inputFields.length})</h4>
-              
-              {inputFields.length === 0 ? (
-                <Alert
-                  message="No input fields found"
-                  description="Add input components inside this form to see them here."
-                  type="info"
-                  showIcon
-                />
-              ) : (
-                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                  {inputFields.map(field => (
-                    <Card key={field.id} size="small" style={{ marginBottom: 8 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <Text strong>{field.labelText}</Text>
-                          <br />
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {field.inputType} {field.required && <Tag size="small" color="red">Required</Tag>}
-                          </Text>
-                        </div>
-                        <Text code style={{ fontSize: '11px' }}>
-                          {field.fieldName}
-                        </Text>
-                      </div>
-                    </Card>
-                  ))}
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h4>Form Fields ({inputFields.length})</h4>
+        <Button 
+          size="small" 
+          icon="🔄" 
+          onClick={handleRefreshInputs}
+        >
+          Refresh
+        </Button>
+      </div>
+      
+      {inputFields.length === 0 ? (
+        <Alert
+          message="No input fields found"
+          description="Add input components inside this form to see them here."
+          type="info"
+          showIcon
+        />
+      ) : (
+        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {inputFields.map(field => (
+            <Card key={`${field.id}-${field.lastUpdated}`} size="small" style={{ marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Text strong>{field.labelText}</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    {field.inputType} {field.required && <Tag size="small" color="red">Required</Tag>}
+                  </Text>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+                <Text code style={{ fontSize: '11px' }}>
+                  {field.fieldName}
+                </Text>
+              </div>
+            </Card>
+          ))}
+          
+          {/* Data Preview in Modal */}
+          <FormDataPreview 
+            inputFields={inputFields}
+            formData={{}}
+          />
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
         {/* Database Tab */}
         {activeTab === 'database' && (
@@ -907,22 +968,123 @@ const FormConfigModal = ({
             </div>
 
             <div>
-              <h4>Form Preview</h4>
-              
-              <Card size="small">
-                <Text strong>Current Configuration:</Text>
-                <div style={{ marginTop: 8, fontSize: '12px' }}>
-                  <div>📝 Fields: {inputFields.length}</div>
-                  <div>🗄️ Database: {databaseName || 'Not set'}</div>
-                  <div>🔑 Key Field: {keyField || 'Auto-generated'}</div>
-                  <div>✅ Submit enabled: {databaseName && inputFields.length > 0 ? 'Yes' : 'No'}</div>
-                </div>
-              </Card>
-            </div>
+      <h4>Form Preview</h4>
+      
+      <Card size="small">
+        <Text strong>Current Configuration:</Text>
+        <div style={{ marginTop: 8, fontSize: '12px' }}>
+          <div>📝 Fields: {inputFields.length}</div>
+          <div>🗄️ Database: {databaseName || 'Not set'}</div>
+          <div>🔑 Key Field: {keyField || 'Auto-generated'}</div>
+          <div>✅ Submit enabled: {databaseName && inputFields.length > 0 ? 'Yes' : 'No'}</div>
+        </div>
+      </Card>
+      
+      {/* Fixed FormDataPreview call */}
+      <FormDataPreview 
+        inputFields={inputFields}
+        formData={formData || {}}
+      />
+    </div>
+            
+  
+
           </div>
         )}
-      </div>
+  </div>
     </div>
+  );
+};
+
+// Add this component before the Form.craft configuration:
+const FormDataPreview = ({ inputFields, formData }) => {
+  const sampleData = useMemo(() => {
+    const sample = {};
+    inputFields.forEach(field => {
+      switch (field.inputType) {
+        case 'email':
+          sample[field.fieldName] = 'user@example.com';
+          break;
+        case 'tel':
+          sample[field.fieldName] = '+1 (555) 123-4567';
+          break;
+        case 'number':
+          sample[field.fieldName] = 42;
+          break;
+        case 'date':
+          sample[field.fieldName] = '2024-01-15';
+          break;
+        case 'textarea':
+          sample[field.fieldName] = 'Sample message text here...';
+          break;
+        case 'select':
+          sample[field.fieldName] = 'Option 1';
+          break;
+        case 'checkbox':
+          sample[field.fieldName] = true;
+          break;
+        case 'radio':
+          sample[field.fieldName] = 'choice1';
+          break;
+        default:
+          sample[field.fieldName] = field.labelText?.includes('name') ? 'John Doe' : 'Sample value';
+      }
+    });
+    
+    // Add metadata
+    sample.timestamp = new Date().toISOString();
+    sample.formId = 'form_12345';
+    sample.userAgent = 'Mozilla/5.0 (Sample Browser)';
+    sample.ipAddress = '192.168.1.1';
+    
+    return sample;
+  }, [inputFields]);
+
+  if (inputFields.length === 0) {
+    return (
+      <Alert
+        message="No data structure available"
+        description="Add input fields to see how the data will be structured."
+        type="info"
+        showIcon
+        style={{ marginTop: 16 }}
+      />
+    );
+  }
+
+  return (
+    <Card 
+      size="small" 
+      title="📊 Data Structure Preview" 
+      style={{ marginTop: 16 }}
+      extra={
+        <Tag color="blue">
+          {Object.keys(sampleData).length} fields
+        </Tag>
+      }
+    >
+      <div style={{ fontSize: '12px', fontFamily: 'monospace' }}>
+        <pre style={{ 
+          margin: 0, 
+          padding: 8, 
+          whiteSpace: 'pre-wrap',
+          color: '#333',
+          lineHeight: 1.4,
+          backgroundColor: '#f9f9f9',
+          borderRadius: '4px',
+          border: '1px solid #e8e8e8'
+        }}>
+          {JSON.stringify(sampleData, null, 2)}
+        </pre>
+      </div>
+      
+      <div style={{ fontSize: '11px', color: '#666', marginTop: 8 }}>
+        <Typography.Text type="secondary">
+          💡 This shows how your form data will be structured when submitted to the database.
+          Field names are auto-generated from labels.
+        </Typography.Text>
+      </div>
+    </Card>
   );
 };
 
@@ -974,3 +1136,4 @@ FormInputDropArea.craft = {
     canMoveOut: () => true,
   }
 };
+

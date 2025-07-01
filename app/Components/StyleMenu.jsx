@@ -457,7 +457,6 @@ export function StyleMenu({
 
     return { selected };
   });
-console.log(selected?.supportedProps)
   // Initialize default local style structure
   const getDefaultLocalStyle = useCallback(() => ({
     // Position & Layout
