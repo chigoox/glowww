@@ -1,87 +1,482 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor, Element } from "@craftjs/core";
-import { EditOutlined } from '@ant-design/icons';
+import { EditOutlined, SettingOutlined } from '@ant-design/icons';
+import { 
+  Button as AntButton, 
+  Modal, 
+  Input, 
+  Select, 
+  Switch, 
+  message 
+} from 'antd';
 import { Text } from "./Text";
 
+// Built-in action types
+const ACTION_TYPES = [
+  { value: "none", label: "None" },
+  { value: "link", label: "Open Link" },
+  { value: "submit", label: "Submit Form" },
+  { value: "scroll", label: "Scroll to Element" },
+  { value: "toggle", label: "Toggle Visibility" },
+  { value: "modal", label: "Show/Hide Modal" },
+  { value: "script", label: "Run Script Component" },
+  { value: "theme", label: "Toggle Theme" },
+  { value: "animation", label: "Trigger Animation" }
+];
+
+// Settings Modal Component
+const ButtonSettingsModal = ({ 
+  visible, 
+  onClose, 
+  nodeId,
+  currentProps 
+}) => {
+  const { actions, query } = useEditor();
+  const [activeTab, setActiveTab] = useState('content');
+  const [availableNodes, setAvailableNodes] = useState([]);
+
+  // Local state for form values
+  const [formData, setFormData] = useState(currentProps);
+
+  useEffect(() => {
+    setFormData(currentProps);
+  }, [currentProps]);
+
+  // Get all available nodes for targeting
+  useEffect(() => {
+    if (visible) {
+      const nodes = query.getNodes();
+      const nodeList = Object.entries(nodes)
+        .filter(([id, node]) => node.data.displayName && id !== nodeId)
+        .map(([id, node]) => {
+          const hasVisibleProp = node.data.props.hasOwnProperty('visible');
+          const hasHiddenProp = node.data.props.hasOwnProperty('hidden');
+          const hasDisplayProp = node.data.props.hasOwnProperty('display');
+          
+          return {
+            id,
+            name: node.data.displayName,
+            type: node.data.type?.displayName || 'Unknown',
+            canToggle: hasVisibleProp || hasHiddenProp || hasDisplayProp || true,
+            toggleMethod: hasVisibleProp ? 'visible prop' : hasHiddenProp ? 'hidden prop' : hasDisplayProp ? 'display prop' : 'DOM style'
+          };
+        });
+      setAvailableNodes(nodeList);
+    }
+  }, [query, nodeId, visible]);
+
+  const updateProp = (key, value) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+    
+    // Update the actual component prop
+    actions.setProp(nodeId, (props) => {
+      props[key] = value;
+    });
+  };
+
+  const handleOk = () => {
+    onClose();
+  };
+
+  const handleCancel = () => {
+    onClose();
+  };
+
+  return (
+    <Modal
+      title="Button Settings"
+      open={visible}
+      onOk={handleOk}
+      onCancel={handleCancel}
+      width={600}
+      destroyOnClose
+    >
+      <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+        {/* Tab Navigation */}
+        <div style={{ 
+          display: 'flex', 
+          borderBottom: '1px solid #e8e8e8', 
+          marginBottom: 16 
+        }}>
+          {[
+            { key: 'content', label: '📝 Content' },
+            { key: 'actions', label: '⚡ Actions' },
+            { key: 'styling', label: '🎨 Styling' }
+          ].map(tab => (
+            <AntButton
+              key={tab.key}
+              type={activeTab === tab.key ? 'primary' : 'default'}
+              onClick={() => setActiveTab(tab.key)}
+              style={{ 
+                marginRight: 8,
+                marginBottom: -1,
+                borderBottomLeftRadius: 0,
+                borderBottomRightRadius: 0
+              }}
+            >
+              {tab.label}
+            </AntButton>
+          ))}
+        </div>
+
+        {/* Content Tab */}
+        {activeTab === 'content' && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Button Text
+              </label>
+              <Input
+                value={formData.text}
+                onChange={(e) => updateProp('text', e.target.value)}
+                placeholder="Enter button text"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Button Type
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={formData.buttonType}
+                onChange={(value) => updateProp('buttonType', value)}
+              >
+                <Select.Option value="primary">Primary</Select.Option>
+                <Select.Option value="secondary">Secondary</Select.Option>
+                <Select.Option value="outline">Outline</Select.Option>
+                <Select.Option value="ghost">Ghost</Select.Option>
+              </Select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Button Size
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={formData.size}
+                onChange={(value) => updateProp('size', value)}
+              >
+                <Select.Option value="small">Small</Select.Option>
+                <Select.Option value="medium">Medium</Select.Option>
+                <Select.Option value="large">Large</Select.Option>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* Actions Tab */}
+        {activeTab === 'actions' && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Action Type
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={formData.actionType}
+                onChange={(value) => updateProp('actionType', value)}
+              >
+                {ACTION_TYPES.map(action => (
+                  <Select.Option key={action.value} value={action.value}>
+                    {action.label}
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Link Action Settings */}
+            {formData.actionType === 'link' && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Link URL
+                </label>
+                <Input
+                  value={formData.href || ''}
+                  onChange={(e) => updateProp('href', e.target.value)}
+                  placeholder="https://example.com"
+                />
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Switch
+                      checked={formData.target === '_blank'}
+                      onChange={(checked) => updateProp('target', checked ? '_blank' : '_self')}
+                    />
+                    Open in new tab
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Target Component Settings */}
+            {['scroll', 'toggle', 'modal', 'animation'].includes(formData.actionType) && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Target Component
+                </label>
+                <Select
+                  style={{ width: '100%' }}
+                  value={formData.targetNodeId}
+                  onChange={(value) => updateProp('targetNodeId', value)}
+                  placeholder="Select a component"
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                  }
+                >
+                  {availableNodes.map(node => (
+                    <Select.Option key={node.id} value={node.id}>
+                      {node.name} ({node.type})
+                      {formData.actionType === 'toggle' && (
+                        <span style={{ color: '#666', fontSize: '12px' }}>
+                          {' '}- via {node.toggleMethod}
+                        </span>
+                      )}
+                    </Select.Option>
+                  ))}
+                </Select>
+                {formData.actionType === 'toggle' && (
+                  <div style={{ marginTop: 4, fontSize: '12px', color: '#666' }}>
+                    💡 This will toggle the component's visibility using the best available method
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Scroll Settings */}
+            {formData.actionType === 'scroll' && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Scroll Offset (px)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.scrollOffset}
+                  onChange={(e) => updateProp('scrollOffset', parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                />
+              </div>
+            )}
+
+            {/* Animation Settings */}
+            {formData.actionType === 'animation' && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Animation Type
+                </label>
+                <Select
+                  style={{ width: '100%' }}
+                  value={formData.animationType}
+                  onChange={(value) => updateProp('animationType', value)}
+                >
+                  <Select.Option value="fadeIn">Fade In</Select.Option>
+                  <Select.Option value="slideUp">Slide Up</Select.Option>
+                  <Select.Option value="slideDown">Slide Down</Select.Option>
+                  <Select.Option value="bounce">Bounce</Select.Option>
+                  <Select.Option value="pulse">Pulse</Select.Option>
+                </Select>
+              </div>
+            )}
+
+            {/* Script Component Settings */}
+            {formData.actionType === 'script' && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Script Component ID
+                </label>
+                <Input
+                  value={formData.scriptComponentId || ''}
+                  onChange={(e) => updateProp('scriptComponentId', e.target.value)}
+                  placeholder="Enter script component ID"
+                />
+              </div>
+            )}
+
+            {/* Confirmation Dialog */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  checked={formData.confirmDialog}
+                  onChange={(checked) => updateProp('confirmDialog', checked)}
+                />
+                Show confirmation dialog
+              </label>
+            </div>
+
+            {formData.confirmDialog && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Confirmation Message
+                </label>
+                <Input
+                  value={formData.confirmMessage || ''}
+                  onChange={(e) => updateProp('confirmMessage', e.target.value)}
+                  placeholder="Are you sure?"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Styling Tab */}
+        {activeTab === 'styling' && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Background Color
+              </label>
+              <input
+                type="color"
+                value={formData.backgroundColor || '#1890ff'}
+                onChange={(e) => updateProp('backgroundColor', e.target.value)}
+                style={{ width: '100%', height: 40, border: '1px solid #d9d9d9', borderRadius: 6 }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Text Color
+              </label>
+              <input
+                type="color"
+                value={formData.color || '#ffffff'}
+                onChange={(e) => updateProp('color', e.target.value)}
+                style={{ width: '100%', height: 40, border: '1px solid #d9d9d9', borderRadius: 6 }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Font Size
+              </label>
+              <Input
+                type="number"
+                value={formData.fontSize}
+                onChange={(e) => updateProp('fontSize', parseInt(e.target.value) || 14)}
+                placeholder="14"
+                addonAfter="px"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Padding
+              </label>
+              <Input
+                value={formData.padding || ''}
+                onChange={(e) => updateProp('padding', e.target.value)}
+                placeholder="8px 16px"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Border Radius
+              </label>
+              <Input
+                type="number"
+                value={formData.borderRadius}
+                onChange={(e) => updateProp('borderRadius', parseInt(e.target.value) || 0)}
+                placeholder="6"
+                addonAfter="px"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Width
+              </label>
+              <Input
+                value={formData.width || ''}
+                onChange={(e) => updateProp('width', e.target.value)}
+                placeholder="auto"
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Height
+              </label>
+              <Input
+                value={formData.height || ''}
+                onChange={(e) => updateProp('height', e.target.value)}
+                placeholder="auto"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 export const Button = ({
-  // Button Content
+  // Existing Button props
   text = "Click Me",
-  
-  // Layout & Dimensions
   width = "auto",
   height = "auto",
   minWidth = 80,
   maxWidth,
   minHeight = 32,
   maxHeight,
-  
-  // Positioning
   position = "relative",
   top,
   left,
   right,
   bottom,
   zIndex = 1,
-  
-  // Spacing
   margin = "5px 0",
   padding = "8px 16px",
-  
-  // Typography
   fontFamily = "Arial",
   fontSize = 14,
   fontWeight = "400",
   color = "#ffffff",
   textAlign = "center",
   textDecoration = "none",
-  
-  // Background & Colors
   backgroundColor = "#1890ff",
   background,
   backgroundImage,
-  
-  // Border
   border = "1px solid #1890ff",
   borderRadius = 6,
   borderWidth = 1,
   borderStyle = "solid",
   borderColor = "#1890ff",
-  
-  // Visual Effects
   boxShadow = "0 2px 4px rgba(0,0,0,0.1)",
   opacity = 1,
   transform = "none",
   transition = "all 0.3s ease",
-  
-  // Button Behavior
   disabled = false,
   href,
   target = "_blank",
   rel = "noopener noreferrer",
-  
-  // Button Type/Style
-  buttonType = "primary", // primary, secondary, outline, ghost
-  size = "medium", // small, medium, large
-  
-  // Layout for children
+  buttonType = "primary",
+  size = "medium",
   flexDirection = "row",
   alignItems = "center",
   justifyContent = "center",
   gap = 8,
-  
-  // HTML Attributes
   title,
   className = "",
   id,
-  
-  // Accessibility
   role = "button",
   ariaLabel,
   tabIndex = 0,
+  display = "inline-flex",
+  visibility = "visible",
+  hidden = false,
   
-  // Children
+  // NEW: Action system props
+  actionType = "none",
+  targetNodeId = "",
+  scrollOffset = 0,
+  animationType = "fadeIn",
+  scriptComponentId = "",
+  confirmDialog = false,
+  confirmMessage = "Are you sure?",
+  
   children,
 }) => {
   const { 
@@ -94,12 +489,14 @@ export const Button = ({
     selected: node.events.selected,
   }));
   
-  const { actions } = useEditor();
+  const { actions, query } = useEditor();
   
   const buttonRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(text);
   const [isHovered, setIsHovered] = useState(false);
+  const [hasScript, setHasScript] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     if (!isEditing) {
@@ -112,6 +509,22 @@ export const Button = ({
       connect(drag(buttonRef.current));
     }
   }, [connect, drag]);
+
+  // Check if this button has script attached
+  useEffect(() => {
+    setHasScript(actionType !== "none" || scriptComponentId);
+  }, [actionType, scriptComponentId]);
+
+  // Handle settings modal
+  const handleSettingsClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+  };
 
   // Handle text editing
   const handleDoubleClick = (e) => {
@@ -149,22 +562,187 @@ export const Button = ({
     }
   };
 
-  // Button click handler
-  const handleClick = (e) => {
+  // Enhanced click handler with built-in actions
+  const handleClick = useCallback(async (e) => {
     if (isEditing) return;
     
-    if (href) {
-      if (target === '_blank') {
-        window.open(href, '_blank', 'noopener,noreferrer');
-      } else {
-        window.location.href = href;
-      }
+    // Show confirmation dialog if enabled
+    if (confirmDialog && !window.confirm(confirmMessage)) {
+      return;
     }
-    
-    console.log('Button clicked:', text);
-  };
 
-  // Helper function to process values
+    try {
+      switch (actionType) {
+        case "link":
+          if (href) {
+            if (target === '_blank') {
+              window.open(href, '_blank', 'noopener,noreferrer');
+            } else {
+              window.location.href = href;
+            }
+          }
+          break;
+
+        case "submit":
+          // Find parent form and submit
+          let parentNode = query.node(nodeId).get().data.parent;
+          while (parentNode) {
+            const node = query.node(parentNode).get();
+            if (node?.data.type?.displayName === "Form") {
+              // Dispatch form submit event
+              const formElement = document.querySelector(`[data-craft-id="${parentNode}"] form`);
+              if (formElement) {
+                formElement.requestSubmit();
+              }
+              break;
+            }
+            parentNode = node?.data.parent;
+          }
+          break;
+
+        case "scroll":
+  if (targetNodeId) {
+    const targetElement = document.querySelector(`[data-craft-id="${targetNodeId}"]`);
+    if (targetElement) {
+      // Calculate offset position
+      const rect = targetElement.getBoundingClientRect();
+      const offsetPosition = rect.top + window.pageYOffset - scrollOffset;
+      
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+      
+      console.log('Scrolling to element:', targetNodeId, 'at position:', offsetPosition);
+    } else {
+      console.warn('Target element not found:', targetNodeId);
+    }
+  }
+  break;
+
+        case "toggle":
+          if (targetNodeId) {
+            console.log('🔍 Debug - Toggle action started for:', targetNodeId);
+            const targetNode = query.node(targetNodeId).get();
+            console.log('🔍 Target node:', targetNode);
+            
+            if (targetNode) {
+              console.log('🔍 Node props:', targetNode.data.props);
+              
+              // Method 1: Check if the component has a 'visible' prop (like modals)
+              if (targetNode.data.props.hasOwnProperty('visible')) {
+                console.log('🔍 Using visible prop method');
+                actions.setProp(targetNodeId, (props) => {
+                  console.log('🔍 Before toggle - visible:', props.visible);
+                  props.visible = !props.visible;
+                  console.log('🔍 After toggle - visible:', props.visible);
+                });
+              }
+              // Method 2: Check if the component has a 'hidden' prop
+              else if (targetNode.data.props.hasOwnProperty('hidden')) {
+                console.log('🔍 Using hidden prop method');
+                actions.setProp(targetNodeId, (props) => {
+                  props.hidden = !props.hidden;
+                });
+              }
+              // Method 3: Check if the component has 'display' prop (most common for Text, Image, etc.)
+              else if (targetNode.data.props.hasOwnProperty('display')) {
+                console.log('🔍 Using display prop method');
+                actions.setProp(targetNodeId, (props) => {
+                  const currentDisplay = props.display;
+                  props.display = currentDisplay === "none" ? "block" : "none";
+                  console.log('🔍 Toggled display from', currentDisplay, 'to', props.display);
+                });
+              }
+              // Method 4: Use visibility prop (fallback)
+              else if (targetNode.data.props.hasOwnProperty('visibility')) {
+                console.log('🔍 Using visibility prop method');
+                actions.setProp(targetNodeId, (props) => {
+                  const currentVisibility = props.visibility;
+                  props.visibility = currentVisibility === "hidden" ? "visible" : "hidden";
+                  console.log('🔍 Toggled visibility from', currentVisibility, 'to', props.visibility);
+                });
+              }
+              // Method 5: Add display prop if it doesn't exist
+              else {
+                console.log('🔍 Creating display prop method');
+                actions.setProp(targetNodeId, (props) => {
+                  // Default to hiding the component by setting display to none
+                  props.display = "none";
+                  console.log('🔍 Added display: none to component');
+                });
+              }
+              
+              console.log('🔍 Toggle completed for component:', targetNodeId);
+            }
+          }
+          break;
+
+        case "modal":
+          if (targetNodeId) {
+            actions.setProp(targetNodeId, (props) => {
+              props.visible = !props.visible;
+            });
+          }
+          break;
+
+        case "script":
+          // Trigger ScriptComponent
+          if (scriptComponentId) {
+            window.dispatchEvent(new CustomEvent("run-script", {
+              detail: { 
+                scriptId: scriptComponentId, 
+                sourceId: nodeId,
+                sourceType: "button",
+                data: { text, actionType }
+              }
+            }));
+          }
+          break;
+
+        case "animation":
+          if (targetNodeId) {
+            const targetElement = document.querySelector(`[data-craft-id="${targetNodeId}"]`);
+            if (targetElement) {
+              // Add animation class
+              targetElement.classList.add(`animate-${animationType}`);
+              // Remove after animation completes
+              setTimeout(() => {
+                targetElement.classList.remove(`animate-${animationType}`);
+              }, 1000);
+            }
+          }
+          break;
+
+        case "theme":
+          // Toggle global theme
+          document.body.classList.toggle('dark-theme');
+          break;
+
+        default:
+          // Fallback to original href behavior
+          if (href) {
+            if (target === '_blank') {
+              window.open(href, '_blank', 'noopener,noreferrer');
+            } else {
+              window.location.href = href;
+            }
+          }
+          break;
+      }
+
+      console.log(`Button action: ${actionType}`, { targetNodeId, nodeId });
+      
+    } catch (error) {
+      console.error('Button action failed:', error);
+    }
+  }, [
+    isEditing, actionType, href, target, targetNodeId, scrollOffset, 
+    animationType, scriptComponentId, confirmDialog, confirmMessage, 
+    query, nodeId, actions, text
+  ]);
+
+  // Keep all your existing style logic
   const processValue = (value, property) => {
     if (typeof value === 'number' && !['opacity', 'zIndex'].includes(property)) {
       return `${value}px`;
@@ -172,7 +750,6 @@ export const Button = ({
     return value;
   };
 
-  // Get button type styles
   const getButtonTypeStyles = () => {
     const baseStyles = {
       primary: {
@@ -200,7 +777,6 @@ export const Button = ({
     return baseStyles[buttonType] || baseStyles.primary;
   };
 
-  // Get size styles
   const getSizeStyles = () => {
     const sizeStyles = {
       small: {
@@ -227,143 +803,196 @@ export const Button = ({
   const sizeStyles = getSizeStyles();
 
   const computedStyles = {
-    // Layout & Dimensions
     width: processValue(width, 'width'),
     height: processValue(height, 'height'),
     minWidth: processValue(minWidth, 'minWidth'),
     maxWidth: maxWidth && processValue(maxWidth, 'maxWidth'),
     minHeight: processValue(minHeight, 'minHeight'),
     maxHeight: maxHeight && processValue(maxHeight, 'maxHeight'),
-    
-    // Positioning
     position,
     top: top !== undefined ? processValue(top, 'top') : undefined,
     left: left !== undefined ? processValue(left, 'left') : undefined,
     right: right !== undefined ? processValue(right, 'right') : undefined,
     bottom: bottom !== undefined ? processValue(bottom, 'bottom') : undefined,
     zIndex,
-    
-    // Spacing
     margin: processValue(margin, 'margin'),
     padding: sizeStyles.padding,
-    
-    // Typography
     fontFamily,
     fontSize: sizeStyles.fontSize,
     fontWeight,
     color: typeStyles.color,
     textAlign,
     textDecoration,
-    
-    // Background & Colors
     backgroundColor: typeStyles.backgroundColor,
     background,
     backgroundImage,
-    
-    // Border
     border: typeStyles.border,
     borderRadius: processValue(borderRadius, 'borderRadius'),
-    
-    // Visual Effects
     boxShadow: disabled ? 'none' : boxShadow,
     opacity: disabled ? 0.6 : opacity,
     transform,
     transition,
-    
-    // Interaction
     cursor: disabled ? 'not-allowed' : 'pointer',
     userSelect: 'none',
     outline: 'none',
-    
-    // Flex layout for children
-    display: 'inline-flex',
+    display: display,
+    visibility: visibility,
     flexDirection,
     alignItems,
     justifyContent,
     gap: processValue(gap, 'gap'),
     
-    // Hover effects
+    // Add visual indicator for buttons with actions
+    ...(hasScript && {
+      boxShadow: `${boxShadow}, 0 0 0 2px rgba(82, 196, 26, 0.3)`,
+    }),
+    
     ...(isHovered && !disabled && {
       transform: `${transform} scale(1.02)`,
-      boxShadow: '0 4px 8px rgba(0,0,0,0.15)'
+      boxShadow: hasScript 
+        ? '0 4px 8px rgba(0,0,0,0.15), 0 0 0 2px rgba(82, 196, 26, 0.5)'
+        : '0 4px 8px rgba(0,0,0,0.15)'
     })
   };
 
-  const ButtonElement = href ? 'a' : 'button';
+  const ButtonElement = href && actionType === "link" ? 'a' : 'button';
+
+  // Get current props for modal
+  const currentProps = {
+    text,
+    actionType,
+    targetNodeId,
+    href,
+    confirmDialog,
+    confirmMessage,
+    buttonType,
+    size,
+    target,
+    backgroundColor,
+    color,
+    fontSize,
+    padding,
+    borderRadius,
+    width,
+    height,
+    scrollOffset,
+    animationType,
+    scriptComponentId,
+  };
+
+  // Don't render if hidden
+  if (hidden) {
+    return null;
+  }
 
   return (
-    <ButtonElement
-      className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
-      ref={buttonRef}
-      style={computedStyles}
-      disabled={disabled && !href}
-      href={href}
-      target={href ? target : undefined}
-      rel={href ? rel : undefined}
-      title={title}
-      id={id}
-      role={role}
-      aria-label={ariaLabel || text}
-      tabIndex={tabIndex}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Edit indicator */}
-      {selected && !isEditing && (
-        <div
-          style={{
-            position: "absolute",
-            top: -12,
-            right: -12,
-            width: 24,
-            height: 24,
-            background: "#52c41a",
-            borderRadius: "50%",
-            cursor: "pointer",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 12,
-            border: "2px solid white",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onClick={handleDoubleClick}
-          title="Double-click to edit text"
-        >
-          <EditOutlined />
-        </div>
-      )}
-      
-      {/* Button content - text and children */}
-      {text && !children?.length && (
-  <span
-    contentEditable={isEditing}
-    onBlur={handleBlur}
-    onInput={handleTextChange}
-    onKeyDown={handleKeyDown}
-    style={{
-      outline: 'none',
-      minHeight: '1em'
-    }}
-    suppressContentEditableWarning={true}
-  >
-    {isEditing ? localText : text}
-  </span>
-)}
+    <>
+      <ButtonElement
+        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        ref={buttonRef}
+        style={computedStyles}
+        disabled={disabled && actionType !== "link"}
+        href={href && actionType === "link" ? href : undefined}
+        target={href && actionType === "link" ? target : undefined}
+        rel={href && actionType === "link" ? rel : undefined}
+        title={title}
+        id={id}
+        role={role}
+        aria-label={ariaLabel || text}
+        tabIndex={tabIndex}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        data-craft-id={nodeId}
+      >
+        {/* Edit indicator */}
+        {selected && !isEditing && (
+          <div
+            style={{
+              position: "absolute",
+              top: -12,
+              right: -12,
+              width: 24,
+              height: 24,
+              background: "#52c41a",
+              borderRadius: "50%",
+              cursor: "pointer",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontSize: 12,
+              border: "2px solid white",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+            }}
+            onClick={handleSettingsClick}
+            title="Click to open settings"
+          >
+            <EditOutlined />
+          </div>
+        )}
 
-      
-      {/* Render children */}
-      {children}
-    </ButtonElement>
+        {/* Script indicator */}
+        {hasScript && (
+          <div
+            style={{
+              position: "absolute",
+              top: -8,
+              left: -8,
+              width: 16,
+              height: 16,
+              background: "#52c41a",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontSize: 8,
+              border: "1px solid white",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.2)"
+            }}
+            title={`Action: ${actionType}`}
+          >
+            <SettingOutlined />
+          </div>
+        )}
+        
+        {/* Button content */}
+        {text && !children?.length && (
+          <span
+            contentEditable={isEditing}
+            onBlur={handleBlur}
+            onInput={handleTextChange}
+            onKeyDown={handleKeyDown}
+            style={{
+              outline: 'none',
+              minHeight: '1em'
+            }}
+            suppressContentEditableWarning={true}
+          >
+            {isEditing ? localText : text}
+          </span>
+        )}
+        
+        {children}
+      </ButtonElement>
+
+      {/* Settings Modal */}
+      <ButtonSettingsModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        nodeId={nodeId}
+        currentProps={currentProps}
+      />
+    </>
   );
 };
 
-// CraftJS configuration
+// Enhanced CraftJS configuration
 Button.craft = {
+  displayName: "Button",
   props: {
     text: "Click Me",
     width: "auto",
@@ -414,51 +1043,38 @@ Button.craft = {
     role: "button",
     ariaLabel: "",
     tabIndex: 0,
+    display: "inline-flex",
+    visibility: "visible",
+    hidden: false,
+    actionType: "none",
+    targetNodeId: "",
+    scrollOffset: 0,
+    animationType: "fadeIn",
+    scriptComponentId: "",
+    confirmDialog: false,
+    confirmMessage: "Are you sure?",
   },
   rules: {
     canDrag: () => true,
-    canDrop: () => true,     // Now accepts children
-    canMoveIn: () => true,   // Children can be moved in
+    canDrop: () => true,
+    canMoveIn: () => true,
     canMoveOut: () => true,
-    
-    
   },
   custom: {
     styleMenu: {
       supportedProps: [
-        // Content
-        "text",
-        
-        // Layout & Dimensions
-        "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
-        "position", "top", "left", "right", "bottom", "zIndex",
-        
-        // Spacing
-        "margin", "padding",
-        
-        // Typography
+        "text", "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+        "position", "top", "left", "right", "bottom", "zIndex", "margin", "padding",
         "fontFamily", "fontSize", "fontWeight", "color", "textAlign", "textDecoration",
-        
-        // Background & Colors
-        "backgroundColor", "background", "backgroundImage",
-        
-        // Border
-        "border", "borderRadius",
-        
-        // Visual Effects
-        "boxShadow", "opacity", "transform", "transition",
-
-        'overflow',
-        
-        // Flexbox Layout (for children)
+        "backgroundColor", "background", "backgroundImage", "border", "borderRadius",
+        "boxShadow", "opacity", "transform", "transition", "overflow",
         "flexDirection", "alignItems", "justifyContent", "gap",
-        
-        // Button Properties
-        "buttonType", "size", "disabled", "href", "target",
-        
-        // HTML Attributes
-        "title", "className", "id", "ariaLabel"
-      ]
+        "buttonType", "size", "disabled", "href", "target", "title", "className", "id", "ariaLabel",
+        "display", "visibility", "hidden",
+        "actionType", "targetNodeId", "scrollOffset", "animationType", 
+        "scriptComponentId", "confirmDialog", "confirmMessage"
+      ],
+      actionTypes: ACTION_TYPES
     }
   }
 };

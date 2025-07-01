@@ -20,7 +20,7 @@ import {ShopFlexBox, ShopImage, ShopText} from './Components/user/Advanced/ShopF
 import { FormInput } from './Components/user/Input';
 import EditorLayers from './Components/EditorLayers';
 import { Form, FormInputDropArea } from './Components/user/Advanced/Form';
-
+import {Carousel} from './Components/user/Carousel';
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
@@ -156,7 +156,7 @@ export default function App() {
   return (
     <Editor resolver={{
       Box, FlexBox, GridBox, Text, Image, Button, TextArea, Link, FormInputDropArea,
-      Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form
+      Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel
     }}> 
       <EditorLayout />
     </Editor>

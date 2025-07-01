@@ -38,6 +38,7 @@ import { Video } from "./user/Video";
 import { ShopFlexBox } from "./user/Advanced/ShopFlexBox";
 import { FormInput } from "./user/Input";
 import { Form } from "./user/Advanced/Form";
+import {Carousel} from "./user/Carousel";
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const { connectors } = useEditor();
@@ -57,6 +58,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const shopFlexBoxRef = useRef(null);
   const formInputRef = useRef(null);
   const formRef = useRef(null);
+  const carouselRef = useRef(null);
 
   // Component categories
   const sections = [
@@ -137,9 +139,17 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           icon: <VideoCameraAddOutlined />,
           description: 'Video player',
           element: <Element is={Video} />
-        }
+        },
+        {
+          ref: carouselRef,
+          name: 'Carousel',
+          icon: <PictureOutlined />,
+          description: 'Image carousel',
+          element: <Element is={Carousel} />
+        },
       ]
     },
+
     {
       id: 'interactive',
       title: 'Interactive',
