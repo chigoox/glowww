@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
-import { DragOutlined } from '@ant-design/icons';
 
 export const Box = ({
+  
   // Layout & Position
   width = "auto",
   height = "auto",
@@ -39,7 +40,7 @@ export const Box = ({
   marginLeft,
   marginX,
   marginY,
-  padding = 20,
+  padding = 4,
   paddingTop,
   paddingRight,
   paddingBottom,
@@ -195,16 +196,169 @@ placeContent,
   const { actions } = useEditor();
 
   const cardRef = useRef(null);
-  const dragHandleRef = useRef(null);
+  const dragRef = useRef(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+  // Function to update box position for portal positioning
+  const updateBoxPosition = () => {
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
+      setBoxPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
 
   useEffect(() => {
-    if (cardRef.current) {
-      connect(cardRef.current);
+    const connectElements = () => {
+      if (cardRef.current) {
+        connect(cardRef.current); // Connect for selection
+      }
+      if (dragRef.current) {
+        drag(dragRef.current); // Connect the drag handle for Craft.js dragging
+      }
+    };
+
+    connectElements();
+    
+    // Also reconnect when the component is selected
+    if (isSelected) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(connectElements, 10);
+      return () => clearTimeout(timer);
     }
-    if (dragHandleRef.current) {
-      drag(dragHandleRef.current);
+  }, [connect, drag, isSelected]);
+
+  // Update box position when selected or hovered changes
+  useEffect(() => {
+    if (isSelected || isHovered) {
+      updateBoxPosition();
+      
+      // Update position on scroll and resize
+      const handleScroll = () => updateBoxPosition();
+      const handleResize = () => updateBoxPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
     }
-  }, [connect, drag]);
+  }, [isSelected, isHovered]);
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = cardRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    
+    setIsResizing(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      // Calculate new dimensions based on resize direction
+      switch (direction) {
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      // Apply minimum constraints
+      newWidth = Math.max(newWidth, 50);
+      newHeight = Math.max(newHeight, 20);
+      
+      // Update dimensions using Craft.js setProp
+      setProp(props => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle custom drag for position changes
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Update position using Craft.js setProp
+      setProp(props => {
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Helper function to process values (add px to numbers where appropriate)
   const processValue = (value, property) => {
@@ -354,9 +508,13 @@ placeContent,
 
   return (
     <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className || ''}`}
+      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
       ref={cardRef}
-      style={computedStyles}
+      style={{
+        ...computedStyles,
+        position: 'relative',
+        cursor: 'default'
+      }}
       id={id}
       title={title}
       role={role}
@@ -372,36 +530,264 @@ placeContent,
       dir={dir}
       lang={lang}
       hidden={hidden}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        updateBoxPosition();
+      }}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Drag handle */}
-      <div
-        ref={dragHandleRef}
-        style={{
-          position: "absolute",
-          top: 4,
-          right: 4,
-          width: 24,
-          height: 24,
-          background: "#eee",
-          borderRadius: "50%",
-          cursor: "grab",
-          zIndex: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center"
-        }}
-        onMouseDown={e => e.stopPropagation()}
-        title="Drag Container"
-      >
-        <DragOutlined />
-      </div>
+      {/* Portal controls rendered outside this container to avoid overflow clipping */}
+      {isSelected && (
+        <PortalControls
+          boxPosition={boxPosition}
+          dragRef={dragRef}
+          handleDragStart={handleDragStart}
+          handleResizeStart={handleResizeStart}
+        />
+      )}
       {children}
     </div>
   );
 };
 
+// Portal Controls Component - renders outside of the Box to avoid overflow clipping
+const PortalControls = ({ 
+  boxPosition, 
+  dragRef, 
+  handleDragStart, 
+  handleResizeStart 
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+  
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
+        <div
+          ref={dragRef}
+          style={{
+            background: '#52c41a',
+            color: 'white',
+            padding: '2px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          title="Drag to move between containers"
+        >
+          📦 MOVE
+        </div>
+        
+        {/* Right half - POS (Custom position drag) */}
+        <div
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
+      </div>
+
+      {/* Resize handles */}
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        title="Resize"
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        title="Resize"
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        title="Resize"
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+        title="Resize"
+      />
+
+      {/* Edge resize handles - beautiful semi-transparent style */}
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'n-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+        title="Resize height"
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 's-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+        title="Resize height"
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'w-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+        title="Resize width"
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left + boxPosition.width - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'e-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+        title="Resize width"
+      />
+    </div>,
+    document.body
+  );
+};
+
 // Define default props for Craft.js - these will be the initial values
 Box.craft = {
+  displayName: "Box",
   props: {
     // Layout & Position
     width: "auto",
@@ -423,7 +809,7 @@ Box.craft = {
     
     // Spacing
     margin: "none",
-    padding: '2rem',
+    padding: '4px',
     
     // Border
     border: "none",
@@ -493,10 +879,11 @@ Box.craft = {
     canDrag: () => true,
     canDrop: () => true,
     canMoveIn: () => true,
+    canMoveOut: () => true
   },
    custom: {
     styleMenu: {
-      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border', 'overflow']
+      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border', 'overflow','padding', "html"]
     }
   }
 };

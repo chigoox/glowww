@@ -2,7 +2,9 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { useNode } from "@craftjs/core";
-import { DragOutlined, EditOutlined, PlayCircleOutlined, UploadOutlined, LinkOutlined } from '@ant-design/icons';
+import { createPortal } from 'react-dom';
+import { PlayCircleOutlined } from '@ant-design/icons';
+import MediaLibrary from '../support/MediaLibrary';
 
 export const Video = ({
   // Video Source
@@ -16,7 +18,7 @@ export const Video = ({
   muted = false,
   preload = "metadata", // "none" | "metadata" | "auto"
   poster = "", // Thumbnail image
-  objectFit = "cover", // Add this new prop
+  objectFit = "cover",
   
   // Layout & Position
   width = "100%",
@@ -60,18 +62,172 @@ export const Video = ({
   }));
 
   const videoRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [localVideoUrl, setLocalVideoUrl] = useState("");
-  const [inputUrl, setInputUrl] = useState(videoSrc);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+
+  // Function to update box position for portal positioning
+  const updateBoxPosition = () => {
+    if (videoRef.current) {
+      const rect = videoRef.current.getBoundingClientRect();
+      setBoxPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
 
   useEffect(() => {
-    if (videoRef.current) {
-      connect(drag(videoRef.current));
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    const connectElements = () => {
+      if (videoRef.current) {
+        connect(drag(videoRef.current));
+      }
+    };
+
+    connectElements();
+    const timer = setTimeout(connectElements, 50);
+    return () => clearTimeout(timer);
+  }, [connect, drag, isSelected, isClient]);
+
+  // Update box position when selected or hovered changes
+  useEffect(() => {
+    if (isSelected || isHovered) {
+      updateBoxPosition();
+      
+      const handleScroll = () => updateBoxPosition();
+      const handleResize = () => updateBoxPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
     }
-  }, [connect, drag]);
+  }, [isSelected, isHovered]);
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = videoRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    
+    setIsResizing(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      switch (direction) {
+        case 'se':
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw':
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne':
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw':
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e':
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w':
+          newWidth = startWidth - deltaX;
+          break;
+        case 's':
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n':
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      newWidth = Math.max(newWidth, 200);
+      newHeight = Math.max(newHeight, 150);
+      
+      setProp(props => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle custom drag for position changes
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      setProp(props => {
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle media selection from library
+  const handleMediaSelect = (item, itemType) => {
+    if (itemType === 'video') {
+      setProp(props => {
+        props.videoSrc = item.url;
+        props.videoType = item.isExternal ? "url" : "file";
+        if (item.name) props.title = item.name;
+      });
+    }
+  };
 
   // Helper function to process values
   const processValue = (value, property) => {
@@ -115,372 +271,318 @@ export const Video = ({
     }
   });
 
-  const handleEditClick = () => {
-    setIsEditing(true);
-    setInputUrl(videoSrc);
-  };
+  const getVideoElement = () => {
+    if (!videoSrc) return null;
 
-  const handleSaveEdit = () => {
-    if (videoType === "url") {
-      setProp(props => props.videoSrc = inputUrl);
+    // Check if it's a YouTube/Vimeo/other embed URL
+    if (videoSrc.includes('youtube.com') || videoSrc.includes('youtu.be')) {
+      let embedUrl = videoSrc;
+      if (videoSrc.includes('watch?v=')) {
+        const videoId = videoSrc.split('watch?v=')[1].split('&')[0];
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      } else if (videoSrc.includes('youtu.be/')) {
+        const videoId = videoSrc.split('youtu.be/')[1].split('?')[0];
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      }
+      
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <iframe
+            src={embedUrl}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              borderRadius: 'inherit',
+              pointerEvents: isSelected ? 'none' : 'auto'
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title={title || "Video"}
+          />
+          {isSelected && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+                cursor: 'grab',
+                backgroundColor: 'rgba(0,0,0,0.1)',
+                pointerEvents: 'auto'
+              }}
+              onMouseDown={e => e.stopPropagation()}
+            />
+          )}
+        </div>
+      );
     }
-    setIsEditing(false);
-  };
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setInputUrl(videoSrc);
-  };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type.startsWith('video/')) {
-      setIsUploading(true);
-      setUploadProgress(0);
-
-      // Simulate upload progress (replace with actual upload logic)
-      const uploadInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(uploadInterval);
-            setIsUploading(false);
-            
-            // Create local URL for the video
-            const url = URL.createObjectURL(file);
-            setLocalVideoUrl(url);
-            setProp(props => {
-              props.videoSrc = url;
-              props.videoType = "file";
-            });
-            
-            return 100;
-          }
-          return prev + 10;
-        });
-      }, 200);
+    if (videoSrc.includes('vimeo.com')) {
+      const videoId = videoSrc.split('vimeo.com/')[1].split('?')[0];
+      const embedUrl = `https://player.vimeo.com/video/${videoId}`;
+      
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <iframe
+            src={embedUrl}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              borderRadius: 'inherit',
+              pointerEvents: isSelected ? 'none' : 'auto'
+            }}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            title={title || "Video"}
+          />
+          {isSelected && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+                cursor: 'grab',
+                backgroundColor: 'rgba(0,0,0,0.1)',
+                pointerEvents: 'auto'
+              }}
+              onMouseDown={e => e.stopPropagation()}
+            />
+          )}
+        </div>
+      );
     }
-  };
 
-  const handleUrlSubmit = () => {
-    setProp(props => {
-      props.videoSrc = inputUrl;
-      props.videoType = "url";
-    });
-    setIsEditing(false);
-  };
-
-const getVideoElement = () => {
-  if (!videoSrc) return null;
-
-  // Check if it's a YouTube/Vimeo/other embed URL
-  if (videoSrc.includes('youtube.com') || videoSrc.includes('youtu.be')) {
-    let embedUrl = videoSrc;
-    if (videoSrc.includes('watch?v=')) {
-      const videoId = videoSrc.split('watch?v=')[1].split('&')[0];
-      embedUrl = `https://www.youtube.com/embed/${videoId}`;
-    } else if (videoSrc.includes('youtu.be/')) {
-      const videoId = videoSrc.split('youtu.be/')[1].split('?')[0];
-      embedUrl = `https://www.youtube.com/embed/${videoId}`;
-    }
-    
+    // Regular video element for direct video files
     return (
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <iframe
-          src={embedUrl}
-          style={{
+      <video
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: objectFit,
+          borderRadius: 'inherit',
+          pointerEvents: isSelected ? 'none' : 'auto'
+        }}
+        autoPlay={autoplay}
+        controls={controls}
+        loop={loop}
+        muted={muted}
+        preload={preload}
+        poster={poster}
+        title={title}
+      >
+        <source src={videoSrc} />
+        Your browser does not support the video tag.
+      </video>
+    );
+  };
+
+  // Don't render until client-side
+  if (!isClient) {
+    return (
+      <div style={computedStyles}>
+        {videoSrc ? getVideoElement() : (
+          <div style={{
             width: '100%',
             height: '100%',
-            border: 'none',
-            borderRadius: 'inherit',
-            pointerEvents: isSelected ? 'none' : 'auto'
-          }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          title={title || "Video"}
-        />
-        {isSelected && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 10,
-              cursor: 'grab',
-              backgroundColor: 'rgba(0,0,0,0.1)',
-              pointerEvents: 'auto'
-            }}
-            onMouseDown={e => e.stopPropagation()}
-          />
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#f5f5f5',
+            color: '#999',
+            fontSize: '48px',
+            borderRadius: 'inherit'
+          }}>
+            <PlayCircleOutlined />
+          </div>
         )}
       </div>
     );
   }
-
-  if (videoSrc.includes('vimeo.com')) {
-    const videoId = videoSrc.split('vimeo.com/')[1].split('?')[0];
-    const embedUrl = `https://player.vimeo.com/video/${videoId}`;
-    
-    return (
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <iframe
-          src={embedUrl}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            borderRadius: 'inherit',
-            pointerEvents: isSelected ? 'none' : 'auto'
-          }}
-          allow="autoplay; fullscreen; picture-in-picture"
-          allowFullScreen
-          title={title || "Video"}
-        />
-        {isSelected && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 10,
-              cursor: 'grab',
-              backgroundColor: 'rgba(0,0,0,0.1)',
-              pointerEvents: 'auto'
-            }}
-            onMouseDown={e => e.stopPropagation()}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Regular video element for direct video files - FILL CONTAINER
-  return (
-    <video
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: objectFit, // Changed from 'contain' to 'cover' to fill container
-        borderRadius: 'inherit',
-        pointerEvents: isSelected ? 'none' : 'auto'
-      }}
-      autoPlay={autoplay}
-      controls={controls}
-      loop={loop}
-      muted={muted}
-      preload={preload}
-      poster={poster}
-      title={title}
-    >
-      <source src={videoSrc} />
-      Your browser does not support the video tag.
-    </video>
-  );
-};
 
   return (
     <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className || ''}`}
-      ref={videoRef}
+      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      ref={(el) => {
+        videoRef.current = el;
+        if (el) {
+          connect(drag(el));
+        }
+      }}
       style={{
         position: 'relative',
-        cursor: isSelected && !isEditing ? 'grab' : 'default',
+        cursor: 'default',
+        userSelect: 'none',
+        pointerEvents: 'auto',
         ...computedStyles
       }}
       id={id}
       title={title}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        updateBoxPosition();
+      }}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Edit button */}
-      {isSelected && !isEditing && (
-        <div
-          style={{
-            position: "absolute",
-            top: -12,
-            left: -12,
-            width: 24,
-            height: 24,
-            background: "#52c41a",
-            borderRadius: "50%",
-            cursor: "pointer",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 12,
-            border: "2px solid white",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onClick={handleEditClick}
-          onMouseDown={e => e.stopPropagation()}
-          title="Edit video source"
-        >
-          <EditOutlined />
-        </div>
-      )}
-
-      {/* Video Editor */}
-      {isEditing && (
-        <div style={{
-          position: 'absolute',
-          top: -60,
-          left: 0,
-          right: 0,
-          zIndex: 1001,
-          background: 'white',
-          border: '1px solid #ddd',
-          borderRadius: '8px',
-          padding: '12px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-            Video Source
-          </div>
-          
-          {/* Upload buttons */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                background: '#1890ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '6px 12px',
-                fontSize: '12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-              disabled={isUploading}
-            >
-              <UploadOutlined /> Upload File
-            </button>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/*"
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-            />
-          </div>
-
-          {/* Upload progress */}
-          {isUploading && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '12px', marginBottom: '4px' }}>
-                Uploading... {uploadProgress}%
-              </div>
-              <div style={{
-                width: '100%',
-                height: '4px',
-                background: '#f0f0f0',
-                borderRadius: '2px',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  width: `${uploadProgress}%`,
-                  height: '100%',
-                  background: '#1890ff',
-                  transition: 'width 0.3s'
-                }} />
-              </div>
-            </div>
-          )}
-
-          {/* URL input */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '12px', marginBottom: '4px', color: '#666' }}>
-              Or paste video URL (YouTube, Vimeo, direct link):
-            </div>
-            <input
-              type="url"
-              value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=... or direct video URL"
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '12px'
-              }}
-              onKeyPress={(e) => e.key === 'Enter' && handleUrlSubmit()}
-            />
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button
-              onClick={handleCancelEdit}
-              style={{
-                background: '#ff4d4f',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveEdit}
-              style={{
-                background: '#52c41a',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Save
-            </button>
-          </div>
-        </div>
+      {/* Portal controls rendered outside this container */}
+      {isClient && isSelected && (
+        <PortalControls
+          boxPosition={boxPosition}
+          handleDragStart={handleDragStart}
+          handleResizeStart={handleResizeStart}
+          handleEditClick={() => setShowMediaLibrary(true)}
+        />
       )}
 
       {/* Video Content */}
-      <div style={{ 
-  width: '100%', 
-  height: height === 'auto' ? '100%' : '100%', // Changed to always be 100%
-  minHeight: processValue(minHeight, 'minHeight') || '200px',
-  position: 'relative',
-  overflow: 'hidden',
-  borderRadius: 'inherit'
-}}>
-  {videoSrc ? getVideoElement() : (
-    // Placeholder when no video
-    <div style={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#f5f5f5',
-      color: '#999',
-      fontSize: '48px',
-      borderRadius: 'inherit'
-    }}>
-      <PlayCircleOutlined />
+      <div style={{
+        width: '100%',
+        height: height === 'auto' ? '100%' : '100%',
+        minHeight: processValue(minHeight, 'minHeight') || '200px',
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 'inherit'
+      }}>
+        {videoSrc ? getVideoElement() : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#f5f5f5',
+            color: '#999',
+            fontSize: '48px',
+            borderRadius: 'inherit'
+          }}>
+            <PlayCircleOutlined />
+          </div>
+        )}
+      </div>
+
+      {/* Media Library Modal */}
+      <MediaLibrary
+        visible={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        onSelect={handleMediaSelect}
+        type="videos" // Only show videos for Video component
+        title="Select Video"
+      />
     </div>
-  )}
-</div>
-    </div>
+  );
+};
+
+// Portal Controls Component
+const PortalControls = ({ 
+  boxPosition, 
+  handleDragStart, 
+  handleResizeStart,
+  handleEditClick 
+}) => {
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
+      {/* Control pills */}
+      <div style={{
+        position: 'absolute',
+        top: boxPosition.top - 35,
+        left: boxPosition.left,
+        display: 'flex',
+        pointerEvents: 'auto'
+      }}>
+        {/* Left - POS */}
+        <div
+          style={{
+            background: '#52c41a',
+            color: 'white',
+            padding: '6px 8px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '40px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease',
+            fontSize: '11px',
+            fontWeight: 'bold'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
+
+        {/* Right - EDIT */}
+        <div
+          style={{
+            background: '#faad14',
+            color: 'white',
+            padding: '6px 8px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '45px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease',
+            fontSize: '11px',
+            fontWeight: 'bold'
+          }}
+          onClick={handleEditClick}
+          title="Change video"
+        >
+          🎥 EDIT
+        </div>
+      </div>
+
+      {/* Resize handles */}
+      {[
+        { position: 'nw', cursor: 'nw-resize', top: -4, left: -4 },
+        { position: 'ne', cursor: 'ne-resize', top: -4, left: boxPosition.width - 4 },
+        { position: 'sw', cursor: 'sw-resize', top: boxPosition.height - 4, left: -4 },
+        { position: 'se', cursor: 'se-resize', top: boxPosition.height - 4, left: boxPosition.width - 4 },
+        { position: 'n', cursor: 'n-resize', top: -4, left: boxPosition.width / 2 - 4 },
+        { position: 's', cursor: 's-resize', top: boxPosition.height - 4, left: boxPosition.width / 2 - 4 },
+        { position: 'w', cursor: 'w-resize', top: boxPosition.height / 2 - 4, left: -4 },
+        { position: 'e', cursor: 'e-resize', top: boxPosition.height / 2 - 4, left: boxPosition.width - 4 }
+      ].map(handle => (
+        <div
+          key={handle.position}
+          style={{
+            position: 'absolute',
+            top: boxPosition.top + handle.top,
+            left: boxPosition.left + handle.left,
+            width: 8,
+            height: 8,
+            background: 'white',
+            border: '2px solid #1890ff',
+            borderRadius: '2px',
+            cursor: handle.cursor,
+            zIndex: 10001,
+            pointerEvents: 'auto'
+          }}
+          onMouseDown={(e) => handleResizeStart(e, handle.position)}
+        />
+      ))}
+    </div>,
+    document.body
   );
 };
 
 // Craft configuration
 Video.craft = {
+  displayName: "Video",
   props: {
+    
     videoSrc: "",
     videoType: "url",
     autoplay: false,
@@ -526,12 +628,14 @@ Video.craft = {
     styleMenu: {
       supportedProps: [
         // Video Properties
+        'videoSrc',
         'autoplay',
         'controls',
         'loop',
         'muted',
         'preload',
         'poster',
+        'objectFit',
         
         // Layout & Position
         'width',
@@ -553,9 +657,10 @@ Video.craft = {
         'padding',
         
         // Border
-        'border',
+        'borderWidth',
+        'borderStyle',
+        'borderColor',
         'borderRadius',
-        'objectFit',
         
         // Background
         'backgroundColor',

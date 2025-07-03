@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import { DragOutlined, EditOutlined } from '@ant-design/icons';
 
 export const Text = ({
   // Content
@@ -242,22 +242,224 @@ export const Text = ({
   const { actions } = useEditor();
 
   const textRef = useRef(null);
+  const dragRef = useRef(null);
+  const [isClient, setIsClient] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(text);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+  // Function to update box position for portal positioning
+  const updateBoxPosition = () => {
+    if (textRef.current) {
+      const rect = textRef.current.getBoundingClientRect();
+      setBoxPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
 
   useEffect(() => {
-  if (!isEditing) {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isEditing) {
+      setLocalText(text);
+    }
+  }, [text, isEditing]);
+
+  useEffect(() => {
+    const connectElements = () => {
+      if (textRef.current) {
+        connect(textRef.current); // Connect for selection
+      }
+      if (dragRef.current) {
+        drag(dragRef.current); // Connect the drag handle for Craft.js dragging
+      }
+    };
+
+    connectElements();
+    
+    // Also reconnect when the component is selected
+    if (isSelected) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(connectElements, 10);
+      return () => clearTimeout(timer);
+    }
+  }, [connect, drag, isSelected]);
+
+  // Update box position when selected or hovered changes
+  useEffect(() => {
+    if (isSelected || isHovered) {
+      updateBoxPosition();
+      
+      // Update position on scroll and resize
+      const handleScroll = () => updateBoxPosition();
+      const handleResize = () => updateBoxPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isSelected, isHovered]);
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = textRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    
+    setIsResizing(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      // Calculate new dimensions based on resize direction
+      switch (direction) {
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      // Apply minimum constraints
+      newWidth = Math.max(newWidth, 50);
+      newHeight = Math.max(newHeight, 20);
+      
+      // Update dimensions using Craft.js setProp
+      setProp(props => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle custom drag for position changes
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Update position using Craft.js setProp
+      setProp(props => {
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle text editing functions
+  const handleTextChange = (e) => {
+    const newText = e.target.textContent || e.target.innerText;
+    setLocalText(newText);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      setIsEditing(false);
+      setProp(props => {
+        props.text = localText;
+      });
+      textRef.current?.blur();
+    }
+    if (e.key === 'Escape') {
+      setIsEditing(false);
+      setLocalText(text);
+      textRef.current?.blur();
+    }
+  };
+
+  const handleDoubleClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsEditing(true);
     setLocalText(text);
-  }
-}, [text, isEditing]);
+  };
 
-useEffect(() => {
-  if (textRef.current) {
-    connect(drag(textRef.current));
-  }
-}, [connect, drag]);
+  const handleBlur = () => {
+    setIsEditing(false);
+    setProp(props => {
+      props.text = localText;
+    });
+  };
 
-  // Helper function to process values (add px to numbers where appropriate)
+  // Handle data attributes
+  const dataAttrs = {};
+  Object.entries(dataAttributes).forEach(([key, value]) => {
+    dataAttrs[`data-${key}`] = value;
+  });
   const processValue = (value, property) => {
     if (value === undefined || value === null || value === "") return undefined;
     if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight', 'order', 'flexGrow', 'flexShrink'].includes(property)) {
@@ -446,128 +648,310 @@ useEffect(() => {
     }
   });
 
-  // Handle data attributes
-  const dataAttrs = {};
-  Object.entries(dataAttributes).forEach(([key, value]) => {
-    dataAttrs[`data-${key}`] = value;
-  });
-
-const handleTextChange = (e) => {
-  const newText = e.target.textContent || e.target.innerText;
-  setLocalText(newText); // Only update local state, don't trigger React re-render
-};
-
-const handleKeyDown = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    setIsEditing(false);
-    // Save to CraftJS when editing ends
-    setProp(props => {
-      props.text = localText;
-    });
-    textRef.current?.blur();
-  }
-  if (e.key === 'Escape') {
-    setIsEditing(false);
-    setLocalText(text); // Revert to original text
-    textRef.current?.blur();
-  }
-};
-
-const handleDoubleClick = () => {
-  setIsEditing(true);
-  setLocalText(text); // Initialize local text with current value
-};
-
-const handleBlur = () => {
-  setIsEditing(false);
-  // Save to CraftJS when editing ends
-  setProp(props => {
-    props.text = localText;
-  });
-};
-
   return (
-  <div
-    className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className || ''}`}
-    ref={textRef}
-    style={{
-      position: 'relative',
-      ...computedStyles
-    }}
-    id={id}
-    title={title}
-    role={role}
-    aria-label={ariaLabel}
-    aria-describedby={ariaDescribedBy}
-    aria-labelledby={ariaLabelledBy}
-    tabIndex={tabIndex}
-    accessKey={accessKey}
-    draggable={draggable}
-    spellCheck={spellCheck}
-    translate={translate ? 'yes' : 'no'}
-    dir={dir}
-    lang={lang}
-    hidden={hidden}
-    onDoubleClick={handleDoubleClick}
-    {...dataAttrs}
-    {...(disabled && { disabled: true })}
-    {...(required && { required: true })}
-    {...(readonly && { readonly: true })}
-    {...(multiple && { multiple: true })}
-    {...(checked && { checked: true })}
-    {...(selected && { selected: true })}
-  >
-    {/* Edit indicator - outside of contentEditable area */}
-    {isSelected && !isEditing && (
+    <div
+      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      ref={textRef}
+      style={{
+        ...computedStyles,
+        position: 'relative',
+        cursor: isEditing ? 'text' : 'default'
+      }}
+      id={id}
+      title={title}
+      role={role}
+      aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      aria-labelledby={ariaLabelledBy}
+      tabIndex={tabIndex}
+      accessKey={accessKey}
+      draggable={false}
+      spellCheck={spellCheck}
+      translate={translate ? 'yes' : 'no'}
+      dir={dir}
+      lang={lang}
+      hidden={hidden}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        updateBoxPosition();
+      }}
+      onMouseLeave={() => setIsHovered(false)}
+      {...dataAttrs}
+      {...(disabled && { disabled: true })}
+      {...(required && { required: true })}
+      {...(readonly && { readonly: true })}
+      {...(multiple && { multiple: true })}
+      {...(checked && { checked: true })}
+      {...(selected && { selected: true })}
+    >
+      {/* Portal controls rendered outside this container to avoid overflow clipping */}
+      {isSelected && !isEditing && (
+        <PortalControls
+          boxPosition={boxPosition}
+          dragRef={dragRef}
+          handleDragStart={handleDragStart}
+          handleResizeStart={handleResizeStart}
+        />
+      )}
+      
+      {/* Text content - editable span */}
+      <span
+        contentEditable={isEditing}
+        onBlur={handleBlur}
+        onInput={handleTextChange}
+        onKeyDown={handleKeyDown}
+        style={{
+          outline: 'none',
+          display: 'block',
+          width: '100%',
+          minHeight: '1em'
+        }}
+        suppressContentEditableWarning={true}
+      >
+        {text}
+      </span>
+    </div>
+  );
+};
+
+// Portal Controls Component - renders outside of the Text to avoid overflow clipping
+const PortalControls = ({ 
+  boxPosition, 
+  dragRef, 
+  handleDragStart, 
+  handleResizeStart 
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+  
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
       <div
         style={{
-          position: "absolute",
-          top: -12,
-          left: -12,
-          width: 24,
-          height: 24,
-          background: "#52c41a",
-          borderRadius: "50%",
-          cursor: "pointer",
-          zIndex: 1000,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "white",
-          fontSize: 12,
-          border: "2px solid white",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto' // Re-enable pointer events for this element
         }}
-        onClick={handleDoubleClick}
-        title="Double-click to edit text"
       >
-        <EditOutlined />
+        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
+        <div
+          ref={dragRef}
+          style={{
+            background: '#52c41a',
+            color: 'white',
+            padding: '6px 12px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          title="Drag to move between containers"
+        >
+          📦 MOVE
+        </div>
+        
+        {/* Right half - POS (Custom position drag) */}
+        <div
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '6px 12px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
       </div>
-    )}
-    
-    {/* Separate contentEditable span for text content */}
-    <span
-      contentEditable={isEditing}
-      onBlur={handleBlur}
-      onInput={handleTextChange}
-      onKeyDown={handleKeyDown}
-      style={{
-        outline: 'none',
-        display: 'block',
-        width: '100%',
-        minHeight: '1em'
-      }}
-      suppressContentEditableWarning={true}
-    >
-      {text}
-    </span>
-  </div>
-);
+
+      {/* Resize handles */}
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        title="Resize"
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        title="Resize"
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        title="Resize"
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+        title="Resize"
+      />
+
+      {/* Edge resize handles - beautiful semi-transparent style */}
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'n-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+        title="Resize height"
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 's-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+        title="Resize height"
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'w-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+        title="Resize width"
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left + boxPosition.width - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'e-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+        title="Resize width"
+      />
+    </div>,
+    document.body
+  );
 };
 
 // Define all supported props for the Text component
 Text.craft = {
+  displayName: "Text",
   props: {
     // Content
     text: "Edit this text",

@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor, Element } from "@craftjs/core";
+import { createPortal } from 'react-dom';
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -39,6 +40,7 @@ import {
   Divider
 } from 'antd';
 import { Paragraph } from "./Paragraph";
+import MediaLibrary from '../support/MediaLibrary';
 
 const { TabPane } = Tabs;
 
@@ -52,7 +54,7 @@ const MOCK_MEDIA_LIBRARY = {
     { id: 5, url: 'https://images.unsplash.com/photo-1476820865390-c52aeebb9891?w=800', name: 'City Lights' }
   ],
   videos: [
-    { id: 1, url: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4', name: 'Sample Video 1', thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400' },
+    { id: 1, url: 'https://www.youtube.com/watch?v=oASwMQDJPAw&ab_channel=MEDCARS', name: 'Sample Video 1', thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400' },
     { id: 2, url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', name: 'YouTube Video', thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400' }
   ]
 };
@@ -193,109 +195,6 @@ const CarouselSlide = ({ slide, isActive, imageStyles, videoStyles, captionStyle
   );
 };
 
-// Media Library Modal
-const MediaLibraryModal = ({ visible, onClose, onSelect, type = 'both' }) => {
-  const [activeTab, setActiveTab] = useState('images');
-
-  const handleSelect = (item, itemType) => {
-    onSelect({
-      id: Date.now(),
-      type: itemType,
-      url: item.url,
-      name: item.name,
-      caption: '',
-      captionPosition: 'bottom-center'
-    });
-    onClose();
-  };
-
-  return (
-    <Modal
-      title="Media Library"
-      open={visible}
-      onCancel={onClose}
-      footer={null}
-      width={800}
-    >
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        {(type === 'both' || type === 'images') && (
-          <TabPane tab="Images" key="images">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-              {MOCK_MEDIA_LIBRARY.images.map(image => (
-                <div
-                  key={image.id}
-                  style={{
-                    cursor: 'pointer',
-                    border: '2px solid transparent',
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onClick={() => handleSelect(image, 'image')}
-                  onMouseEnter={(e) => e.target.style.borderColor = '#1890ff'}
-                  onMouseLeave={(e) => e.target.style.borderColor = 'transparent'}
-                >
-                  <img
-                    src={image.url}
-                    alt={image.name}
-                    style={{ width: '100%', height: 120, objectFit: 'cover' }}
-                  />
-                  <div style={{ padding: 8, fontSize: 12, textAlign: 'center' }}>
-                    {image.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </TabPane>
-        )}
-        
-        {(type === 'both' || type === 'videos') && (
-          <TabPane tab="Videos" key="videos">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-              {MOCK_MEDIA_LIBRARY.videos.map(video => (
-                <div
-                  key={video.id}
-                  style={{
-                    cursor: 'pointer',
-                    border: '2px solid transparent',
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onClick={() => handleSelect(video, 'video')}
-                  onMouseEnter={(e) => e.target.style.borderColor = '#1890ff'}
-                  onMouseLeave={(e) => e.target.style.borderColor = 'transparent'}
-                >
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={video.thumbnail}
-                      alt={video.name}
-                      style={{ width: '100%', height: 120, objectFit: 'cover' }}
-                    />
-                    <PlayCircleOutlined 
-                      style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        fontSize: 30,
-                        color: 'white',
-                        textShadow: '0 0 10px rgba(0,0,0,0.5)'
-                      }}
-                    />
-                  </div>
-                  <div style={{ padding: 8, fontSize: 12, textAlign: 'center' }}>
-                    {video.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </TabPane>
-        )}
-      </Tabs>
-    </Modal>
-  );
-};
 
 // Settings Modal
 const CarouselSettingsModal = ({ visible, onClose, carousel, onUpdate }) => {
@@ -303,9 +202,22 @@ const CarouselSettingsModal = ({ visible, onClose, carousel, onUpdate }) => {
   const [mediaLibraryVisible, setMediaLibraryVisible] = useState(false);
   const [editingSlideIndex, setEditingSlideIndex] = useState(null);
 
-  const addSlide = (slide) => {
-    const newSlides = [...carousel.slides, slide];
+  // Add one or more slides from MediaLibrary
+  const handleMediaSelect = (item, itemType) => {
+    // Support both single and array selection (future-proof)
+    const items = Array.isArray(item) ? item : [item];
+    const newSlides = [
+      ...carousel.slides,
+      ...items.map((media) => ({
+        ...media,
+        type: itemType,
+        name: media.name || (itemType === 'image' ? 'Image' : 'Video'),
+        caption: '',
+        captionPosition: 'bottom-center',
+      }))
+    ];
     onUpdate({ ...carousel, slides: newSlides });
+    setMediaLibraryVisible(false);
   };
 
   const updateSlide = (index, updates) => {
@@ -860,10 +772,12 @@ const CarouselSettingsModal = ({ visible, onClose, carousel, onUpdate }) => {
         </Tabs>
       </Modal>
 
-      <MediaLibraryModal
+      <MediaLibrary
         visible={mediaLibraryVisible}
         onClose={() => setMediaLibraryVisible(false)}
-        onSelect={addSlide}
+        onSelect={handleMediaSelect}
+        type="both"
+        title="Select Images or Videos for Carousel"
       />
     </>
   );
@@ -962,12 +876,162 @@ export const Carousel = ({
   const carouselRef = useRef(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [internalCurrentSlide, setInternalCurrentSlide] = useState(currentSlide);
+  const [isClient, setIsClient] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+  // Function to update box position for portal positioning
+  const updateBoxPosition = () => {
+    if (carouselRef.current) {
+      const rect = carouselRef.current.getBoundingClientRect();
+      setBoxPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
 
   useEffect(() => {
-    if (carouselRef.current) {
-      connect(drag(carouselRef.current));
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    const connectElements = () => {
+      if (carouselRef.current) {
+        connect(drag(carouselRef.current));
+      }
+    };
+    connectElements();
+    const timer = setTimeout(connectElements, 50);
+    return () => clearTimeout(timer);
+  }, [connect, drag, selected, isClient]);
+
+  // Update box position when selected or hovered changes
+  useEffect(() => {
+    if (selected || isHovered) {
+      updateBoxPosition();
+      
+      const handleScroll = () => updateBoxPosition();
+      const handleResize = () => updateBoxPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
     }
-  }, [connect, drag]);
+  }, [selected, isHovered]);
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = carouselRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    
+    setIsResizing(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      switch (direction) {
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      newWidth = Math.max(newWidth, minWidth || 200);
+      newHeight = Math.max(newHeight, minHeight || 200);
+      
+      if (maxWidth) newWidth = Math.min(newWidth, maxWidth);
+      if (maxHeight) newHeight = Math.min(newHeight, maxHeight);
+      
+      setProp(props => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle custom drag for position changes
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      setProp(props => {
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Auto-play functionality
   useEffect(() => {
@@ -1062,38 +1126,36 @@ export const Carousel = ({
   return (
     <>
       <div
-        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
-        ref={carouselRef}
-        style={computedStyles}
+        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className}`}
+        ref={(el) => {
+          carouselRef.current = el;
+          if (el) {
+            connect(drag(el));
+          }
+        }}
+        style={{
+          position: 'relative',
+          cursor: 'default',
+          userSelect: 'none',
+          pointerEvents: 'auto',
+          ...computedStyles
+        }}
         id={id}
         title={title}
+        onMouseEnter={() => {
+          setIsHovered(true);
+          updateBoxPosition();
+        }}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Edit button */}
-        {selected && (
-          <div
-            style={{
-              position: "absolute",
-              top: -12,
-              right: -12,
-              width: 24,
-              height: 24,
-              background: "#52c41a",
-              borderRadius: "50%",
-              cursor: "pointer",
-              zIndex: 1000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: 12,
-              border: "2px solid white",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-            }}
-            onClick={() => setModalVisible(true)}
-            title="Edit carousel"
-          >
-            <EditOutlined />
-          </div>
+        {/* Portal controls rendered outside this container to avoid overflow clipping */}
+        {isClient && selected && (
+          <PortalControls
+            boxPosition={boxPosition}
+            handleDragStart={handleDragStart}
+            handleResizeStart={handleResizeStart}
+            handleEditClick={() => setModalVisible(true)}
+          />
         )}
 
         {/* Slides Container */}
@@ -1229,6 +1291,221 @@ export const Carousel = ({
         onUpdate={updateCarousel}
       />
     </>
+  );
+};
+
+// Portal Controls Component - renders outside of the Carousel to avoid overflow clipping
+const PortalControls = ({ 
+  boxPosition, 
+  handleDragStart, 
+  handleResizeStart,
+  handleEditClick 
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+
+  return createPortal(
+    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
+      {/* Control pills */}
+      <div style={{
+        position: 'absolute',
+        top: boxPosition.top - 35,
+        left: boxPosition.left,
+        display: 'flex',
+        pointerEvents: 'auto'
+      }}>
+        {/* Left - POS (Position/custom drag) */}
+        <div
+          style={{
+            background: '#52c41a',
+            color: 'white',
+            padding: '6px 8px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '40px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease',
+            fontSize: '11px',
+            fontWeight: 'bold'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
+
+        {/* Right - EDIT (Open carousel settings) */}
+        <div
+          style={{
+            background: '#faad14',
+            color: 'white',
+            padding: '6px 8px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '45px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease',
+            fontSize: '11px',
+            fontWeight: 'bold'
+          }}
+          onClick={handleEditClick}
+          title="Edit carousel settings"
+        >
+          🎠 EDIT
+        </div>
+      </div>
+
+      {/* Resize handles */}
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+      />
+
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'n-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 's-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height / 2 - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'w-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height / 2 - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'e-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+      />
+    </div>,
+    document.body
   );
 };
 

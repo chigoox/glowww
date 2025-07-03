@@ -12,21 +12,385 @@ import {
   MenuOutlined, MinusOutlined, PictureOutlined, PlusOutlined, PushpinOutlined,
   RadiusBottomleftOutlined, RadiusBottomrightOutlined, RadiusUpleftOutlined,
   RadiusUprightOutlined, SettingOutlined, ShrinkOutlined, StrikethroughOutlined,
-  TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,FormOutlined  ,
-  VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined, ShoppingCartOutlined
+  TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,FormOutlined,
+  VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined, ShoppingCartOutlined,
+  StopOutlined, BorderOutlinedIcon, CompressOutlined, ExpandAltOutlined
 } from "@ant-design/icons";
-import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag, Radio } from "antd";
+import { 
+  Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, 
+  Tooltip, Switch, InputNumber, Typography, Tag, Radio, Row, Col, Segmented 
+} from "antd";
 import { useEditor } from "@craftjs/core";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 const { TextArea } = Input;
-// Debounce utility
+
+// Utility functions
 const debounce = (func, wait) => {
   let timeout;
   return (...args) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
+};
+
+// Safely parse numeric values from style properties
+const parseStyleValue = (value, defaultValue = 0) => {
+  if (value === null || value === undefined || value === '') {
+    return defaultValue;
+  }
+  
+  if (typeof value === 'number') {
+    return value;
+  }
+  
+  if (typeof value === 'string') {
+    // Remove units and parse
+    const numericValue = parseFloat(value.replace(/[^\d.-]/g, ''));
+    return isNaN(numericValue) ? defaultValue : numericValue;
+  }
+  
+  return defaultValue;
+};
+
+// Get unit from string value
+const getUnit = (value, defaultUnit = 'px') => {
+  if (!value || typeof value !== 'string') return defaultUnit;
+  
+  const unitMatch = value.match(/[a-z%]+$/i);
+  return unitMatch ? unitMatch[0] : defaultUnit;
+};
+
+// Enhanced Property Renderers
+const renderSliderWithInput = (value, onChange, min = 0, max = 100, step = 1, suffix = '', prefix = '', disabled = false) => (
+  <Row gutter={8} align="middle">
+    <Col span={16}>
+      <Slider
+        value={parseFloat(value) || min}
+        onChange={onChange}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        tooltip={{ 
+          formatter: (val) => `${prefix}${val}${suffix}`,
+          placement: 'top'
+        }}
+      />
+    </Col>
+    <Col span={8}>
+      <InputNumber
+        value={parseFloat(value) || min}
+        onChange={onChange}
+        min={min}
+        max={max}
+        step={step}
+        size="small"
+        disabled={disabled}
+        addonAfter={suffix}
+        addonBefore={prefix}
+        style={{ width: '100%' }}
+      />
+    </Col>
+  </Row>
+);
+
+const renderColorWithOpacity = (color, opacity, onColorChange, onOpacityChange, label = 'Color') => (
+  <Space.Compact style={{ width: '100%' }}>
+    <ColorPicker
+      value={color}
+      onChange={onColorChange}
+      showText={(color) => (
+        <span style={{ fontSize: '12px' }}>{color.toHexString()}</span>
+      )}
+      style={{ flex: 1 }}
+    />
+    <Tooltip title="Opacity">
+      <InputNumber
+        value={parseFloat(opacity) || 1}
+        onChange={onOpacityChange}
+        min={0}
+        max={1}
+        step={0.1}
+        size="small"
+        style={{ width: '70px' }}
+        formatter={(value) => `${Math.round((value || 0) * 100)}%`}
+        parser={(value) => value.replace('%', '') / 100}
+      />
+    </Tooltip>
+  </Space.Compact>
+);
+
+const renderSpacingControl = (values, onChange, mode, onModeChange) => {
+  const modes = [
+    { label: 'All', value: 'all', icon: <StopOutlined /> },
+    { label: 'Individual', value: 'individual', icon: <BorderOutlined /> },
+    { label: 'X/Y', value: 'axis', icon: <PlusOutlined /> }
+  ];
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Segmented
+        value={mode}
+        onChange={onModeChange}
+        options={modes}
+        size="small"
+        style={{ width: '100%' }}
+      />
+      
+      {mode === 'all' && (
+        renderSliderWithInput(values.all || 0, (val) => onChange({ all: val }), 0, 200, 1, 'px')
+      )}
+      
+      {mode === 'axis' && (
+        <Row gutter={8}>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Horizontal (X)</Typography.Text>
+              {renderSliderWithInput(values.x || 0, (val) => onChange({ x: val }), 0, 200, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Vertical (Y)</Typography.Text>
+              {renderSliderWithInput(values.y || 0, (val) => onChange({ y: val }), 0, 200, 1, 'px')}
+            </Space>
+          </Col>
+        </Row>
+      )}
+      
+      {mode === 'individual' && (
+        <Row gutter={[8, 8]}>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <BorderTopOutlined /> Top
+              </Typography.Text>
+              {renderSliderWithInput(values.top || 0, (val) => onChange({ top: val }), 0, 200, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <BorderRightOutlined /> Right
+              </Typography.Text>
+              {renderSliderWithInput(values.right || 0, (val) => onChange({ right: val }), 0, 200, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <BorderBottomOutlined /> Bottom
+              </Typography.Text>
+              {renderSliderWithInput(values.bottom || 0, (val) => onChange({ bottom: val }), 0, 200, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <BorderLeftOutlined /> Left
+              </Typography.Text>
+              {renderSliderWithInput(values.left || 0, (val) => onChange({ left: val }), 0, 200, 1, 'px')}
+            </Space>
+          </Col>
+        </Row>
+      )}
+    </Space>
+  );
+};
+
+const renderBorderRadiusControl = (values, onChange, mode, onModeChange) => {
+  const modes = [
+    { label: 'All', value: 'all', icon: <BorderOutlined /> },
+    { label: 'Individual', value: 'individual', icon: <StopOutlined /> }
+  ];
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Segmented
+        value={mode}
+        onChange={onModeChange}
+        options={modes}
+        size="small"
+        style={{ width: '100%' }}
+      />
+      
+      {mode === 'all' && (
+        renderSliderWithInput(values.all || 0, (val) => onChange({ all: val }), 0, 99999, 1, 'px')
+      )}
+      
+      {mode === 'individual' && (
+        <Row gutter={[8, 8]}>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <RadiusUpleftOutlined /> Top Left
+              </Typography.Text>
+              {renderSliderWithInput(values.topLeft || 0, (val) => onChange({ topLeft: val }), 0, 50, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <RadiusUprightOutlined /> Top Right
+              </Typography.Text>
+              {renderSliderWithInput(values.topRight || 0, (val) => onChange({ topRight: val }), 0, 50, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <RadiusBottomleftOutlined /> Bottom Left
+              </Typography.Text>
+              {renderSliderWithInput(values.bottomLeft || 0, (val) => onChange({ bottomLeft: val }), 0, 50, 1, 'px')}
+            </Space>
+          </Col>
+          <Col span={12}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Typography.Text style={{ fontSize: '11px', color: '#666' }}>
+                <RadiusBottomrightOutlined /> Bottom Right
+              </Typography.Text>
+              {renderSliderWithInput(values.bottomRight || 0, (val) => onChange({ bottomRight: val }), 0, 50, 1, 'px')}
+            </Space>
+          </Col>
+        </Row>
+      )}
+    </Space>
+  );
+};
+
+const renderBoxShadowControl = (shadow, onChange) => {
+  // Parse box-shadow string: "offsetX offsetY blurRadius spreadRadius color"
+  const parseShadow = (shadowStr) => {
+    if (!shadowStr || shadowStr === 'none') {
+      return { offsetX: 0, offsetY: 0, blurRadius: 0, spreadRadius: 0, color: '#000000', inset: false };
+    }
+    
+    const parts = shadowStr.trim().split(/\s+/);
+    const isInset = parts.includes('inset');
+    const values = parts.filter(p => p !== 'inset');
+    
+    return {
+      offsetX: parseFloat(values[0]) || 0,
+      offsetY: parseFloat(values[1]) || 0,
+      blurRadius: parseFloat(values[2]) || 0,
+      spreadRadius: parseFloat(values[3]) || 0,
+      color: values[4] || '#000000',
+      inset: isInset
+    };
+  };
+
+  const buildShadow = (values) => {
+    const { offsetX, offsetY, blurRadius, spreadRadius, color, inset } = values;
+    const insetStr = inset ? 'inset ' : '';
+    return `${insetStr}${offsetX}px ${offsetY}px ${blurRadius}px ${spreadRadius}px ${color}`;
+  };
+
+  const shadowValues = parseShadow(shadow);
+
+  const updateShadow = (newValues) => {
+    const updatedValues = { ...shadowValues, ...newValues };
+    onChange(buildShadow(updatedValues));
+  };
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Row gutter={[8, 8]}>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Horizontal Offset</Typography.Text>
+          {renderSliderWithInput(shadowValues.offsetX, (val) => updateShadow({ offsetX: val }), -50, 50, 1, 'px')}
+        </Col>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Vertical Offset</Typography.Text>
+          {renderSliderWithInput(shadowValues.offsetY, (val) => updateShadow({ offsetY: val }), -50, 50, 1, 'px')}
+        </Col>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Blur Radius</Typography.Text>
+          {renderSliderWithInput(shadowValues.blurRadius, (val) => updateShadow({ blurRadius: val }), 0, 50, 1, 'px')}
+        </Col>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Spread Radius</Typography.Text>
+          {renderSliderWithInput(shadowValues.spreadRadius, (val) => updateShadow({ spreadRadius: val }), -25, 25, 1, 'px')}
+        </Col>
+        <Col span={16}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Shadow Color</Typography.Text>
+          <ColorPicker
+            value={shadowValues.color}
+            onChange={(color) => updateShadow({ color: color.toHexString() })}
+            showText={(color) => <span style={{ fontSize: '12px' }}>{color.toHexString()}</span>}
+            style={{ width: '100%' }}
+          />
+        </Col>
+        <Col span={8}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Inset</Typography.Text>
+          <div style={{ marginTop: '4px' }}>
+            <Switch
+              checked={shadowValues.inset}
+              onChange={(checked) => updateShadow({ inset: checked })}
+              size="small"
+            />
+          </div>
+        </Col>
+      </Row>
+    </Space>
+  );
+};
+
+const renderTextShadowControl = (shadow, onChange) => {
+  // Parse text-shadow string: "offsetX offsetY blurRadius color"
+  const parseShadow = (shadowStr) => {
+    if (!shadowStr || shadowStr === 'none') {
+      return { offsetX: 0, offsetY: 0, blurRadius: 0, color: '#000000' };
+    }
+    
+    const parts = shadowStr.trim().split(/\s+/);
+    return {
+      offsetX: parseFloat(parts[0]) || 0,
+      offsetY: parseFloat(parts[1]) || 0,
+      blurRadius: parseFloat(parts[2]) || 0,
+      color: parts[3] || '#000000'
+    };
+  };
+
+  const buildShadow = (values) => {
+    const { offsetX, offsetY, blurRadius, color } = values;
+    return `${offsetX}px ${offsetY}px ${blurRadius}px ${color}`;
+  };
+
+  const shadowValues = parseShadow(shadow);
+
+  const updateShadow = (newValues) => {
+    const updatedValues = { ...shadowValues, ...newValues };
+    onChange(buildShadow(updatedValues));
+  };
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Row gutter={[8, 8]}>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Horizontal Offset</Typography.Text>
+          {renderSliderWithInput(shadowValues.offsetX, (val) => updateShadow({ offsetX: val }), -20, 20, 1, 'px')}
+        </Col>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Vertical Offset</Typography.Text>
+          {renderSliderWithInput(shadowValues.offsetY, (val) => updateShadow({ offsetY: val }), -20, 20, 1, 'px')}
+        </Col>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Blur Radius</Typography.Text>
+          {renderSliderWithInput(shadowValues.blurRadius, (val) => updateShadow({ blurRadius: val }), 0, 20, 1, 'px')}
+        </Col>
+        <Col span={12}>
+          <Typography.Text style={{ fontSize: '11px', color: '#666' }}>Shadow Color</Typography.Text>
+          <ColorPicker
+            value={shadowValues.color}
+            onChange={(color) => updateShadow({ color: color.toHexString() })}
+            showText={(color) => <span style={{ fontSize: '12px' }}>{color.toHexString()}</span>}
+            style={{ width: '100%' }}
+          />
+        </Col>
+      </Row>
+    </Space>
+  );
 };
 
 // --- Complete Option Arrays ---
@@ -504,6 +868,22 @@ export function StyleMenu({
     borderTopLeftRadius: 0, borderTopRightRadius: 0,
     borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
     
+    // Enhanced Border
+    borderMode: "all",
+    borderWidth: 0, borderStyle: "solid", borderColor: "#000000",
+    borderTopWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderLeftWidth: 0,
+    borderTopStyle: "solid", borderRightStyle: "solid", borderBottomStyle: "solid", borderLeftStyle: "solid",
+    borderTopColor: "#000000", borderRightColor: "#000000", borderBottomColor: "#000000", borderLeftColor: "#000000",
+    borderCollapse: "separate", borderSpacing: "0",
+    
+    // Enhanced Box Shadow
+    boxShadow: "none",
+    boxShadowEnabled: false,
+    
+    // Enhanced Text Shadow
+    textShadow: "none",
+    textShadowEnabled: false,
+    
     // Typography
     fontFamily: "Arial", fontSize: 16,
     fontWeight: "400", fontStyle: "normal",
@@ -593,6 +973,14 @@ export function StyleMenu({
     borderRadius: props?.borderRadius || 0,
     borderTopLeftRadius: props?.borderTopLeftRadius || 0, borderTopRightRadius: props?.borderTopRightRadius || 0,
     borderBottomLeftRadius: props?.borderBottomLeftRadius || 0, borderBottomRightRadius: props?.borderBottomRightRadius || 0,
+    
+    // Enhanced Box Shadow
+    boxShadow: props?.boxShadow || "none",
+    boxShadowEnabled: props?.boxShadow && props?.boxShadow !== "none",
+    
+    // Enhanced Text Shadow
+    textShadow: props?.textShadow || "none",
+    textShadowEnabled: props?.textShadow && props?.textShadow !== "none",
     
     // Typography
     fontFamily: props?.fontFamily || "Arial", fontSize: props?.fontSize || 16,
@@ -805,6 +1193,92 @@ export function StyleMenu({
       debouncedSync(key, val);
     }
   }), [localStyle, debouncedSync]);
+
+  // Enhanced handlers for complex properties
+  const handleSpacingChange = useCallback((property) => (values) => {
+    const mode = localStyle[`${property}Mode`] || 'all';
+    const updates = {};
+    
+    if (mode === 'all') {
+      updates[property] = `${values.all || 0}px`;
+      setLocalStyle(prev => ({ ...prev, ...updates }));
+      debouncedSync(property, updates[property]);
+    } else if (mode === 'axis') {
+      updates[`${property}X`] = `${values.x || 0}px`;
+      updates[`${property}Y`] = `${values.y || 0}px`;
+      setLocalStyle(prev => ({ ...prev, ...updates }));
+      debouncedSync(`${property}X`, updates[`${property}X`]);
+      debouncedSync(`${property}Y`, updates[`${property}Y`]);
+    } else if (mode === 'individual') {
+      const sides = ['Top', 'Right', 'Bottom', 'Left'];
+      const sideKeys = ['top', 'right', 'bottom', 'left'];
+      
+      sides.forEach((side, index) => {
+        const key = `${property}${side}`;
+        const value = `${values[sideKeys[index]] || 0}px`;
+        updates[key] = value;
+      });
+      
+      setLocalStyle(prev => ({ ...prev, ...updates }));
+      Object.keys(updates).forEach(key => debouncedSync(key, updates[key]));
+    }
+  }, [localStyle, setLocalStyle, debouncedSync]);
+
+  const handleSpacingModeChange = useCallback((property) => (mode) => {
+    const updates = { [`${property}Mode`]: mode };
+    setLocalStyle(prev => ({ ...prev, ...updates }));
+    debouncedSync(`${property}Mode`, mode);
+  }, [setLocalStyle, debouncedSync]);
+
+  const handleBorderRadiusChange = useCallback((values) => {
+    const mode = localStyle.radiusMode || 'all';
+    const updates = {};
+    
+    if (mode === 'all') {
+      updates.borderRadius = `${values.all || 0}px`;
+      setLocalStyle(prev => ({ ...prev, ...updates }));
+      debouncedSync('borderRadius', updates.borderRadius);
+    } else if (mode === 'individual') {
+      const corners = [
+        { key: 'borderTopLeftRadius', value: values.topLeft },
+        { key: 'borderTopRightRadius', value: values.topRight },
+        { key: 'borderBottomLeftRadius', value: values.bottomLeft },
+        { key: 'borderBottomRightRadius', value: values.bottomRight }
+      ];
+      
+      corners.forEach(corner => {
+        const value = `${corner.value || 0}px`;
+        updates[corner.key] = value;
+      });
+      
+      setLocalStyle(prev => ({ ...prev, ...updates }));
+      Object.keys(updates).forEach(key => debouncedSync(key, updates[key]));
+    }
+  }, [localStyle, setLocalStyle, debouncedSync]);
+
+  const handleBorderRadiusModeChange = useCallback((mode) => {
+    const updates = { radiusMode: mode };
+    setLocalStyle(prev => ({ ...prev, ...updates }));
+    debouncedSync('radiusMode', mode);
+  }, [setLocalStyle, debouncedSync]);
+
+  const handleBoxShadowChange = useCallback((shadowValue) => {
+    const updates = { 
+      boxShadow: shadowValue,
+      boxShadowEnabled: shadowValue !== 'none' && shadowValue !== ''
+    };
+    setLocalStyle(prev => ({ ...prev, ...updates }));
+    debouncedSync('boxShadow', shadowValue);
+  }, [setLocalStyle, debouncedSync]);
+
+  const handleTextShadowChange = useCallback((shadowValue) => {
+    const updates = { 
+      textShadow: shadowValue,
+      textShadowEnabled: shadowValue !== 'none' && shadowValue !== ''
+    };
+    setLocalStyle(prev => ({ ...prev, ...updates }));
+    debouncedSync('textShadow', shadowValue);
+  }, [setLocalStyle, debouncedSync]);
 
   const shouldShow = useCallback((section) => {
   const propsToCheck = selected?.supportedProps || supportedProps;
@@ -1484,7 +1958,39 @@ if (shouldShow('layout')) {
   if (shouldShowProperty('width', 'layout')) {
     layoutItems.push(
       <Form.Item key="width" label={<span><ColumnWidthOutlined /> Width</span>} style={sharedStyles.formItem}>
-        <Input {...handleInputChange("width")} placeholder="e.g. 100px, 50%, auto" size="small" />
+        <Space.Compact style={{ width: '100%' }}>
+          <InputNumber
+            value={parseStyleValue(localStyle.width)}
+            onChange={(val) => {
+              const unit = getUnit(localStyle.width);
+              const newValue = val ? `${val}${unit}` : '';
+              setLocalStyle(prev => ({ ...prev, width: newValue }));
+              debouncedSync('width', newValue);
+            }}
+            placeholder="Auto"
+            size="small"
+            style={{ flex: 1 }}
+            min={0}
+            max={2000}
+          />
+          <Select
+            value={getUnit(localStyle.width)}
+            onChange={(unit) => {
+              const numValue = parseStyleValue(localStyle.width) || 0;
+              const newValue = unit === 'auto' ? 'auto' : `${numValue}${unit}`;
+              setLocalStyle(prev => ({ ...prev, width: newValue }));
+              debouncedSync('width', newValue);
+            }}
+            size="small"
+            style={{ width: '70px' }}
+            options={[
+              { value: 'px', label: 'px' },
+              { value: '%', label: '%' },
+              { value: 'vw', label: 'vw' },
+              { value: 'auto', label: 'auto' }
+            ]}
+          />
+        </Space.Compact>
       </Form.Item>
     );
   }
@@ -1492,7 +1998,39 @@ if (shouldShow('layout')) {
   if (shouldShowProperty('height', 'layout')) {
     layoutItems.push(
       <Form.Item key="height" label={<span><ColumnHeightOutlined /> Height</span>} style={sharedStyles.formItem}>
-        <Input {...handleInputChange("height")} placeholder="e.g. 100px, 50%, auto" size="small" />
+        <Space.Compact style={{ width: '100%' }}>
+          <InputNumber
+            value={parseStyleValue(localStyle.height)}
+            onChange={(val) => {
+              const unit = getUnit(localStyle.height);
+              const newValue = val ? `${val}${unit}` : '';
+              setLocalStyle(prev => ({ ...prev, height: newValue }));
+              debouncedSync('height', newValue);
+            }}
+            placeholder="Auto"
+            size="small"
+            style={{ flex: 1 }}
+            min={0}
+            max={2000}
+          />
+          <Select
+            value={getUnit(localStyle.height)}
+            onChange={(unit) => {
+              const numValue = parseStyleValue(localStyle.height) || 0;
+              const newValue = unit === 'auto' ? 'auto' : `${numValue}${unit}`;
+              setLocalStyle(prev => ({ ...prev, height: newValue }));
+              debouncedSync('height', newValue);
+            }}
+            size="small"
+            style={{ width: '70px' }}
+            options={[
+              { value: 'px', label: 'px' },
+              { value: '%', label: '%' },
+              { value: 'vh', label: 'vh' },
+              { value: 'auto', label: 'auto' }
+            ]}
+          />
+        </Space.Compact>
       </Form.Item>
     );
   }
@@ -1683,7 +2221,14 @@ if (shouldShow('typography')) {
   if (shouldShowProperty('fontSize', 'typography')) {
     typographyItems.push(
       <Form.Item key="fontSize" label="Font Size" style={sharedStyles.formItem}>
-        <Slider {...handleSliderChange("fontSize")} min={6} max={120} tooltip={{ formatter: (val) => `${val}px` }} />
+        {renderSliderWithInput(
+          parseFloat(localStyle.fontSize) || 16,
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, fontSize: `${val}px` }));
+            debouncedSync('fontSize', `${val}px`);
+          },
+          6, 120, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -1707,7 +2252,14 @@ if (shouldShow('typography')) {
   if (shouldShowProperty('lineHeight', 'typography')) {
     typographyItems.push(
       <Form.Item key="lineHeight" label="Line Height" style={sharedStyles.formItem}>
-        <Slider {...handleSliderChange("lineHeight")} min={0.5} max={4} step={0.1} tooltip={{ formatter: (val) => `${val}` }} />
+        {renderSliderWithInput(
+          parseFloat(localStyle.lineHeight) || 1.4,
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, lineHeight: val }));
+            debouncedSync('lineHeight', val);
+          },
+          0.5, 4, 0.1, '', '', false
+        )}
       </Form.Item>
     );
   }
@@ -1715,7 +2267,14 @@ if (shouldShow('typography')) {
   if (shouldShowProperty('letterSpacing', 'typography')) {
     typographyItems.push(
       <Form.Item key="letterSpacing" label="Letter Spacing" style={sharedStyles.formItem}>
-        <Slider {...handleSliderChange("letterSpacing")} min={-5} max={20} step={0.1} tooltip={{ formatter: (val) => `${val}px` }} />
+        {renderSliderWithInput(
+          parseFloat(localStyle.letterSpacing) || 0,
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, letterSpacing: `${val}px` }));
+            debouncedSync('letterSpacing', `${val}px`);
+          },
+          -5, 20, 0.1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -1922,42 +2481,20 @@ if (shouldShow('colors')) {
   
   if (hasMargin) {
     spacingItems.push(
-      <Divider key="margin-divider" orientation="left" plain>Margin</Divider>
-    );
-    
-    spacingItems.push(
-      <Space key="margin-modes">
-        {spacingSides.map(opt => (
-          <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-            <Button
-              type={localStyle.marginMode === opt.value ? "primary" : "default"}
-              icon={opt.icon}
-              size="small"
-              onClick={() => {
-                setLocalStyle(prev => ({ ...prev, marginMode: opt.value }));
-                debouncedSync("marginMode", opt.value);
-              }}
-            />
-          </Tooltip>
-        ))}
-      </Space>
-    );
-    
-    spacingItems.push(
-      <Form.Item key="margin-input" style={sharedStyles.formItem}>
-        {localStyle.marginMode === "all" ? (
-          <Input {...handleInputChange("margin")} placeholder="e.g. 10px" size="small" />
-        ) : (
-          <Input
-            value={localStyle.marginSidesVals[localStyle.marginMode]}
-            onChange={e => setLocalStyle(prev => ({
-              ...prev,
-              marginSidesVals: { ...prev.marginSidesVals, [localStyle.marginMode]: e.target.value }
-            }))}
-            onBlur={e => debouncedSync(`marginSidesVals.${localStyle.marginMode}`, e.target.value)}
-            placeholder={`${localStyle.marginMode} margin`}
-            size="small"
-          />
+      <Form.Item key="margin" label="Margin" style={sharedStyles.formItem}>
+        {renderSpacingControl(
+          {
+            all: parseStyleValue(localStyle.margin),
+            x: parseStyleValue(localStyle.marginX),
+            y: parseStyleValue(localStyle.marginY),
+            top: parseStyleValue(localStyle.marginTop),
+            right: parseStyleValue(localStyle.marginRight),
+            bottom: parseStyleValue(localStyle.marginBottom),
+            left: parseStyleValue(localStyle.marginLeft)
+          },
+          handleSpacingChange('margin'),
+          localStyle.marginMode || 'all',
+          handleSpacingModeChange('margin')
         )}
       </Form.Item>
     );
@@ -1970,42 +2507,66 @@ if (shouldShow('colors')) {
   
   if (hasPadding) {
     spacingItems.push(
-      <Divider key="padding-divider" orientation="left" plain>Padding</Divider>
+      <Form.Item key="padding" label="Padding" style={sharedStyles.formItem}>
+        {renderSpacingControl(
+          {
+            all: parseStyleValue(localStyle.padding),
+            x: parseStyleValue(localStyle.paddingX),
+            y: parseStyleValue(localStyle.paddingY),
+            top: parseStyleValue(localStyle.paddingTop),
+            right: parseStyleValue(localStyle.paddingRight),
+            bottom: parseStyleValue(localStyle.paddingBottom),
+            left: parseStyleValue(localStyle.paddingLeft)
+          },
+          handleSpacingChange('padding'),
+          localStyle.paddingMode || 'all',
+          handleSpacingModeChange('padding')
+        )}
+      </Form.Item>
     );
-    
+  }
+  
+  // Gap controls for flexbox/grid
+  if (shouldShowProperty('gap', 'spacing')) {
     spacingItems.push(
-      <Space key="padding-modes">
-        {spacingSides.map(opt => (
-          <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-            <Button
-              type={localStyle.paddingMode === opt.value ? "primary" : "default"}
-              icon={opt.icon}
-              size="small"
-              onClick={() => {
-                setLocalStyle(prev => ({ ...prev, paddingMode: opt.value }));
-                debouncedSync("paddingMode", opt.value);
-              }}
-            />
-          </Tooltip>
-        ))}
-      </Space>
+      <Form.Item key="gap" label="Gap" style={sharedStyles.formItem}>
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.gap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, gap: `${val}px` }));
+            debouncedSync('gap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
+      </Form.Item>
     );
-    
+  }
+  
+  if (shouldShowProperty('rowGap', 'spacing')) {
     spacingItems.push(
-      <Form.Item key="padding-input" style={sharedStyles.formItem}>
-        {localStyle.paddingMode === "all" ? (
-          <Input {...handleInputChange("padding")} placeholder="e.g. 10px" size="small" />
-        ) : (
-          <Input
-            value={localStyle.paddingSidesVals[localStyle.paddingMode]}
-            onChange={e => setLocalStyle(prev => ({
-              ...prev,
-              paddingSidesVals: { ...prev.paddingSidesVals, [localStyle.paddingMode]: e.target.value }
-            }))}
-            onBlur={e => debouncedSync(`paddingSidesVals.${localStyle.paddingMode}`, e.target.value)}
-            placeholder={`${localStyle.paddingMode} padding`}
-            size="small"
-          />
+      <Form.Item key="rowGap" label="Row Gap" style={sharedStyles.formItem}>
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.rowGap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, rowGap: `${val}px` }));
+            debouncedSync('rowGap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
+      </Form.Item>
+    );
+  }
+  
+  if (shouldShowProperty('columnGap', 'spacing')) {
+    spacingItems.push(
+      <Form.Item key="columnGap" label="Column Gap" style={sharedStyles.formItem}>
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.columnGap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, columnGap: `${val}px` }));
+            debouncedSync('columnGap', `${val}px`);
+          },
+          0, 100, 1, 'px'
         )}
       </Form.Item>
     );
@@ -2038,44 +2599,47 @@ if (shouldShow('colors')) {
       <Divider key="border-divider" orientation="left" plain>Border</Divider>
     );
     
-    borderItems.push(
-      <Space key="border-modes">
-        {sides.map(opt => (
-          <Tooltip title={opt.value} key={opt.value} getPopupContainer={(triggerNode) => triggerNode.parentNode}>
-            <Button
-              type={localStyle.borderMode === opt.value ? "primary" : "default"}
-              icon={opt.icon}
-              size="small"
-              onClick={() => {
-                setLocalStyle(prev => ({ ...prev, borderMode: opt.value }));
-                debouncedSync("borderMode", opt.value);
-              }}
-            />
-          </Tooltip>
-        ))}
-      </Space>
-    );
-    
+    // Border width with enhanced slider
     if (shouldShowProperty('borderWidth', 'border')) {
       borderItems.push(
         <Form.Item key="borderWidth" label="Border Width" style={sharedStyles.formItem}>
-          <Slider {...handleSliderChange("borderWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+          {renderSliderWithInput(
+            parseFloat(localStyle.borderWidth) || 0,
+            (val) => {
+              setLocalStyle(prev => ({ ...prev, borderWidth: val }));
+              debouncedSync('borderWidth', val);
+            },
+            0, 20, 1, 'px'
+          )}
         </Form.Item>
       );
     }
     
+    // Border style with better styling
     if (shouldShowProperty('borderStyle', 'border')) {
       borderItems.push(
         <Form.Item key="borderStyle" label="Border Style" style={sharedStyles.formItem}>
-          <Select {...handleSelectChange("borderStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+          <Select 
+            {...handleSelectChange("borderStyle")} 
+            options={borderStyles} 
+            size="small" 
+            style={{ width: '100%' }}
+            getPopupContainer={(trigger) => trigger.parentNode} 
+          />
         </Form.Item>
       );
     }
     
+    // Border color with better styling
     if (shouldShowProperty('borderColor', 'border')) {
       borderItems.push(
         <Form.Item key="borderColor" label="Border Color" style={sharedStyles.formItem}>
-          <ColorPicker {...handleColorChange("borderColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+          <ColorPicker 
+            {...handleColorChange("borderColor")} 
+            showText={(color) => <span style={{ fontSize: '12px' }}>{color.toHexString()}</span>}
+            style={{ width: '100%' }}
+            getPopupContainer={(trigger) => trigger.parentNode} 
+          />
         </Form.Item>
       );
     }
@@ -2221,56 +2785,23 @@ if (shouldShow('colors')) {
 if (shouldShow('borderRadius')) {
   const borderRadiusItems = [];
   
-  // Radius mode toggle
+  // Enhanced border radius control
   borderRadiusItems.push(
-    <Form.Item key="radiusMode" label="Radius Mode" style={sharedStyles.formItem}>
-      <Radio.Group 
-        value={localStyle.radiusMode || "all"} 
-        onChange={(e) => setLocalStyle(prev => ({ ...prev, radiusMode: e.target.value }))}
-        size="small"
-      >
-        <Radio.Button value="all">All</Radio.Button>
-        <Radio.Button value="individual">Individual</Radio.Button>
-      </Radio.Group>
+    <Form.Item key="borderRadius" label="Border Radius" style={sharedStyles.formItem}>
+      {renderBorderRadiusControl(
+        {
+          all: parseStyleValue(localStyle.borderRadius),
+          topLeft: parseStyleValue(localStyle.borderTopLeftRadius),
+          topRight: parseStyleValue(localStyle.borderTopRightRadius),
+          bottomLeft: parseStyleValue(localStyle.borderBottomLeftRadius),
+          bottomRight: parseStyleValue(localStyle.borderBottomRightRadius)
+        },
+        handleBorderRadiusChange,
+        localStyle.radiusMode || 'all',
+        handleBorderRadiusModeChange
+      )}
     </Form.Item>
   );
-
-  if (localStyle.radiusMode === "all" && shouldShowProperty('borderRadius', 'borderRadius')) {
-    borderRadiusItems.push(
-      <Form.Item key="borderRadius" label="Border Radius" style={sharedStyles.formItem}>
-        <Slider {...handleSliderChange("borderRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-      </Form.Item>
-    );
-  } else if (localStyle.radiusMode !== "all") {
-    if (shouldShowProperty('borderTopLeftRadius', 'borderRadius')) {
-      borderRadiusItems.push(
-        <Form.Item key="borderTopLeftRadius" label="Top Left" style={sharedStyles.formItem}>
-          <Slider {...handleSliderChange("borderTopLeftRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-        </Form.Item>
-      );
-    }
-    if (shouldShowProperty('borderTopRightRadius', 'borderRadius')) {
-      borderRadiusItems.push(
-        <Form.Item key="borderTopRightRadius" label="Top Right" style={sharedStyles.formItem}>
-          <Slider {...handleSliderChange("borderTopRightRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-        </Form.Item>
-      );
-    }
-    if (shouldShowProperty('borderBottomLeftRadius', 'borderRadius')) {
-      borderRadiusItems.push(
-        <Form.Item key="borderBottomLeftRadius" label="Bottom Left" style={sharedStyles.formItem}>
-          <Slider {...handleSliderChange("borderBottomLeftRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-        </Form.Item>
-      );
-    }
-    if (shouldShowProperty('borderBottomRightRadius', 'borderRadius')) {
-      borderRadiusItems.push(
-        <Form.Item key="borderBottomRightRadius" label="Bottom Right" style={sharedStyles.formItem}>
-          <Slider {...handleSliderChange("borderBottomRightRadius")} min={0} max={100} tooltip={{ formatter: (val) => `${val}px` }} />
-        </Form.Item>
-      );
-    }
-  }
 
   if (borderRadiusItems.length > 0) {
     items.push({
@@ -2449,7 +2980,14 @@ if (shouldShow('flexbox')) {
   if (shouldShowProperty('gap', 'flexbox')) {
     flexboxItems.push(
       <Form.Item key="gap" label="Gap" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("gap")} placeholder="e.g. 10px" size="small" />
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.gap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, gap: `${val}px` }));
+            debouncedSync('gap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -2457,7 +2995,14 @@ if (shouldShow('flexbox')) {
   if (shouldShowProperty('rowGap', 'flexbox')) {
     flexboxItems.push(
       <Form.Item key="rowGap" label="Row Gap" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("rowGap")} placeholder="e.g. 10px" size="small" />
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.rowGap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, rowGap: `${val}px` }));
+            debouncedSync('rowGap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -2465,7 +3010,14 @@ if (shouldShow('flexbox')) {
   if (shouldShowProperty('columnGap', 'flexbox')) {
     flexboxItems.push(
       <Form.Item key="columnGap" label="Column Gap" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("columnGap")} placeholder="e.g. 10px" size="small" />
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.columnGap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, columnGap: `${val}px` }));
+            debouncedSync('columnGap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -2669,7 +3221,14 @@ if (shouldShow('grid')) {
   if (shouldShowProperty('gap', 'grid')) {
     gridItems.push(
       <Form.Item key="gap" label="Gap" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("gap")} placeholder="e.g. 10px" size="small" />
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.gap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, gap: `${val}px` }));
+            debouncedSync('gap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -2677,7 +3236,14 @@ if (shouldShow('grid')) {
   if (shouldShowProperty('rowGap', 'grid')) {
     gridItems.push(
       <Form.Item key="rowGap" label="Row Gap" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("rowGap")} placeholder="e.g. 10px" size="small" />
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.rowGap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, rowGap: `${val}px` }));
+            debouncedSync('rowGap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -2685,7 +3251,14 @@ if (shouldShow('grid')) {
   if (shouldShowProperty('columnGap', 'grid')) {
     gridItems.push(
       <Form.Item key="columnGap" label="Column Gap" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("columnGap")} placeholder="e.g. 10px" size="small" />
+        {renderSliderWithInput(
+          parseStyleValue(localStyle.columnGap),
+          (val) => {
+            setLocalStyle(prev => ({ ...prev, columnGap: `${val}px` }));
+            debouncedSync('columnGap', `${val}px`);
+          },
+          0, 100, 1, 'px'
+        )}
       </Form.Item>
     );
   }
@@ -2887,7 +3460,25 @@ if (shouldShow('effects')) {
   if (shouldShowProperty('boxShadow', 'effects')) {
     effectsItems.push(
       <Form.Item key="boxShadow" label="Box Shadow" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("boxShadow")} placeholder="e.g. 0 4px 8px rgba(0,0,0,0.1)" size="small" />
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Switch
+            checked={localStyle.boxShadowEnabled}
+            onChange={(checked) => {
+              const updates = { boxShadowEnabled: checked };
+              if (!checked) {
+                updates.boxShadow = 'none';
+              } else if (localStyle.boxShadow === 'none' || !localStyle.boxShadow) {
+                updates.boxShadow = '0px 2px 8px 0px #000000';
+              }
+              setLocalStyle(prev => ({ ...prev, ...updates }));
+              debouncedSync('boxShadow', updates.boxShadow || localStyle.boxShadow);
+            }}
+            size="small"
+          />
+          {localStyle.boxShadowEnabled && (
+            renderBoxShadowControl(localStyle.boxShadow, handleBoxShadowChange)
+          )}
+        </Space>
       </Form.Item>
     );
   }
@@ -2895,7 +3486,25 @@ if (shouldShow('effects')) {
   if (shouldShowProperty('textShadow', 'effects')) {
     effectsItems.push(
       <Form.Item key="textShadow" label="Text Shadow" style={sharedStyles.formItem}>
-        <Input {...handleInputChange("textShadow")} placeholder="e.g. 2px 2px 4px rgba(0,0,0,0.5)" size="small" />
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Switch
+            checked={localStyle.textShadowEnabled}
+            onChange={(checked) => {
+              const updates = { textShadowEnabled: checked };
+              if (!checked) {
+                updates.textShadow = 'none';
+              } else if (localStyle.textShadow === 'none' || !localStyle.textShadow) {
+                updates.textShadow = '2px 2px 4px #000000';
+              }
+              setLocalStyle(prev => ({ ...prev, ...updates }));
+              debouncedSync('textShadow', updates.textShadow || localStyle.textShadow);
+            }}
+            size="small"
+          />
+          {localStyle.textShadowEnabled && (
+            renderTextShadowControl(localStyle.textShadow, handleTextShadowChange)
+          )}
+        </Space>
       </Form.Item>
     );
   }
@@ -3433,7 +4042,7 @@ if (shouldShow('attributes')) {
 }
 
     return items;
-  }, [localStyle, shouldShow, handleInputChange, handleSelectChange, handleSliderChange, handleColorChange, handleButtonGroupChange, handleNumberChange, handleSwitchChange, sharedStyles, debouncedSync]);
+  }, [localStyle, shouldShow, shouldShowProperty, handleInputChange, handleSelectChange, handleSliderChange, handleColorChange, handleButtonGroupChange, handleNumberChange, handleSwitchChange, handleSpacingChange, handleSpacingModeChange, handleBorderRadiusChange, handleBorderRadiusModeChange, handleBoxShadowChange, handleTextShadowChange, sharedStyles, debouncedSync, setLocalStyle]);
 
 
 

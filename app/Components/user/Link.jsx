@@ -2,7 +2,592 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { useNode, useEditor } from "@craftjs/core";
+import { createPortal } from 'react-dom';
+import { 
+  Modal, 
+  Input, 
+  Select, 
+  Switch, 
+  Button as AntButton,
+  Tabs,
+  ColorPicker,
+  Slider,
+  InputNumber
+} from 'antd';
 import { EditOutlined, LinkOutlined } from '@ant-design/icons';
+
+// Link Settings Modal Component
+const LinkSettingsModal = ({ 
+  visible, 
+  onClose, 
+  nodeId,
+  currentProps 
+}) => {
+  const { actions } = useEditor();
+  const [activeTab, setActiveTab] = useState('content');
+
+  // Local state for form values
+  const [formData, setFormData] = useState(currentProps);
+
+  useEffect(() => {
+    setFormData(currentProps);
+  }, [currentProps]);
+
+  const updateProp = (key, value) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+    
+    // Update the actual component prop
+    actions.setProp(nodeId, (props) => {
+      props[key] = value;
+    });
+  };
+
+  const handleOk = () => {
+    onClose();
+  };
+
+  const handleCancel = () => {
+    onClose();
+  };
+
+  return (
+    <Modal
+      title="Link Settings"
+      open={visible}
+      onOk={handleOk}
+      onCancel={handleCancel}
+      width={700}
+      zIndex={999999}
+      destroyOnClose
+    >
+      <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: 'content',
+              label: '📝 Content',
+              children: (
+                <div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Link Text
+                    </label>
+                    <Input
+                      value={formData.text}
+                      onChange={(e) => updateProp('text', e.target.value)}
+                      placeholder="Enter link text"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      URL
+                    </label>
+                    <Input
+                      value={formData.href}
+                      onChange={(e) => updateProp('href', e.target.value)}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Switch
+                        checked={formData.target === '_blank'}
+                        onChange={(checked) => updateProp('target', checked ? '_blank' : '_self')}
+                      />
+                      Open in new tab
+                    </label>
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Switch
+                        checked={formData.showIcon}
+                        onChange={(checked) => updateProp('showIcon', checked)}
+                      />
+                      Show link icon
+                    </label>
+                  </div>
+
+                  {formData.showIcon && (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                        Icon Position
+                      </label>
+                      <Select
+                        style={{ width: '100%' }}
+                        value={formData.iconPosition}
+                        onChange={(value) => updateProp('iconPosition', value)}
+                      >
+                        <Select.Option value="before">Before text</Select.Option>
+                        <Select.Option value="after">After text</Select.Option>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )
+            },
+            {
+              key: 'styling',
+              label: '🎨 Styling',
+              children: (
+                <div>
+                  {/* Typography */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Font Family
+                    </label>
+                    <Select
+                      style={{ width: '100%' }}
+                      value={formData.fontFamily}
+                      onChange={(value) => updateProp('fontFamily', value)}
+                    >
+                      <Select.Option value="Arial">Arial</Select.Option>
+                      <Select.Option value="Helvetica">Helvetica</Select.Option>
+                      <Select.Option value="Times New Roman">Times New Roman</Select.Option>
+                      <Select.Option value="Georgia">Georgia</Select.Option>
+                      <Select.Option value="Verdana">Verdana</Select.Option>
+                      <Select.Option value="Courier New">Courier New</Select.Option>
+                    </Select>
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Font Size
+                    </label>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      value={formData.fontSize}
+                      onChange={(value) => updateProp('fontSize', value)}
+                      min={8}
+                      max={72}
+                      addonAfter="px"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Font Weight
+                    </label>
+                    <Select
+                      style={{ width: '100%' }}
+                      value={formData.fontWeight}
+                      onChange={(value) => updateProp('fontWeight', value)}
+                    >
+                      <Select.Option value="100">Thin</Select.Option>
+                      <Select.Option value="300">Light</Select.Option>
+                      <Select.Option value="400">Normal</Select.Option>
+                      <Select.Option value="500">Medium</Select.Option>
+                      <Select.Option value="600">Semi-bold</Select.Option>
+                      <Select.Option value="700">Bold</Select.Option>
+                      <Select.Option value="900">Black</Select.Option>
+                    </Select>
+                  </div>
+
+                  {/* Colors */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Text Color
+                    </label>
+                    <ColorPicker
+                      value={formData.color}
+                      onChange={(color) => updateProp('color', color.toHexString())}
+                      showText
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Hover Color
+                    </label>
+                    <ColorPicker
+                      value={formData.colorHover}
+                      onChange={(color) => updateProp('colorHover', color.toHexString())}
+                      showText
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Background Color
+                    </label>
+                    <ColorPicker
+                      value={formData.backgroundColor}
+                      onChange={(color) => updateProp('backgroundColor', color.toHexString())}
+                      showText
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Hover Background
+                    </label>
+                    <ColorPicker
+                      value={formData.backgroundHover}
+                      onChange={(color) => updateProp('backgroundHover', color.toHexString())}
+                      showText
+                    />
+                  </div>
+
+                  {/* Text Decoration */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Text Decoration
+                    </label>
+                    <Select
+                      style={{ width: '100%' }}
+                      value={formData.textDecoration}
+                      onChange={(value) => updateProp('textDecoration', value)}
+                    >
+                      <Select.Option value="none">None</Select.Option>
+                      <Select.Option value="underline">Underline</Select.Option>
+                      <Select.Option value="overline">Overline</Select.Option>
+                      <Select.Option value="line-through">Strike-through</Select.Option>
+                    </Select>
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Underline Style
+                    </label>
+                    <Select
+                      style={{ width: '100%' }}
+                      value={formData.underlineStyle}
+                      onChange={(value) => updateProp('underlineStyle', value)}
+                    >
+                      <Select.Option value="solid">Solid</Select.Option>
+                      <Select.Option value="dotted">Dotted</Select.Option>
+                      <Select.Option value="dashed">Dashed</Select.Option>
+                      <Select.Option value="wavy">Wavy</Select.Option>
+                    </Select>
+                  </div>
+                </div>
+              )
+            },
+            {
+              key: 'effects',
+              label: '✨ Effects',
+              children: (
+                <div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Border Radius
+                    </label>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      value={formData.borderRadius}
+                      onChange={(value) => updateProp('borderRadius', value)}
+                      min={0}
+                      max={50}
+                      addonAfter="px"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Padding
+                    </label>
+                    <Input
+                      value={formData.padding}
+                      onChange={(e) => updateProp('padding', e.target.value)}
+                      placeholder="8px 12px"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Box Shadow
+                    </label>
+                    <Input
+                      value={formData.boxShadow}
+                      onChange={(e) => updateProp('boxShadow', e.target.value)}
+                      placeholder="0 2px 4px rgba(0,0,0,0.1)"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Transition Duration
+                    </label>
+                    <Input
+                      value={formData.transition}
+                      onChange={(e) => updateProp('transition', e.target.value)}
+                      placeholder="all 0.3s ease"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Opacity: {formData.opacity}
+                    </label>
+                    <Slider
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      value={formData.opacity}
+                      onChange={(value) => updateProp('opacity', value)}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                      Transform
+                    </label>
+                    <Input
+                      value={formData.transform}
+                      onChange={(e) => updateProp('transform', e.target.value)}
+                      placeholder="scale(1.05) rotate(5deg)"
+                    />
+                  </div>
+                </div>
+              )
+            }
+          ]}
+        />
+      </div>
+    </Modal>
+  );
+};
+
+// Portal Controls Component - renders outside of the link to avoid overflow clipping
+const LinkPortalControls = ({ 
+  linkPosition, 
+  setModalVisible,
+  handleDragStart,
+  handleResizeStart,
+  handleDoubleClick,
+  handleDeleteLink
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+  
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top - 28,
+          left: linkPosition.left + linkPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left half - POS (Custom position drag) */}
+        <div
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px 6px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
+
+        {/* Right half - EDIT (Settings modal) */}
+        <div
+          style={{
+            background: '#722ed1',
+            color: 'white',
+            padding: '4px 6px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onClick={() => setModalVisible(true)}
+          title="Configure link settings"
+        >
+          ⚙️ EDIT
+        </div>
+      </div>
+
+      {/* Resize handles */}
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top - 4,
+          left: linkPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        title="Resize"
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top - 4,
+          left: linkPosition.left + linkPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        title="Resize"
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top + linkPosition.height - 4,
+          left: linkPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        title="Resize"
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top + linkPosition.height - 4,
+          left: linkPosition.left + linkPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+        title="Resize"
+      />
+
+      {/* Edge resize handles - beautiful semi-transparent style */}
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top - 4,
+          left: linkPosition.left + linkPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'n-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+        title="Resize height"
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: linkPosition.top + linkPosition.height - 4,
+          left: linkPosition.left + linkPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 's-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+        title="Resize height"
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: linkPosition.left - 4,
+          top: linkPosition.top + linkPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'w-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+        title="Resize width"
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: linkPosition.left + linkPosition.width - 4,
+          top: linkPosition.top + linkPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'e-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+        title="Resize width"
+      />
+    </div>,
+    document.body
+  );
+};
 
 export const Link = ({
   // Link Content
@@ -21,7 +606,7 @@ export const Link = ({
   maxWidth,
   minHeight,
   maxHeight,
-  display = "inline",
+  display = "inline-block",
   
   // Positioning
   position = "relative",
@@ -33,7 +618,7 @@ export const Link = ({
   
   // Spacing
   margin = "0",
-  padding = "2px 4px",
+  padding = "4px 8px",
   
   // Typography
   fontFamily = "Arial",
@@ -59,7 +644,7 @@ export const Link = ({
   
   // Border
   border = "none",
-  borderRadius = 0,
+  borderRadius = 4,
   borderWidth = 0,
   borderStyle = "solid",
   borderColor = "transparent",
@@ -86,6 +671,8 @@ export const Link = ({
   underlineStyle = "solid", // solid, dotted, dashed, wavy
   showIcon = true,
   iconPosition = "after", // before, after
+  
+  children,
 }) => {
   const { 
     id: nodeId, 
@@ -100,26 +687,209 @@ export const Link = ({
   const { actions } = useEditor();
   
   const linkRef = useRef(null);
+  const [isClient, setIsClient] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(text);
-  const [localHref, setLocalHref] = useState(href);
   const [isHovered, setIsHovered] = useState(false);
-  const [isEditingUrl, setIsEditingUrl] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [linkPosition, setLinkPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeData, setResizeData] = useState(null);
+
+  // Function to update link position for portal positioning
+  const updateLinkPosition = () => {
+    if (linkRef.current) {
+      const rect = linkRef.current.getBoundingClientRect();
+      setLinkPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    const connectElements = () => {
+      if (linkRef.current) {
+        // Connect both selection and dragging to the main element - makes whole link draggable
+        connect(drag(linkRef.current));
+      }
+    };
+
+    // Always connect on mount and when dependencies change
+    connectElements();
+    
+    // Reconnect when selection state changes
+    const timer = setTimeout(connectElements, 50);
+    return () => clearTimeout(timer);
+  }, [connect, drag, selected, isClient]);
+
+  // Update link position when hovered or selected changes
+  useEffect(() => {
+    if (isHovered || selected) {
+      // Defer position update to avoid render cycle issues
+      const timer = setTimeout(() => updateLinkPosition(), 0);
+      
+      // Update position on scroll and resize
+      const handleScroll = () => updateLinkPosition();
+      const handleResize = () => updateLinkPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isHovered, selected]);
 
   useEffect(() => {
     if (!isEditing) {
       setLocalText(text);
     }
-    if (!isEditingUrl) {
-      setLocalHref(href);
-    }
-  }, [text, href, isEditing, isEditingUrl]);
+  }, [text, isEditing]);
 
-  useEffect(() => {
-    if (linkRef.current) {
-      connect(drag(linkRef.current));
-    }
-  }, [connect, drag]);
+  // Handle delete
+  const handleDeleteLink = () => {
+    actions.delete(nodeId);
+  };
+
+  // Handle drag start for position changes
+  const handleDragStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Update position using Craft.js setProp
+      setProp(props => {
+        props.position = 'absolute';
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsResizing(true);
+    const linkRect = linkRef.current.getBoundingClientRect();
+    
+    setResizeData({
+      direction,
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: linkRect.width,
+      startHeight: linkRect.height,
+      startLeft: linkRect.left,
+      startTop: linkRect.top
+    });
+
+    const handleMouseMove = (moveEvent) => {
+      if (!resizeData || !linkRef.current) return;
+
+      const deltaX = moveEvent.clientX - resizeData.startX;
+      const deltaY = moveEvent.clientY - resizeData.startY;
+
+      setProp(props => {
+        const minSize = 20; // Minimum size constraint
+        
+        switch (direction) {
+          case 'se': // Southeast - resize width and height
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
+            break;
+          case 'sw': // Southwest - resize width and height, adjust left
+            const newWidth = Math.max(minSize, resizeData.startWidth - deltaX);
+            props.width = newWidth;
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
+            if (props.position === 'absolute') {
+              props.left = resizeData.startLeft - (newWidth - resizeData.startWidth);
+            }
+            break;
+          case 'ne': // Northeast - resize width and height, adjust top
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            const newHeight = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.height = newHeight;
+            if (props.position === 'absolute') {
+              props.top = resizeData.startTop - (newHeight - resizeData.startHeight);
+            }
+            break;
+          case 'nw': // Northwest - resize width and height, adjust left and top
+            const newWidthNW = Math.max(minSize, resizeData.startWidth - deltaX);
+            const newHeightNW = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.width = newWidthNW;
+            props.height = newHeightNW;
+            if (props.position === 'absolute') {
+              props.left = resizeData.startLeft - (newWidthNW - resizeData.startWidth);
+              props.top = resizeData.startTop - (newHeightNW - resizeData.startHeight);
+            }
+            break;
+          case 'n': // North - resize height, adjust top
+            const newHeightN = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.height = newHeightN;
+            if (props.position === 'absolute') {
+              props.top = resizeData.startTop - (newHeightN - resizeData.startHeight);
+            }
+            break;
+          case 's': // South - resize height
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
+            break;
+          case 'w': // West - resize width, adjust left
+            const newWidthW = Math.max(minSize, resizeData.startWidth - deltaX);
+            props.width = newWidthW;
+            if (props.position === 'absolute') {
+              props.left = resizeData.startLeft - (newWidthW - resizeData.startWidth);
+            }
+            break;
+          case 'e': // East - resize width
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            break;
+        }
+      });
+
+      updateLinkPosition();
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      setResizeData(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Handle text editing
   const handleDoubleClick = (e) => {
@@ -157,16 +927,6 @@ export const Link = ({
     }
   };
 
-  // Handle URL editing
-  const handleEditUrl = () => {
-    const newUrl = prompt('Enter URL:', href);
-    if (newUrl !== null) {
-      setProp(props => {
-        props.href = newUrl;
-      });
-    }
-  };
-
   // Handle link click
   const handleClick = (e) => {
     if (isEditing || !href) {
@@ -191,46 +951,46 @@ export const Link = ({
   };
 
   // Get link icon
- const getLinkIcon = () => {
-  if (!showIcon) return null;
-  
-  const isExternal = href && (href.startsWith('http') || href.startsWith('//'));
-  
-  if (isExternal) {
-    // External link - custom SVG icon with link color
+  const getLinkIcon = () => {
+    if (!showIcon) return null;
+    
+    const isExternal = href && (href.startsWith('http') || href.startsWith('//'));
+    
+    if (isExternal) {
+      // External link - custom SVG icon with link color
+      return (
+        <svg 
+          width="0.8em" 
+          height="0.8em" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+          style={{ 
+            marginLeft: iconPosition === 'after' ? '4px' : '0',
+            marginRight: iconPosition === 'before' ? '4px' : '0',
+            color: isHovered ? colorHover : color,
+          }}
+        >
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15,3 21,3 21,9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      );
+    }
+    
+    // Internal link - LinkOutlined with link color
     return (
-      <svg 
-        width="0.8em" 
-        height="0.8em" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2"
+      <LinkOutlined 
         style={{ 
+          fontSize: '0.8em', 
           marginLeft: iconPosition === 'after' ? '4px' : '0',
           marginRight: iconPosition === 'before' ? '4px' : '0',
           color: isHovered ? colorHover : color,
-        }}
-      >
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-        <polyline points="15,3 21,3 21,9"></polyline>
-        <line x1="10" y1="14" x2="21" y2="3"></line>
-      </svg>
+        }} 
+      />
     );
-  }
-  
-  // Internal link - LinkOutlined with blue color
-  return (
-    <LinkOutlined 
-      style={{ 
-        fontSize: '0.8em', 
-        marginLeft: iconPosition === 'after' ? '4px' : '0',
-        marginRight: iconPosition === 'before' ? '4px' : '0',
-        color: '#1890ff', // Blue color for internal links
-      }} 
-    />
-  );
-};
+  };
 
   const computedStyles = {
     // Layout & Dimensions
@@ -262,7 +1022,7 @@ export const Link = ({
     lineHeight,
     letterSpacing: processValue(letterSpacing, 'letterSpacing'),
     textAlign,
-    textDecoration: `${textDecoration} ${underlineStyle}`,
+    textDecoration: textDecoration === 'none' ? 'none' : `${textDecoration} ${underlineStyle}`,
     textTransform,
     
     // Colors - dynamic based on state
@@ -277,145 +1037,118 @@ export const Link = ({
     borderRadius: processValue(borderRadius, 'borderRadius'),
     
     // Visual Effects
-    boxShadow,
+    boxShadow: isHovered && boxShadow !== 'none' ? `${boxShadow}, 0 2px 8px rgba(0,0,0,0.15)` : boxShadow,
     opacity,
-    transform,
+    transform: isHovered && transform !== 'none' ? `${transform} scale(1.02)` : transform,
     transition,
     
     // Interaction
     cursor: isEditing ? 'text' : 'pointer',
-    outline: 'none',
+    outline: selected ? '2px solid #1890ff' : 'none',
+    outlineOffset: '2px',
     
     // Link specific
     textDecorationColor: isHovered ? colorHover : color,
   };
 
-  return (
-    <a
-      className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
-      ref={linkRef}
-      style={computedStyles}
-      href={href}
-      target={target}
-      rel={rel}
-      download={download}
-      title={title || href}
-      id={id}
-      name={name}
-      role={role}
-      aria-label={ariaLabel || `${text} - ${href}`}
-      aria-describedby={ariaDescribedBy}
-      tabIndex={tabIndex}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Edit indicator */}
-      {selected && !isEditing && (
-        <div
-          style={{
-            position: "absolute",
-            top: -12,
-            right: -12,
-            width: 24,
-            height: 24,
-            background: "#52c41a",
-            borderRadius: "50%",
-            cursor: "pointer",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 12,
-            border: "2px solid white",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onClick={handleDoubleClick}
-          title="Double-click to edit text"
-        >
-          <EditOutlined />
-        </div>
-      )}
+  // Get current props for modal
+  const currentProps = {
+    text,
+    href,
+    target,
+    rel,
+    showIcon,
+    iconPosition,
+    fontFamily,
+    fontSize,
+    fontWeight,
+    color,
+    colorHover,
+    backgroundColor,
+    backgroundHover,
+    textDecoration,
+    underlineStyle,
+    borderRadius,
+    padding,
+    boxShadow,
+    transition,
+    opacity,
+    transform,
+  };
 
-      {/* URL edit button */}
-      {selected && !isEditing && (
-        <div
-          style={{
-            position: "absolute",
-            top: -12,
-            left: -12,
-            width: 24,
-            height: 24,
-            background: "#1890ff",
-            borderRadius: "50%",
-            cursor: "pointer",
-            zIndex: 1000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 12,
-            border: "2px solid white",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onClick={handleEditUrl}
-          title="Edit URL"
-        >
-          <LinkOutlined />
-        </div>
-      )}
-      
-      {/* Link content */}
-      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        {iconPosition === 'before' && getLinkIcon()}
-        
-        <span
-          contentEditable={isEditing}
-          onBlur={handleTextBlur}
-          onInput={handleTextChange}
-          onKeyDown={handleKeyDown}
-          style={{
-            outline: 'none',
-            minHeight: '1em'
-          }}
-          suppressContentEditableWarning={true}
-        >
-          {isEditing ? localText : text}
+  return (
+    <>
+      <a
+        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        ref={linkRef}
+        style={computedStyles}
+        href={href}
+        target={target}
+        rel={rel}
+        download={download}
+        title={title || href}
+        id={id}
+        name={name}
+        role={role}
+        aria-label={ariaLabel || `${text} - ${href}`}
+        aria-describedby={ariaDescribedBy}
+        tabIndex={tabIndex}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setTimeout(() => setIsHovered(true), 0)}
+        onMouseLeave={() => setTimeout(() => setIsHovered(false), 0)}
+        data-craft-id={nodeId}
+      >
+        {/* Link content */}
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+          {iconPosition === 'before' && getLinkIcon()}
+          
+          <span
+            contentEditable={isEditing}
+            onBlur={handleTextBlur}
+            onInput={handleTextChange}
+            onKeyDown={handleKeyDown}
+            style={{
+              outline: 'none',
+              minHeight: '1em'
+            }}
+            suppressContentEditableWarning={true}
+          >
+            {isEditing ? localText : text}
+          </span>
+          
+          {iconPosition === 'after' && getLinkIcon()}
         </span>
         
-        {iconPosition === 'after' && getLinkIcon()}
-      </span>
-      
-      {/* URL preview tooltip */}
-      {selected && href && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: -25,
-            left: 0,
-            background: "rgba(0,0,0,0.8)",
-            color: "white",
-            padding: "2px 6px",
-            borderRadius: "4px",
-            fontSize: "11px",
-            whiteSpace: "nowrap",
-            maxWidth: "200px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            zIndex: 1001
-          }}
-        >
-          {href}
-        </div>
+        {children}
+      </a>
+
+      {/* Link Portal Controls - show when link is hovered or component is selected */}
+      {(isHovered || selected) && !isEditing && isClient && (
+        <LinkPortalControls
+          linkPosition={linkPosition}
+          setModalVisible={setModalVisible}
+          handleDragStart={handleDragStart}
+          handleResizeStart={handleResizeStart}
+          handleDoubleClick={handleDoubleClick}
+          handleDeleteLink={handleDeleteLink}
+        />
       )}
-    </a>
+
+      {/* Settings Modal */}
+      <LinkSettingsModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        nodeId={nodeId}
+        currentProps={currentProps}
+      />
+    </>
   );
 };
 
 // CraftJS configuration
 Link.craft = {
+  displayName: "Link",
   props: {
     text: "Click here",
     href: "https://example.com",
@@ -428,7 +1161,7 @@ Link.craft = {
     maxWidth: "",
     minHeight: "",
     maxHeight: "",
-    display: "inline",
+    display: "inline-block",
     position: "relative",
     top: "",
     left: "",
@@ -436,7 +1169,7 @@ Link.craft = {
     bottom: "",
     zIndex: 1,
     margin: "0",
-    padding: "2px 4px",
+    padding: "4px 8px",
     fontFamily: "Arial",
     fontSize: 14,
     fontWeight: "400",
@@ -454,7 +1187,7 @@ Link.craft = {
     background: "",
     backgroundHover: "rgba(24, 144, 255, 0.1)",
     border: "none",
-    borderRadius: 0,
+    borderRadius: 4,
     borderWidth: 0,
     borderStyle: "solid",
     borderColor: "transparent",
@@ -497,7 +1230,7 @@ Link.craft = {
         "fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight",
         "letterSpacing", "textAlign", "textDecoration", "textTransform",
         
-        // Colors
+        // Colors & States
         "color", "colorHover", "colorVisited", "colorActive",
         
         // Background
@@ -514,7 +1247,39 @@ Link.craft = {
         
         // HTML Attributes
         "title", "id", "className", "name", "ariaLabel"
-      ]
+      ],
+      categories: {
+        content: [
+          "text", "href", "target", "rel", "download"
+        ],
+        layout: [
+          "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+          "display", "position", "top", "left", "right", "bottom", "zIndex"
+        ],
+        spacing: [
+          "margin", "padding"
+        ],
+        typography: [
+          "fontFamily", "fontSize", "fontWeight", "fontStyle", "lineHeight",
+          "letterSpacing", "textAlign", "textDecoration", "textTransform"
+        ],
+        colors: [
+          "color", "colorHover", "colorVisited", "colorActive",
+          "backgroundColor", "background", "backgroundHover"
+        ],
+        border: [
+          "border", "borderRadius", "borderWidth", "borderStyle", "borderColor"
+        ],
+        effects: [
+          "boxShadow", "opacity", "transform", "transition"
+        ],
+        linkProps: [
+          "underlineStyle", "showIcon", "iconPosition"
+        ],
+        attributes: [
+          "title", "id", "className", "name", "ariaLabel"
+        ]
+      }
     }
   }
 };

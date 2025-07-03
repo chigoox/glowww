@@ -1,12 +1,15 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNode, useEditor, Element } from "@craftjs/core";
 import { 
   EditOutlined, 
   DatabaseOutlined, 
   PlusOutlined,
-  FormOutlined
+  FormOutlined,
+  DragOutlined,
+  BorderOuterOutlined
 } from '@ant-design/icons';
 import { 
   Button, 
@@ -19,7 +22,12 @@ import {
   Typography,
   Card,
   Tag,
-  Alert
+  Alert,
+  Tabs,
+  ColorPicker,
+  Slider,
+  InputNumber,
+  Space
 } from 'antd';
 import { FormInput } from '../Input';
 
@@ -46,20 +54,95 @@ export const Form = ({
   // Styling Options
   linkStyles = false,
   
-  // Layout & Styling
+  // Layout & Position
+  position = "relative",
+  top = "auto",
+  left = "auto",
+  right = "auto",
+  bottom = "auto",
+  zIndex = "auto",
+  
+  // Size & Spacing
   width = "100%",
+  minWidth = "auto",
   maxWidth = "600px",
+  height = "auto",
+  minHeight = "auto",
+  maxHeight = "none",
   padding = "24px",
+  paddingTop = "",
+  paddingRight = "",
+  paddingBottom = "",
+  paddingLeft = "",
+  margin = "0",
+  marginTop = "",
+  marginRight = "",
+  marginBottom = "",
+  marginLeft = "",
+  
+  // Background
   backgroundColor = "#ffffff",
-  borderRadius = "8px",
-  boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)",
+  backgroundImage = "",
+  backgroundSize = "cover",
+  backgroundPosition = "center",
+  backgroundRepeat = "no-repeat",
+  backgroundAttachment = "scroll",
+  
+  // Border
   border = "1px solid #e8e8e8",
+  borderTop = "",
+  borderRight = "",
+  borderBottom = "",
+  borderLeft = "",
+  borderRadius = "8px",
+  borderTopLeftRadius = "",
+  borderTopRightRadius = "",
+  borderBottomLeftRadius = "",
+  borderBottomRightRadius = "",
+  borderColor = "#e8e8e8",
+  borderStyle = "solid",
+  borderWidth = "1px",
+  
+  // Shadow & Effects
+  boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)",
+  filter = "none",
+  backdropFilter = "none",
+  opacity = 1,
+  
+  // Transform
+  transform = "none",
+  transformOrigin = "center",
+  scale = 1,
+  rotate = 0,
+  translateX = 0,
+  translateY = 0,
+  skewX = 0,
+  skewY = 0,
+  
+  // Transition
+  transition = "all 0.3s ease",
+  transitionProperty = "all",
+  transitionDuration = "0.3s",
+  transitionTimingFunction = "ease",
+  transitionDelay = "0s",
+  
+  // Layout
+  display = "block",
+  flexDirection = "column",
+  justifyContent = "flex-start",
+  alignItems = "stretch",
+  gap = "0px",
+  flexWrap = "nowrap",
+  overflow = "visible",
+  overflowX = "visible",
+  overflowY = "visible",
   
   // Submit Button Styling
   submitButtonColor = "#1890ff",
   submitButtonSize = "large",
   submitButtonWidth = "100%",
   
+  // Additional
   className = "",
   children
 }) => {
@@ -68,9 +151,11 @@ export const Form = ({
     connectors: { connect, drag }, 
     actions: { setProp }, 
     selected: isSelected, 
+    hovered: isHovered,
     id 
   } = useNode((node) => ({
     selected: node.events.selected,
+    hovered: node.events.hovered,
     id: node.id,
   }));
 
@@ -78,6 +163,8 @@ export const Form = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formPosition, setFormPosition] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [isPositionTracked, setIsPositionTracked] = useState(false);
 
   // Use the correct Craft.js way to get descendants and detect FormInputs
 const { inputFields, descendants } = useEditor((state, query) => {
@@ -200,21 +287,58 @@ useEffect(() => {
   // Refs
   const formRef = useRef(null);
 
-  // Connect form element
+  // Connect form element and setup drag
   useEffect(() => {
-    if (formRef.current && connect && drag) {
-      try {
-        const element = formRef.current;
-        connect(drag(element));
-        
-        return () => {
-          // Cleanup is handled by Craft.js automatically
-        };
-      } catch (error) {
-        console.warn('Error connecting form element:', error);
-      }
+    if (formRef.current) {
+      const element = formRef.current;
+      connect(drag(element));
     }
   }, [connect, drag]);
+
+  // Position tracking for portal controls
+  const updateFormPosition = useCallback(() => {
+    if (formRef.current) {
+      const rect = formRef.current.getBoundingClientRect();
+      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      
+      setFormPosition({
+        x: rect.left + scrollLeft,
+        y: rect.top + scrollTop,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  }, []);
+
+  // Track position when selected/hovered
+  useEffect(() => {
+    if ((isSelected || isHovered) && !isPositionTracked) {
+      updateFormPosition();
+      setIsPositionTracked(true);
+      
+      const handleResize = () => updateFormPosition();
+      const handleScroll = () => updateFormPosition();
+      
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('scroll', handleScroll);
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('scroll', handleScroll);
+      };
+    } else if (!isSelected && !isHovered && isPositionTracked) {
+      setIsPositionTracked(false);
+    }
+  }, [isSelected, isHovered, isPositionTracked, updateFormPosition]);
+
+  // Update position when component updates
+  useEffect(() => {
+    if (isPositionTracked) {
+      const timeoutId = setTimeout(updateFormPosition, 10);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isPositionTracked, updateFormPosition, width, height, padding, margin]);
 
   // Log input detection for debugging
   useEffect(() => {
@@ -292,7 +416,10 @@ useEffect(() => {
 
   // Event handlers
   const handleFormEvent = useCallback((e) => {
-    e.stopPropagation();
+    // Only stop propagation for form submission, not for drag events
+    if (e.type === 'submit') {
+      e.stopPropagation();
+    }
   }, []);
 
   const handleEditClick = useCallback((e) => {
@@ -300,6 +427,104 @@ useEffect(() => {
     e.stopPropagation();
     setIsEditModalOpen(true);
   }, []);
+
+  // Create dynamic styles object
+  const dynamicStyles = useMemo(() => {
+    const paddingValue = paddingTop || paddingRight || paddingBottom || paddingLeft
+      ? `${paddingTop || padding} ${paddingRight || padding} ${paddingBottom || padding} ${paddingLeft || padding}`
+      : padding;
+      
+    const marginValue = marginTop || marginRight || marginBottom || marginLeft
+      ? `${marginTop || margin} ${marginRight || margin} ${marginBottom || margin} ${marginLeft || margin}`
+      : margin;
+      
+    const borderRadiusValue = borderTopLeftRadius || borderTopRightRadius || borderBottomLeftRadius || borderBottomRightRadius
+      ? `${borderTopLeftRadius || borderRadius} ${borderTopRightRadius || borderRadius} ${borderBottomRightRadius || borderRadius} ${borderBottomLeftRadius || borderRadius}`
+      : borderRadius;
+      
+    const borderValue = borderTop || borderRight || borderBottom || borderLeft
+      ? `${borderTop || border} ${borderRight || border} ${borderBottom || border} ${borderLeft || border}`
+      : border;
+      
+    const transformValue = transform !== "none" ? transform : 
+      `translate(${translateX}px, ${translateY}px) scale(${scale}) rotate(${rotate}deg) skew(${skewX}deg, ${skewY}deg)`;
+      
+    const transitionValue = transitionProperty !== "all" || transitionDuration !== "0.3s" || transitionTimingFunction !== "ease" || transitionDelay !== "0s"
+      ? `${transitionProperty} ${transitionDuration} ${transitionTimingFunction} ${transitionDelay}`
+      : transition;
+
+    return {
+      // Position & Layout
+      position,
+      top: top !== "auto" ? top : undefined,
+      left: left !== "auto" ? left : undefined,
+      right: right !== "auto" ? right : undefined,
+      bottom: bottom !== "auto" ? bottom : undefined,
+      zIndex: zIndex !== "auto" ? zIndex : undefined,
+      display,
+      
+      // Size & Spacing
+      width,
+      minWidth: minWidth !== "auto" ? minWidth : undefined,
+      maxWidth,
+      height: height !== "auto" ? height : undefined,
+      minHeight: minHeight !== "auto" ? minHeight : undefined,
+      maxHeight: maxHeight !== "none" ? maxHeight : undefined,
+      padding: paddingValue,
+      margin: marginValue,
+      
+      // Background
+      backgroundColor,
+      backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
+      backgroundSize,
+      backgroundPosition,
+      backgroundRepeat,
+      backgroundAttachment,
+      
+      // Border
+      border: borderValue,
+      borderRadius: borderRadiusValue,
+      borderColor,
+      borderStyle,
+      borderWidth,
+      
+      // Shadow & Effects
+      boxShadow,
+      filter: filter !== "none" ? filter : undefined,
+      backdropFilter: backdropFilter !== "none" ? backdropFilter : undefined,
+      opacity,
+      
+      // Transform
+      transform: transformValue,
+      transformOrigin,
+      
+      // Transition
+      transition: transitionValue,
+      
+      // Layout (Flex)
+      flexDirection: display.includes('flex') ? flexDirection : undefined,
+      justifyContent: display.includes('flex') ? justifyContent : undefined,
+      alignItems: display.includes('flex') ? alignItems : undefined,
+      gap: display.includes('flex') ? gap : undefined,
+      flexWrap: display.includes('flex') ? flexWrap : undefined,
+      
+      // Overflow
+      overflow: overflow !== "visible" ? overflow : undefined,
+      overflowX: overflowX !== "visible" ? overflowX : undefined,
+      overflowY: overflowY !== "visible" ? overflowY : undefined,
+    };
+  }, [
+    position, top, left, right, bottom, zIndex, display,
+    width, minWidth, maxWidth, height, minHeight, maxHeight,
+    padding, paddingTop, paddingRight, paddingBottom, paddingLeft,
+    margin, marginTop, marginRight, marginBottom, marginLeft,
+    backgroundColor, backgroundImage, backgroundSize, backgroundPosition, backgroundRepeat, backgroundAttachment,
+    border, borderTop, borderRight, borderBottom, borderLeft, borderRadius, borderTopLeftRadius, borderTopRightRadius, borderBottomLeftRadius, borderBottomRightRadius,
+    borderColor, borderStyle, borderWidth, boxShadow, filter, backdropFilter, opacity,
+    transform, transformOrigin, scale, rotate, translateX, translateY, skewX, skewY,
+    transition, transitionProperty, transitionDuration, transitionTimingFunction, transitionDelay,
+    flexDirection, justifyContent, alignItems, gap, flexWrap, overflow, overflowX, overflowY
+  ]);
 
   // Handle input value changes
   const handleInputChange = useCallback((fieldName, value) => {
@@ -313,51 +538,15 @@ useEffect(() => {
     <>
       <form
         ref={formRef}
-        className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        className={`${isSelected ? 'craft-selected' : ''} ${isHovered ? 'craft-hovered' : ''} ${className}`}
         style={{
-          width,
-          maxWidth,
-          padding,
-          backgroundColor,
-          borderRadius,
-          boxShadow,
-          border,
+          ...dynamicStyles,
           position: 'relative',
-          margin: '0 auto'
+          outline: isSelected ? '2px solid #1890ff' : isHovered ? '2px solid #40a9ff' : 'none',
+          outlineOffset: isSelected || isHovered ? '2px' : '0',
         }}
         onSubmit={handleSubmit}
-        onClick={handleFormEvent}
-        onMouseDown={handleFormEvent}
       >
-        {/* Edit Button */}
-        {isSelected && (
-          <div
-            style={{
-              position: "absolute",
-              top: -12,
-              right: -12,
-              width: 24,
-              height: 24,
-              background: "#52c41a",
-              borderRadius: "50%",
-              cursor: "pointer",
-              zIndex: 1000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: 12,
-              border: "2px solid white",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-            }}
-            onClick={handleEditClick}
-            onMouseDown={handleEditClick}
-            title="Configure form"
-          >
-            <EditOutlined />
-          </div>
-        )}
-
         {/* Form Header */}
         <div style={{ marginBottom: 24 }}>
           <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
@@ -452,12 +641,27 @@ useEffect(() => {
         )}
       </form>
 
+      {/* Portal Controls */}
+      {(isSelected || isHovered) && isPositionTracked && typeof document !== 'undefined' && 
+        createPortal(
+          <FormPortalControls
+            formPosition={formPosition}
+            isSelected={isSelected}
+            isHovered={isHovered}
+            onEdit={handleEditClick}
+            setProp={setProp}
+            updateFormPosition={updateFormPosition}
+          />,
+          document.body
+        )
+      }
+
       {/* Configuration Modal */}
       <Modal
-        title="Configure Form"
+        title="Form Configuration"
         open={isEditModalOpen}
         onCancel={() => setIsEditModalOpen(false)}
-        width={1000}
+        width={1200}
         footer={[
           <Button key="cancel" onClick={() => setIsEditModalOpen(false)}>
             Cancel
@@ -487,9 +691,381 @@ useEffect(() => {
           submitButtonColor={submitButtonColor}
           submitButtonSize={submitButtonSize}
           submitButtonWidth={submitButtonWidth}
+          // Pass all styling props
+          position={position}
+          top={top}
+          left={left}
+          right={right}
+          bottom={bottom}
+          zIndex={zIndex}
+          width={width}
+          minWidth={minWidth}
+          maxWidth={maxWidth}
+          height={height}
+          minHeight={minHeight}
+          maxHeight={maxHeight}
+          padding={padding}
+          paddingTop={paddingTop}
+          paddingRight={paddingRight}
+          paddingBottom={paddingBottom}
+          paddingLeft={paddingLeft}
+          margin={margin}
+          marginTop={marginTop}
+          marginRight={marginRight}
+          marginBottom={marginBottom}
+          marginLeft={marginLeft}
+          backgroundColor={backgroundColor}
+          backgroundImage={backgroundImage}
+          backgroundSize={backgroundSize}
+          backgroundPosition={backgroundPosition}
+          backgroundRepeat={backgroundRepeat}
+          backgroundAttachment={backgroundAttachment}
+          border={border}
+          borderTop={borderTop}
+          borderRight={borderRight}
+          borderBottom={borderBottom}
+          borderLeft={borderLeft}
+          borderRadius={borderRadius}
+          borderTopLeftRadius={borderTopLeftRadius}
+          borderTopRightRadius={borderTopRightRadius}
+          borderBottomLeftRadius={borderBottomLeftRadius}
+          borderBottomRightRadius={borderBottomRightRadius}
+          borderColor={borderColor}
+          borderStyle={borderStyle}
+          borderWidth={borderWidth}
+          boxShadow={boxShadow}
+          filter={filter}
+          backdropFilter={backdropFilter}
+          opacity={opacity}
+          transform={transform}
+          transformOrigin={transformOrigin}
+          scale={scale}
+          rotate={rotate}
+          translateX={translateX}
+          translateY={translateY}
+          skewX={skewX}
+          skewY={skewY}
+          transition={transition}
+          transitionProperty={transitionProperty}
+          transitionDuration={transitionDuration}
+          transitionTimingFunction={transitionTimingFunction}
+          transitionDelay={transitionDelay}
+          display={display}
+          flexDirection={flexDirection}
+          justifyContent={justifyContent}
+          alignItems={alignItems}
+          gap={gap}
+          flexWrap={flexWrap}
+          overflow={overflow}
+          overflowX={overflowX}
+          overflowY={overflowY}
         />
       </Modal>
     </>
+  );
+};
+
+// Portal Controls Component
+const FormPortalControls = ({ formPosition, isSelected, isHovered, onEdit, setProp, updateFormPosition }) => {
+  const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Handle position dragging
+  const handleDragStart = useCallback((e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsDragging(true);
+
+    // Get the button's position relative to the page
+    const buttonRect = e.target.getBoundingClientRect();
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // Calculate offset from button click to form's top-left corner
+    const clickOffsetX = buttonRect.left + scrollLeft - formPosition.x + (e.clientX - buttonRect.left);
+    const clickOffsetY = buttonRect.top + scrollTop - formPosition.y + (e.clientY - buttonRect.top);
+
+    const handleMouseMove = (e) => {
+      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      
+      // Calculate new position accounting for the click offset
+      const newLeft = e.clientX + scrollLeft - clickOffsetX;
+      const newTop = e.clientY + scrollTop - clickOffsetY;
+
+      setProp(props => {
+        props.position = 'absolute';
+        props.left = `${newLeft}px`;
+        props.top = `${newTop}px`;
+      });
+      
+      // Update portal position immediately for smooth following
+      setFormPosition(prev => ({
+        ...prev,
+        x: newLeft,
+        y: newTop
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Update final position after drag
+      setTimeout(updateFormPosition, 10);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [formPosition, setProp, updateFormPosition]);
+
+  // Handle resizing
+  const handleResizeStart = useCallback((e, direction) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = formPosition.width;
+    const startHeight = formPosition.height;
+    const startLeft = formPosition.x;
+    const startTop = formPosition.y;
+
+    const handleMouseMove = (e) => {
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      let newLeft = startLeft;
+      let newTop = startTop;
+
+      if (direction.includes('right')) {
+        newWidth = Math.max(100, startWidth + deltaX);
+      }
+      if (direction.includes('left')) {
+        newWidth = Math.max(100, startWidth - deltaX);
+        newLeft = startLeft + deltaX;
+      }
+      if (direction.includes('bottom')) {
+        newHeight = Math.max(50, startHeight + deltaY);
+      }
+      if (direction.includes('top')) {
+        newHeight = Math.max(50, startHeight - deltaY);
+        newTop = startTop + deltaY;
+      }
+
+      setProp(props => {
+        props.width = `${newWidth}px`;
+        props.height = `${newHeight}px`;
+        
+        // Update position if resizing from top or left
+        if (direction.includes('left')) {
+          props.position = 'absolute';
+          props.left = `${newLeft}px`;
+        }
+        if (direction.includes('top')) {
+          props.position = 'absolute';
+          props.top = `${newTop}px`;
+        }
+      });
+      
+      // Update portal position immediately for smooth following
+      setFormPosition(prev => ({
+        ...prev,
+        x: newLeft,
+        y: newTop,
+        width: newWidth,
+        height: newHeight
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Update final position after resize
+      setTimeout(updateFormPosition, 10);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [formPosition, setProp, updateFormPosition]);
+
+  const controlsStyle = {
+    position: 'absolute',
+    top: formPosition.y,
+    left: formPosition.x,
+    width: formPosition.width,
+    height: formPosition.height,
+    pointerEvents: 'none',
+    zIndex: 9999,
+  };
+
+  const pillStyle = {
+    position: 'absolute',
+    top: -40,
+    left: 0,
+    display: 'flex',
+    gap: '4px',
+    pointerEvents: 'auto',
+  };
+
+  const buttonStyle = {
+    padding: '4px 8px',
+    fontSize: '12px',
+    fontWeight: 500,
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+    transition: 'all 0.2s ease',
+  };
+
+  const resizeHandleStyle = {
+    position: 'absolute',
+    backgroundColor: '#1890ff',
+    border: '2px solid white',
+    borderRadius: '50%',
+    width: '12px',
+    height: '12px',
+    pointerEvents: 'auto',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+    opacity: isSelected ? 1 : 0.7,
+  };
+
+  return (
+    <div style={controlsStyle}>
+      {/* Control Pills */}
+      <div style={pillStyle}>
+        <button
+          style={{
+            ...buttonStyle,
+            backgroundColor: isDragging ? '#9254de' : '#722ed1',
+            color: 'white',
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}
+          onMouseDown={handleDragStart}
+          title="Drag to reposition"
+        >
+          <DragOutlined style={{ fontSize: '10px' }} />
+          POS
+        </button>
+        
+        <button
+          style={{
+            ...buttonStyle,
+            backgroundColor: '#52c41a',
+            color: 'white',
+          }}
+          onClick={onEdit}
+          onMouseDown={(e) => e.stopPropagation()}
+          title="Edit form settings"
+        >
+          <EditOutlined style={{ fontSize: '10px' }} />
+          EDIT
+        </button>
+      </div>
+
+      {/* Resize Handles */}
+      {isSelected && (
+        <>
+          {/* Corner handles */}
+          <div
+            style={{
+              ...resizeHandleStyle,
+              top: -6,
+              left: -6,
+              cursor: 'nw-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'top-left')}
+            title="Resize"
+          />
+          <div
+            style={{
+              ...resizeHandleStyle,
+              top: -6,
+              right: -6,
+              cursor: 'ne-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'top-right')}
+            title="Resize"
+          />
+          <div
+            style={{
+              ...resizeHandleStyle,
+              bottom: -6,
+              left: -6,
+              cursor: 'sw-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'bottom-left')}
+            title="Resize"
+          />
+          <div
+            style={{
+              ...resizeHandleStyle,
+              bottom: -6,
+              right: -6,
+              cursor: 'se-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'bottom-right')}
+            title="Resize"
+          />
+
+          {/* Edge handles */}
+          <div
+            style={{
+              ...resizeHandleStyle,
+              top: -6,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              cursor: 'n-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'top')}
+            title="Resize height"
+          />
+          <div
+            style={{
+              ...resizeHandleStyle,
+              bottom: -6,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              cursor: 's-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'bottom')}
+            title="Resize height"
+          />
+          <div
+            style={{
+              ...resizeHandleStyle,
+              top: '50%',
+              left: -6,
+              transform: 'translateY(-50%)',
+              cursor: 'w-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'left')}
+            title="Resize width"
+          />
+          <div
+            style={{
+              ...resizeHandleStyle,
+              top: '50%',
+              right: -6,
+              transform: 'translateY(-50%)',
+              cursor: 'e-resize',
+            }}
+            onMouseDown={(e) => handleResizeStart(e, 'right')}
+            title="Resize width"
+          />
+        </>
+      )}
+    </div>
   );
 };
 
@@ -651,7 +1227,75 @@ const FormConfigModal = ({
   linkStyles,
   submitButtonColor,
   submitButtonSize,
-  submitButtonWidth
+  submitButtonWidth,
+  // Styling props
+  position,
+  top,
+  left,
+  right,
+  bottom,
+  zIndex,
+  width,
+  minWidth,
+  maxWidth,
+  height,
+  minHeight,
+  maxHeight,
+  padding,
+  paddingTop,
+  paddingRight,
+  paddingBottom,
+  paddingLeft,
+  margin,
+  marginTop,
+  marginRight,
+  marginBottom,
+  marginLeft,
+  backgroundColor,
+  backgroundImage,
+  backgroundSize,
+  backgroundPosition,
+  backgroundRepeat,
+  backgroundAttachment,
+  border,
+  borderTop,
+  borderRight,
+  borderBottom,
+  borderLeft,
+  borderRadius,
+  borderTopLeftRadius,
+  borderTopRightRadius,
+  borderBottomLeftRadius,
+  borderBottomRightRadius,
+  borderColor,
+  borderStyle,
+  borderWidth,
+  boxShadow,
+  filter,
+  backdropFilter,
+  opacity,
+  transform,
+  transformOrigin,
+  scale,
+  rotate,
+  translateX,
+  translateY,
+  skewX,
+  skewY,
+  transition,
+  transitionProperty,
+  transitionDuration,
+  transitionTimingFunction,
+  transitionDelay,
+  display,
+  flexDirection,
+  justifyContent,
+  alignItems,
+  gap,
+  flexWrap,
+  overflow,
+  overflowX,
+  overflowY
 }) => {
   const [activeTab, setActiveTab] = useState('general');
   const [newDatabaseName, setNewDatabaseName] = useState('');
@@ -665,357 +1309,341 @@ const FormConfigModal = ({
     }
   }, [newDatabaseName, createNewDatabase]);
 
-  return (
-    <div style={{ height: '70vh' }}>
-      {/* Tab Navigation */}
-      <div style={{ 
-        display: 'flex', 
-        borderBottom: '1px solid #e8e8e8', 
-        marginBottom: 24 
-      }}>
-        {[
-          { key: 'general', label: '⚙️ General' },
-          { key: 'database', label: '🗄️ Database' },
-          { key: 'styling', label: '🎨 Styling' },
-          { key: 'behavior', label: '🔄 Behavior' }
-        ].map(tab => (
-          <Button
-            key={tab.key}
-            type={activeTab === tab.key ? 'primary' : 'default'}
-            onClick={() => setActiveTab(tab.key)}
-            style={{ 
-              marginRight: 8,
-              marginBottom: -1,
-              borderBottomLeftRadius: 0,
-              borderBottomRightRadius: 0
-            }}
-          >
-            {tab.label}
-          </Button>
-        ))}
-      </div>
-
-      <div style={{ height: 'calc(100% - 80px)', overflowY: 'auto', padding: '0 4px' }}>
-        {/* General Tab */}
-        {activeTab === 'general' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <h4>Form Information</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Form Title
-                </label>
-                <Input
-                  value={formTitle}
-                  onChange={(e) => setProp(props => props.formTitle = e.target.value)}
-                  placeholder="Enter form title"
-                />
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Form Description
-                </label>
-                <TextArea
-                  value={formDescription}
-                  onChange={(e) => setProp(props => props.formDescription = e.target.value)}
-                  placeholder="Enter form description"
-                  rows={3}
-                />
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Submit Button Text
-                </label>
-                <Input
-                  value={submitButtonText}
-                  onChange={(e) => setProp(props => props.submitButtonText = e.target.value)}
-                  placeholder="Submit"
-                />
-              </div>
+  const tabItems = [
+    {
+      key: 'general',
+      label: (
+        <span>
+          <FormOutlined />
+          General
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div>
+            <h4>Form Information</h4>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Form Title
+              </label>
+              <Input
+                value={formTitle}
+                onChange={(e) => setProp(props => props.formTitle = e.target.value)}
+                placeholder="Enter form title"
+              />
             </div>
 
-            <div>
-              <h4>Form Fields ({inputFields.length})</h4>
-              
-              {inputFields.length === 0 ? (
-                <Alert
-                  message="No input fields found"
-                  description="Add input components inside this form to see them here."
-                  type="info"
-                  showIcon
-                />
-              ) : (
-                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                  {inputFields.map(field => (
-                    <Card key={`${field.id}-${field.lastUpdated}`} size="small" style={{ marginBottom: 8 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <Text strong>{field.labelText}</Text>
-                          <br />
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {field.inputType} {field.required && <Tag size="small" color="red">Required</Tag>}
-                          </Text>
-                        </div>
-                        <Text code style={{ fontSize: '11px' }}>
-                          {field.fieldName}
-                        </Text>
-                      </div>
-                    </Card>
-                  ))}
-                  
-                  {/* Data Preview in Modal */}
-                  <FormDataPreview 
-                    inputFields={inputFields}
-                    formData={formData || {}}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Database Tab */}
-        {activeTab === 'database' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <h4>Database Configuration</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Select Database
-                </label>
-                <Select
-                  style={{ width: '100%' }}
-                  value={databaseName}
-                  onChange={(value) => setProp(props => props.databaseName = value)}
-                  placeholder="Select a database"
-                  dropdownRender={(menu) => (
-                    <>
-                      {menu}
-                      <Divider style={{ margin: '8px 0' }} />
-                      <div style={{ padding: '0 8px 4px' }}>
-                        <Button
-                          type="text"
-                          icon={<PlusOutlined />}
-                          onClick={() => setShowCreateDatabase(true)}
-                          style={{ width: '100%' }}
-                        >
-                          Create New Database
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                >
-                  {databases.map(db => (
-                    <Select.Option key={db.id} value={db.id}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <DatabaseOutlined />
-                        {db.name}
-                      </div>
-                    </Select.Option>
-                  ))}
-                </Select>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Key Field
-                </label>
-                <Select
-                  style={{ width: '100%' }}
-                  value={keyField}
-                  onChange={(value) => setProp(props => props.keyField = value)}
-                  placeholder="Select a field to use as key"
-                  allowClear
-                >
-                  {inputFields.map(field => (
-                    <Select.Option key={field.fieldName} value={field.fieldName}>
-                      {field.labelText} ({field.fieldName})
-                    </Select.Option>
-                  ))}
-                </Select>
-              </div>
-
-              {showCreateDatabase && (
-                <Card size="small" style={{ backgroundColor: '#f8f9fa' }}>
-                  <div style={{ marginBottom: 12 }}>
-                    <Text strong>Create New Database</Text>
-                  </div>
-                  <Input
-                    value={newDatabaseName}
-                    onChange={(e) => setNewDatabaseName(e.target.value)}
-                    placeholder="Enter database name"
-                    onPressEnter={handleCreateDatabase}
-                  />
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                    <Button size="small" type="primary" onClick={handleCreateDatabase}>
-                      Create
-                    </Button>
-                    <Button size="small" onClick={() => setShowCreateDatabase(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </Card>
-              )}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Form Description
+              </label>
+              <Input.TextArea
+                value={formDescription}
+                onChange={(e) => setProp(props => props.formDescription = e.target.value)}
+                placeholder="Enter form description"
+                rows={3}
+              />
             </div>
 
-            <div>
-              <h4>Style Linking</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Switch
-                    checked={linkStyles}
-                    onChange={(checked) => setProp(props => props.linkStyles = checked)}
-                  />
-                  Link Input Styles
-                </label>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Styling Tab */}
-        {activeTab === 'styling' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <h4>Submit Button Styling</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Button Color
-                </label>
-                <input
-                  type="color"
-                  value={submitButtonColor}
-                  onChange={(e) => setProp(props => props.submitButtonColor = e.target.value)}
-                  style={{ width: '100%', height: 40, border: '1px solid #d9d9d9', borderRadius: 6 }}
-                />
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Button Size
-                </label>
-                <Select
-                  style={{ width: '100%' }}
-                  value={submitButtonSize}
-                  onChange={(value) => setProp(props => props.submitButtonSize = value)}
-                >
-                  <Select.Option value="small">Small</Select.Option>
-                  <Select.Option value="middle">Medium</Select.Option>
-                  <Select.Option value="large">Large</Select.Option>
-                </Select>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Button Width
-                </label>
-                <Select
-                  style={{ width: '100%' }}
-                  value={submitButtonWidth}
-                  onChange={(value) => setProp(props => props.submitButtonWidth = value)}
-                >
-                  <Select.Option value="auto">Auto</Select.Option>
-                  <Select.Option value="50%">50%</Select.Option>
-                  <Select.Option value="100%">Full Width</Select.Option>
-                </Select>
-              </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Submit Button Text
+              </label>
+              <Input
+                value={submitButtonText}
+                onChange={(e) => setProp(props => props.submitButtonText = e.target.value)}
+                placeholder="Submit"
+              />
             </div>
 
-            <div>
-              <h4>Messages</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                  Success Message
-                </label>
-                <Input
-                  value={successMessage}
-                  onChange={(e) => setProp(props => props.successMessage = e.target.value)}
-                  placeholder="Form submitted successfully!"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Behavior Tab */}
-        {activeTab === 'behavior' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <h4>Form Behavior</h4>
-              
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Switch
-                    checked={resetAfterSubmit}
-                    onChange={(checked) => setProp(props => props.resetAfterSubmit = checked)}
-                  />
-                  Reset form after submit
-                </label>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Switch
-                    checked={showSuccessMessage}
-                    onChange={(checked) => setProp(props => props.showSuccessMessage = checked)}
-                  />
-                  Show success message
-                </label>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Switch
-                    checked={redirectAfterSubmit}
-                    onChange={(checked) => setProp(props => props.redirectAfterSubmit = checked)}
-                  />
-                  Redirect after submit
-                </label>
-              </div>
-
-              {redirectAfterSubmit && (
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                    Redirect URL
-                  </label>
-                  <Input
-                    value={redirectUrl}
-                    onChange={(e) => setProp(props => props.redirectUrl = e.target.value)}
-                    placeholder="https://example.com/thank-you"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <h4>Form Preview</h4>
-              
-              <Card size="small">
-                <Text strong>Current Configuration:</Text>
-                <div style={{ marginTop: 8, fontSize: '12px' }}>
-                  <div>📝 Fields: {inputFields.length}</div>
-                  <div>🗄️ Database: {databaseName || 'Not set'}</div>
-                  <div>🔑 Key Field: {keyField || 'Auto-generated'}</div>
-                  <div>✅ Submit enabled: {databaseName && inputFields.length > 0 ? 'Yes' : 'No'}</div>
-                </div>
-              </Card>
-              
-              {/* Fixed FormDataPreview call */}
-              <FormDataPreview 
-                inputFields={inputFields}
-                formData={formData || {}}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Success Message
+              </label>
+              <Input
+                value={successMessage}
+                onChange={(e) => setProp(props => props.successMessage = e.target.value)}
+                placeholder="Form submitted successfully!"
               />
             </div>
           </div>
-        )}
-      </div>
+
+          <div>
+            <h4>Form Fields ({inputFields.length})</h4>
+            
+            {inputFields.length === 0 ? (
+              <Alert
+                message="No input fields found"
+                description="Add input components inside this form to see them here."
+                type="info"
+                showIcon
+              />
+            ) : (
+              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                {inputFields.map(field => (
+                  <Card key={`${field.id}-${field.lastUpdated}`} size="small" style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <Text strong>{field.labelText}</Text>
+                        <br />
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          {field.inputType} {field.required && <Tag size="small" color="red">Required</Tag>}
+                        </Text>
+                      </div>
+                      <Text code style={{ fontSize: '11px' }}>
+                        {field.fieldName}
+                      </Text>
+                    </div>
+                  </Card>
+                ))}
+                
+                {/* Data Preview in Modal */}
+                <FormDataPreview 
+                  inputFields={inputFields}
+                  formData={formData || {}}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'database',
+      label: (
+        <span>
+          <DatabaseOutlined />
+          Database
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div>
+            <h4>Database Configuration</h4>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Select Database
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={databaseName}
+                onChange={(value) => setProp(props => props.databaseName = value)}
+                placeholder="Select a database"
+                dropdownRender={(menu) => (
+                  <>
+                    {menu}
+                    <Divider style={{ margin: '8px 0' }} />
+                    <div style={{ padding: '0 8px 4px' }}>
+                      <Button
+                        type="text"
+                        icon={<PlusOutlined />}
+                        onClick={() => setShowCreateDatabase(true)}
+                        style={{ width: '100%' }}
+                      >
+                        Create New Database
+                      </Button>
+                    </div>
+                  </>
+                )}
+              >
+                {databases.map(db => (
+                  <Select.Option key={db.id} value={db.id}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <DatabaseOutlined />
+                      {db.name}
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Key Field
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={keyField}
+                onChange={(value) => setProp(props => props.keyField = value)}
+                placeholder="Select a field to use as key"
+                allowClear
+              >
+                {inputFields.map(field => (
+                  <Select.Option key={field.fieldName} value={field.fieldName}>
+                    {field.labelText} ({field.fieldName})
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+
+            {showCreateDatabase && (
+              <Card size="small" style={{ backgroundColor: '#f8f9fa' }}>
+                <div style={{ marginBottom: 12 }}>
+                  <Text strong>Create New Database</Text>
+                </div>
+                <Input
+                  value={newDatabaseName}
+                  onChange={(e) => setNewDatabaseName(e.target.value)}
+                  placeholder="Enter database name"
+                  onPressEnter={handleCreateDatabase}
+                />
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <Button size="small" type="primary" onClick={handleCreateDatabase}>
+                    Create
+                  </Button>
+                  <Button size="small" onClick={() => setShowCreateDatabase(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          <div>
+            <h4>Form Behavior</h4>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  checked={resetAfterSubmit}
+                  onChange={(checked) => setProp(props => props.resetAfterSubmit = checked)}
+                />
+                Reset form after submit
+              </label>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  checked={showSuccessMessage}
+                  onChange={(checked) => setProp(props => props.showSuccessMessage = checked)}
+                />
+                Show success message
+              </label>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  checked={redirectAfterSubmit}
+                  onChange={(checked) => setProp(props => props.redirectAfterSubmit = checked)}
+                />
+                Redirect after submit
+              </label>
+            </div>
+
+            {redirectAfterSubmit && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                  Redirect URL
+                </label>
+                <Input
+                  value={redirectUrl}
+                  onChange={(e) => setProp(props => props.redirectUrl = e.target.value)}
+                  placeholder="https://example.com/thank-you"
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch
+                  checked={linkStyles}
+                  onChange={(checked) => setProp(props => props.linkStyles = checked)}
+                />
+                Link Input Styles
+              </label>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'button',
+      label: (
+        <span>
+          <BorderOuterOutlined />
+          Button
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div>
+            <h4>Submit Button Styling</h4>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Button Color
+              </label>
+              <ColorPicker
+                value={submitButtonColor}
+                onChange={(color) => setProp(props => props.submitButtonColor = color.toHexString())}
+                showText
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Button Size
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={submitButtonSize}
+                onChange={(value) => setProp(props => props.submitButtonSize = value)}
+              >
+                <Select.Option value="small">Small</Select.Option>
+                <Select.Option value="middle">Medium</Select.Option>
+                <Select.Option value="large">Large</Select.Option>
+              </Select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                Button Width
+              </label>
+              <Select
+                style={{ width: '100%' }}
+                value={submitButtonWidth}
+                onChange={(value) => setProp(props => props.submitButtonWidth = value)}
+              >
+                <Select.Option value="auto">Auto</Select.Option>
+                <Select.Option value="50%">50%</Select.Option>
+                <Select.Option value="100%">Full Width</Select.Option>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <h4>Form Preview</h4>
+            
+            <Card size="small">
+              <Text strong>Current Configuration:</Text>
+              <div style={{ marginTop: 8, fontSize: '12px' }}>
+                <div>📝 Fields: {inputFields.length}</div>
+                <div>🗄️ Database: {databaseName || 'Not set'}</div>
+                <div>🔑 Key Field: {keyField || 'Auto-generated'}</div>
+                <div>✅ Submit enabled: {databaseName && inputFields.length > 0 ? 'Yes' : 'No'}</div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      ),
+    },
+    
+  ];
+
+  return (
+    <div style={{ height: '70vh' }}>
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={tabItems}
+        style={{ height: '100%' }}
+        tabBarStyle={{ marginBottom: 24 }}
+      />
     </div>
   );
 };
@@ -1024,27 +1652,112 @@ const FormConfigModal = ({
 Form.craft = {
   displayName: 'Form',
   props: {
+    // Form Configuration
     formTitle: "Contact Form",
     formDescription: "Please fill out the form below",
     submitButtonText: "Submit",
     successMessage: "Form submitted successfully!",
+    
+    // Database Configuration
     databaseName: "",
     keyField: "",
+    
+    // Form Behavior
     resetAfterSubmit: true,
     showSuccessMessage: true,
     redirectAfterSubmit: false,
     redirectUrl: "",
     linkStyles: false,
+    
+    // Layout & Position
+    position: "relative",
+    top: "auto",
+    left: "auto",
+    right: "auto",
+    bottom: "auto",
+    zIndex: "auto",
+    
+    // Size & Spacing
     width: "100%",
+    minWidth: "auto", 
     maxWidth: "600px",
+    height: "auto",
+    minHeight: "auto",
+    maxHeight: "none",
     padding: "24px",
+    paddingTop: "",
+    paddingRight: "",
+    paddingBottom: "",
+    paddingLeft: "",
+    margin: "0",
+    marginTop: "",
+    marginRight: "",
+    marginBottom: "",
+    marginLeft: "",
+    
+    // Background
     backgroundColor: "#ffffff",
-    borderRadius: "8px",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+    backgroundImage: "",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    backgroundAttachment: "scroll",
+    
+    // Border
     border: "1px solid #e8e8e8",
+    borderTop: "",
+    borderRight: "",
+    borderBottom: "",
+    borderLeft: "",
+    borderRadius: "8px",
+    borderTopLeftRadius: "",
+    borderTopRightRadius: "",
+    borderBottomLeftRadius: "",
+    borderBottomRightRadius: "",
+    borderColor: "#e8e8e8",
+    borderStyle: "solid",
+    borderWidth: "1px",
+    
+    // Shadow & Effects
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+    filter: "none",
+    backdropFilter: "none",
+    opacity: 1,
+    
+    // Transform
+    transform: "none",
+    transformOrigin: "center",
+    scale: 1,
+    rotate: 0,
+    translateX: 0,
+    translateY: 0,
+    skewX: 0,
+    skewY: 0,
+    
+    // Transition
+    transition: "all 0.3s ease",
+    transitionProperty: "all",
+    transitionDuration: "0.3s",
+    transitionTimingFunction: "ease",
+    transitionDelay: "0s",
+    
+    // Layout
+    display: "block",
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    alignItems: "stretch",
+    gap: "0px",
+    flexWrap: "nowrap",
+    overflow: "visible",
+    overflowX: "visible",
+    overflowY: "visible",
+    
+    // Submit Button Styling
     submitButtonColor: "#1890ff",
     submitButtonSize: "large",
     submitButtonWidth: "100%",
+    
+    // Additional
     className: ""
   },
   rules: {

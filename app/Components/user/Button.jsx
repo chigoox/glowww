@@ -2,7 +2,8 @@
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor, Element } from "@craftjs/core";
-import { EditOutlined, SettingOutlined } from '@ant-design/icons';
+import { EditOutlined, SettingOutlined, DeleteOutlined, RotateRightOutlined } from '@ant-design/icons';
+import { createPortal } from 'react-dom';
 import { 
   Button as AntButton, 
   Modal, 
@@ -91,6 +92,7 @@ const ButtonSettingsModal = ({
       onOk={handleOk}
       onCancel={handleCancel}
       width={600}
+      zIndex={999999}
       destroyOnClose
     >
       <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
@@ -413,6 +415,243 @@ const ButtonSettingsModal = ({
   );
 };
 
+// Portal Controls Component - renders outside of the button to avoid overflow clipping
+const ButtonPortalControls = ({ 
+  buttonPosition, 
+  setModalVisible,
+  handleDragStart,
+  handleResizeStart,
+  handleDoubleClick,
+  handleDeleteButton
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+  
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top - 28,
+          left: buttonPosition.left + buttonPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left half - POS (Custom position drag) */}
+        <div
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px 6px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
+
+        {/* Right half - EDIT (Settings modal) */}
+        <div
+          style={{
+            background: '#722ed1',
+            color: 'white',
+            padding: '4px 6px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onClick={() => setModalVisible(true)}
+          title="Configure button settings"
+        >
+          ⚙️ EDIT
+        </div>
+      </div>
+
+      {/* Resize handles */}
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top - 4,
+          left: buttonPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        title="Resize"
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top - 4,
+          left: buttonPosition.left + buttonPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        title="Resize"
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top + buttonPosition.height - 4,
+          left: buttonPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        title="Resize"
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top + buttonPosition.height - 4,
+          left: buttonPosition.left + buttonPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+        title="Resize"
+      />
+
+      {/* Edge resize handles - beautiful semi-transparent style */}
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top - 4,
+          left: buttonPosition.left + buttonPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'n-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+        title="Resize height"
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: buttonPosition.top + buttonPosition.height - 4,
+          left: buttonPosition.left + buttonPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 's-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+        title="Resize height"
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: buttonPosition.left - 4,
+          top: buttonPosition.top + buttonPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'w-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+        title="Resize width"
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: buttonPosition.left + buttonPosition.width - 4,
+          top: buttonPosition.top + buttonPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'e-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+        title="Resize width"
+      />
+    </div>,
+    document.body
+  );
+};
+
 export const Button = ({
   // Existing Button props
   text = "Click Me",
@@ -492,11 +731,34 @@ export const Button = ({
   const { actions, query } = useEditor();
   
   const buttonRef = useRef(null);
+  const [isClient, setIsClient] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(text);
   const [isHovered, setIsHovered] = useState(false);
   const [hasScript, setHasScript] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [buttonPosition, setButtonPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeData, setResizeData] = useState(null);
+
+  // Function to update button position for portal positioning
+  const updateButtonPosition = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setButtonPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if (!isEditing) {
@@ -505,23 +767,191 @@ export const Button = ({
   }, [text, isEditing]);
 
   useEffect(() => {
-    if (buttonRef.current) {
-      connect(drag(buttonRef.current));
+    const connectElements = () => {
+      if (buttonRef.current) {
+        // Connect both selection and dragging to the main element - makes whole button draggable
+        connect(drag(buttonRef.current));
+      }
+    };
+
+    // Always connect on mount and when dependencies change
+    connectElements();
+    
+    // Reconnect when selection state changes
+    const timer = setTimeout(connectElements, 50);
+    return () => clearTimeout(timer);
+  }, [connect, drag, selected, isClient]);
+
+  // Update button position when hovered or selected changes
+  useEffect(() => {
+    if (isHovered || selected) {
+      // Defer position update to avoid render cycle issues
+      const timer = setTimeout(() => updateButtonPosition(), 0);
+      
+      // Update position on scroll and resize
+      const handleScroll = () => updateButtonPosition();
+      const handleResize = () => updateButtonPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
     }
-  }, [connect, drag]);
+  }, [isHovered, selected]);
 
   // Check if this button has script attached
   useEffect(() => {
     setHasScript(actionType !== "none" || scriptComponentId);
   }, [actionType, scriptComponentId]);
 
-  // Handle settings modal
-  const handleSettingsClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setModalVisible(true);
+  // Handle rotation
+  const handleRotate = () => {
+    const newRotation = rotation + 90;
+    setRotation(newRotation);
+    setProp(props => {
+      props.transform = `rotate(${newRotation}deg)`;
+    });
   };
 
+  // Handle delete
+  const handleDeleteButton = () => {
+    actions.delete(nodeId);
+  };
+
+  // Handle drag start for position changes
+  const handleDragStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Update position using Craft.js setProp
+      setProp(props => {
+        props.position = 'absolute';
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsResizing(true);
+    const buttonRect = buttonRef.current.getBoundingClientRect();
+    
+    setResizeData({
+      direction,
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: buttonRect.width,
+      startHeight: buttonRect.height,
+      startLeft: buttonRect.left,
+      startTop: buttonRect.top
+    });
+
+    const handleMouseMove = (moveEvent) => {
+      if (!resizeData || !buttonRef.current) return;
+
+      const deltaX = moveEvent.clientX - resizeData.startX;
+      const deltaY = moveEvent.clientY - resizeData.startY;
+
+      setProp(props => {
+        const minSize = 20; // Minimum size constraint
+        
+        switch (direction) {
+          case 'se': // Southeast - resize width and height
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
+            break;
+          case 'sw': // Southwest - resize width and height, adjust left
+            const newWidth = Math.max(minSize, resizeData.startWidth - deltaX);
+            props.width = newWidth;
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
+            if (props.position === 'absolute') {
+              props.left = resizeData.startLeft - (newWidth - resizeData.startWidth);
+            }
+            break;
+          case 'ne': // Northeast - resize width and height, adjust top
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            const newHeight = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.height = newHeight;
+            if (props.position === 'absolute') {
+              props.top = resizeData.startTop - (newHeight - resizeData.startHeight);
+            }
+            break;
+          case 'nw': // Northwest - resize width and height, adjust left and top
+            const newWidthNW = Math.max(minSize, resizeData.startWidth - deltaX);
+            const newHeightNW = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.width = newWidthNW;
+            props.height = newHeightNW;
+            if (props.position === 'absolute') {
+              props.left = resizeData.startLeft - (newWidthNW - resizeData.startWidth);
+              props.top = resizeData.startTop - (newHeightNW - resizeData.startHeight);
+            }
+            break;
+          case 'n': // North - resize height, adjust top
+            const newHeightN = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.height = newHeightN;
+            if (props.position === 'absolute') {
+              props.top = resizeData.startTop - (newHeightN - resizeData.startHeight);
+            }
+            break;
+          case 's': // South - resize height
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
+            break;
+          case 'w': // West - resize width, adjust left
+            const newWidthW = Math.max(minSize, resizeData.startWidth - deltaX);
+            props.width = newWidthW;
+            if (props.position === 'absolute') {
+              props.left = resizeData.startLeft - (newWidthW - resizeData.startWidth);
+            }
+            break;
+          case 'e': // East - resize width
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            break;
+        }
+      });
+
+      updateButtonPosition();
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      setResizeData(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle settings modal
   const handleCloseModal = () => {
     setModalVisible(false);
   };
@@ -888,9 +1318,15 @@ export const Button = ({
   return (
     <>
       <ButtonElement
-        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className}`}
         ref={buttonRef}
-        style={computedStyles}
+        style={{
+          ...computedStyles,
+          position: 'relative',
+          cursor: isEditing ? 'text' : 'pointer',
+          userSelect: isEditing ? 'text' : 'none',
+          transition: isHovered && !selected ? 'box-shadow 0.2s ease' : 'none',
+        }}
         disabled={disabled && actionType !== "link"}
         href={href && actionType === "link" ? href : undefined}
         target={href && actionType === "link" ? target : undefined}
@@ -902,38 +1338,10 @@ export const Button = ({
         tabIndex={tabIndex}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => setTimeout(() => setIsHovered(true), 0)}
+        onMouseLeave={() => setTimeout(() => setIsHovered(false), 0)}
         data-craft-id={nodeId}
       >
-        {/* Edit indicator */}
-        {selected && !isEditing && (
-          <div
-            style={{
-              position: "absolute",
-              top: -12,
-              right: -12,
-              width: 24,
-              height: 24,
-              background: "#52c41a",
-              borderRadius: "50%",
-              cursor: "pointer",
-              zIndex: 1000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontSize: 12,
-              border: "2px solid white",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
-            }}
-            onClick={handleSettingsClick}
-            title="Click to open settings"
-          >
-            <EditOutlined />
-          </div>
-        )}
-
         {/* Script indicator */}
         {hasScript && (
           <div
@@ -978,6 +1386,18 @@ export const Button = ({
         
         {children}
       </ButtonElement>
+
+      {/* Button Portal Controls - show when button is hovered or component is selected */}
+      {(isHovered || selected) && !isEditing && (
+        <ButtonPortalControls
+          buttonPosition={buttonPosition}
+          setModalVisible={setModalVisible}
+          handleDragStart={handleDragStart}
+          handleResizeStart={handleResizeStart}
+          handleDoubleClick={handleDoubleClick}
+          handleDeleteButton={handleDeleteButton}
+        />
+      )}
 
       {/* Settings Modal */}
       <ButtonSettingsModal

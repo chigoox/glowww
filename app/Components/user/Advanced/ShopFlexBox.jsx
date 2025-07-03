@@ -11,80 +11,139 @@ import { FlexBox } from "../FlexBox";
 const mockStripeProducts = {
     products: [
         {
-            id: 'prod_1',
-            name: 'Vacay Vibes Crochet Button Up Shirt',
-            price: 2400,
-            originalPrice: 3999,
+            id: 'prod_brabus_1',
+            name: 'BRABUS 900 Rocket Edition',
+            price: 65000000,
+            originalPrice: 70000000,
             images: [
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-23-24_S1_27_232360067_Bluecombo_KS_AC_11-57-43_79373_PXF.jpg?v=1717000934&width=600&height=900&crop=center',
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-02-25_S3_29_ZDFNS1160_GreenCombo_RK_DO_11-38-29_17355_PXF.jpg?v=1746479430&width=600&height=900&crop=center',
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-23-24_S1_27_232360067_Bluecombo_KS_AC_11-57-43_79373_PXF.jpg?v=1717000934&width=600&height=900&crop=center'
+                'https://www.brabus.com/_Resources/Persistent/b/c/f/7/bcf7015a266b18cecb12301757b7810b34c43773/BRABUS%20900%20Rocket%20Edition%20%20%2830%29-1170x780.jpg',
+                'https://www.brabus.com/_Resources/Persistent/8/c/0/f/8c0fe66b6b89ee5d6ac52cc8197a1d10d59b963b/20210909_untitled%20shoot6327-1170x780.jpg',
+                'https://www.brabus.com/_Resources/Persistent/4/3/f/0/43f066fb4f6397e3e8778cb47595cd76ac776f63/BRABUS%20900%20Rocket%20Edition%20%20%2831%29-1170x780.jpg'
             ],
-            category: 'clothing',
-            collection: 'summer-collection',
+            category: 'supercars',
+            collection: '6x6',
             variants: [
-                { id: 'var_1_s', size: 'S', price: 2400 },
-                { id: 'var_1_m', size: 'M', price: 2400 },
-                { id: 'var_1_l', size: 'L', price: 2400 },
-                { id: 'var_1_xl', size: 'XL', price: 2400 },
-                { id: 'var_1_xxl', size: 'XXL', price: 2400 },
-                { id: 'var_1_xxxl', size: 'XXXL', price: 2400 }
+                { id: 'var_brabus_1_standard', size: 'Standard', price: 65000000 }
             ]
         },
         {
-            id: 'prod_2',
-            name: 'Summer Beach Shorts',
-            price: 1800,
-            originalPrice: 2999,
+            id: 'prod_brabus_2',
+            name: 'BRABUS 900 PEETCH',
+            price: 64000000,
+            originalPrice: 67000000,
             images: [
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-25-25_Swim-Set-1_32_ZD0718157_Pinkcombo_ZSR_TK_JR_11-27-52_18970_EH.jpg?v=1743100205&width=400&height=599&crop=center',
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/04-04-25_Swim-Set-1_4_ZDFNS1128_Pinkcombo_RA_JW_09-18-31_20593_PXF_MH.jpg?v=1744392643&width=400&height=599&crop=center'
+                'https://www.brabus.com/_Resources/Persistent/7/9/2/4/7924bce6ed7a4463b7173059f37f793e1a8d92a2/BRABUS%20900%20PEETCH_klein%20%20%2823%29-1170x780.jpg',
+                'https://www.brabus.com/_Resources/Persistent/f/8/0/b/f80bada696c97e974d2f2736a0010a06bacb3fcf/BRABUS%20900%20PEETCH_klein%20%20%2837%29-520x780.jpg',
+                'https://www.brabus.com/_Resources/Persistent/7/6/3/8/7638c685bc5ef3de3c55f8242981855d15926293/BRABUS%20900%20PEETCH_klein%20%20%2868%29-520x780.jpg'
             ],
-            category: 'clothing',
-            collection: 'summer-collection',
+            category: 'supercars',
+            collection: '6x6',
             variants: [
-                { id: 'var_2_s', size: 'S', price: 1800 },
-                { id: 'var_2_m', size: 'M', price: 1800 },
-                { id: 'var_2_l', size: 'L', price: 1800 }
+                { id: 'var_brabus_2_standard', size: 'Standard', price: 64000000 }
             ]
         },
         {
-            id: 'prod_3',
-            name: 'Vintage Sunglasses',
-            price: 1200,
+            id: 'prod_brabus_3',
+            name: 'BRABUS 900 Crawler',
+            price: 72000000,
+            originalPrice: 75000000,
             images: [
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/6-02-25__465_Kailani_2_Piece_Bikini_Hot_Pink-combo_JR.jpg?v=1750800427&width=400&height=599&crop=center',
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/4-7-25__463_Daphne_Evil_Eye_Charm_Beads_2_Piece_Bikini_Blue-combo_JR.jpg?v=1748385579&width=400&height=599&crop=center',
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/04-25-24_S2_1_444804FN_Blackcombo_P_KJ_RL_14-45-50_17582_EH.jpg?v=1714432086&width=400&height=599&crop=center'
+                'https://www.brabus.com/_Resources/Persistent/c/7/4/3/c7437c5099d5bd7df86a8c79c5baa0c766859df2/BRABUS%20900%20Crawler_outdoor%20%2873%29-1170x780.jpg',
+                'https://www.brabus.com/_Resources/Persistent/2/e/1/4/2e146b24e3d44015a0dc837031f593e6e3f3f32d/BRABUS%20900%20Crawler_outdoor%20%2853%29-1170x780.jpg',
+                'https://www.brabus.com/_Resources/Persistent/1/2/0/f/120f9dbf23474cb5050c59c4a2a3e629312f6822/BRABUS%20900%20Crawler_outdoor%20%2839%29-1170x780.jpg'
             ],
-            category: 'accessories',
-            collection: 'vintage-collection',
+            category: 'supercars',
+            collection: 'rocket-edition',
             variants: [
-                { id: 'var_3_one', size: 'One Size', price: 1200 }
+                { id: 'var_brabus_3_standard', size: 'Standard', price: 72000000 }
             ]
         },
         {
-            id: 'prod_4',
-            name: 'Canvas Tote Bag',
-            price: 899,
+            id: 'prod_brabus_4',
+            name: 'BRABUS Crawler Supercar',
+            price: 80000000,
+            originalPrice: 85000000,
             images: [
-                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-25-25_S2_31_24GWY4541_Leopard_JG_AP_13-34-14_16727_CM-Amira_PXF_WG.jpg?v=1743624791&width=400&height=599&crop=center'
+                'https://www.brabus.com/f/b/19fb6a6a716ea45750c28cfa57856b2a6ad359/Crawler_Supercar-1920x1279-730x486.jpg'
             ],
-            category: 'accessories',
-            collection: 'eco-friendly',
+            category: 'supercars',
+            collection: 'crawler',
             variants: [
-                { id: 'var_4_reg', size: 'Regular', price: 899 }
+                { id: 'var_brabus_4_standard', size: 'Standard', price: 80000000 }
+            ]
+        },
+        {
+            id: 'prod_brabus_5',
+            name: 'BRABUS Taycan',
+            price: 90000000,
+            originalPrice: 95000000,
+            images: [
+                'https://www.brabus.com/_Resources/Persistent/9/4/9/b/949b3366c639eaffe739dc71d850384c9140087b/Brabus_Taycan_004-1170x780.jpg'
+            ],
+            category: 'supercars',
+            collection: 'supercar',
+            variants: [
+                { id: 'var_brabus_5_standard', size: 'Standard', price: 90000000 }
+            ]
+        },
+        {
+            id: 'prod_brabus_6',
+            name: 'Mercedes-AMG GTR',
+            price: 88000000,
+            originalPrice: 90000000,
+            images: [
+                'https://www.mercedes-benz.com.au/content/dam/hq/passengercars/cars/landing-pages/amg-brand-area/amg/performance/09-2024/images/mercedes-amg-brand-area-performance-characteristics-formfunction-2176x1224-09-2024.jpg/1744718057949.jpg?im=Crop,rect=(0,0,2176,1224);Resize=(1280,720)',
+                'https://www.mercedes-benz.com.au/content/dam/hq/passengercars/cars/landing-pages/amg-brand-area/amg/performance/09-2024/images/mercedes-amg-brand-area-performance-characteristics-inside-2176x1224-09-2024.jpg/1744718058451.jpg?im=Crop,rect=(0,0,2176,1224);Resize=(1280,720)',
+                'https://www.mercedes-benz.com.au/content/dam/hq/passengercars/cars/landing-pages/amg-brand-area/amg/icons/09-2024/images/mercedes-amg-brand-area-icons-amg-gtr-2176x1224-09-2024.jpg/1744718060735.jpg?im=Crop,rect=(0,0,2176,1224);Resize=(1280,720)'
+            ],
+            category: 'supercars',
+            collection: 'rocket-gts',
+            variants: [
+                { id: 'var_brabus_6_standard', size: 'Standard', price: 88000000 }
+            ]
+        },
+        {
+            id: 'prod_brabus_7',
+            name: 'BMW M8 Coupe Fire Red',
+            price: 60000000,
+            originalPrice: 65000000,
+            images: [
+                'https://www.topgear.com/sites/default/files/cars-car/carousel/2019/10/bmw_m8_coupe_fire_red_033.jpg?w=892&h=502'
+            ],
+            category: 'studio',
+            collection: 'dsc',
+            variants: [
+                { id: 'var_brabus_7_standard', size: 'Standard', price: 60000000 }
+            ]
+        },
+        {
+            id: 'prod_brabus_8',
+            name: 'Fotos Website',
+            price: 55000000,
+            originalPrice: 57000000,
+            images: [
+                'https://www.brabus.com/f/8/f2f818f8086192a3d8d95a849b6e60767fae/fotos_website_16122023-24-520x780.jpg'
+            ],
+            category: 'website',
+            collection: 'fotos',
+            variants: [
+                { id: 'var_brabus_8_standard', size: 'Standard', price: 55000000 }
             ]
         }
     ],
     categories: [
-        { id: 'clothing', name: 'Clothing', count: 2 },
-        { id: 'accessories', name: 'Accessories', count: 2 }
+        { id: 'supercars', name: 'Supercars', count: 6 },
+        { id: 'studio', name: 'Studio', count: 1 },
+        { id: 'website', name: 'Website', count: 1 }
     ],
     collections: [
-        { id: 'summer-collection', name: 'Summer Collection', count: 2 },
-        { id: 'vintage-collection', name: 'Vintage Collection', count: 1 },
-        { id: 'eco-friendly', name: 'Eco Friendly', count: 1 }
+        { id: '6x6', name: '6x6', count: 2 },
+        { id: 'rocket-edition', name: 'Rocket Edition', count: 1 },
+        { id: 'crawler', name: 'Crawler', count: 1 },
+        { id: 'supercar', name: 'Supercar', count: 1 },
+        { id: 'rocket-gts', name: 'Rocket GTS', count: 1 },
+        { id: 'dsc', name: 'DSC', count: 1 },
+        { id: 'fotos', name: 'Fotos', count: 1 }
     ]
 };
 
@@ -1513,6 +1572,7 @@ const StyleEditorModal = ({
 
 // Craft.js configuration
 ShopFlexBox.craft = {
+    displayName: "ShopBox",
     props: {
         selectedProducts: [],
         selectedCategories: [],

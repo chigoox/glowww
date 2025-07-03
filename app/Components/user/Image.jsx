@@ -2,11 +2,10 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { useNode, useEditor } from "@craftjs/core";
-import { EditOutlined, UploadOutlined } from '@ant-design/icons';
-import { Upload, message } from 'antd';
-import interact from 'interactjs';
+import { createPortal } from 'react-dom';
+import MediaLibrary from '../support/MediaLibrary';
 
-const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
 export const Image = ({
   // Basic Image Properties
@@ -20,23 +19,27 @@ export const Image = ({
   maxWidth,
   minHeight = 50,
   maxHeight,
+  display = "block",
   
   // Positioning
   position = "relative",
-  top = 0,
-  left = 0,
+  top,
+  right,
+  bottom,
+  left,
   zIndex = 1,
   
   // Spacing
-  margin = "5px 0",
+  margin = "10px 0",
   padding = 0,
   
-  // Visual Styling
-  border = "none",
+  // Border
   borderWidth = 0,
   borderStyle = "solid", 
-  borderColor = "#000000",
-  borderRadius = 0,
+  borderColor = "#e0e0e0",
+  borderRadius = 4,
+  
+  // Effects
   boxShadow = "none",
   opacity = 1,
   
@@ -44,44 +47,36 @@ export const Image = ({
   objectFit = "cover",
   objectPosition = "center",
   
-  // Other props
-  title,
+  // HTML Attributes
   className = "",
-  hidden = false,
-  draggable = false,
+  id,
+  title,
 }) => {
-  const { 
-    id, 
-    connectors: { connect, drag }, 
-    actions: { setProp }, 
-    selected 
-  } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
   }));
-  
   const { actions } = useEditor();
-  
+
   const imageRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [imageState, setImageState] = useState({
-    x: left,
-    y: top,
-    width,
-    height
-  });
+  const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
-   // Helper function to build border string
-  const getBorderStyle = () => {
-    if (border && border !== "none") {
-      return border;
+  // Function to update box position for portal positioning
+  const updateBoxPosition = () => {
+    if (imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
+      setBoxPosition({
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height
+      });
     }
-    if (borderWidth > 0) {
-      return `${borderWidth}px ${borderStyle} ${borderColor}`;
-    }
-    return "none";
   };
 
   useEffect(() => {
@@ -89,128 +84,252 @@ export const Image = ({
   }, []);
 
   useEffect(() => {
-    if (imageRef.current) {
-      connect(drag(imageRef.current));
-    }
-  }, [connect, drag]);
-
-  // Handle image upload
-  const handleImageUpload = (info) => {
-    if (info.file.status === 'done') {
-      const imageUrl = URL.createObjectURL(info.file.originFileObj);
-      setProp(props => {
-        props.src = imageUrl;
-      });
-      message.success('Image uploaded successfully');
-    } else if (info.file.status === 'error') {
-      message.error('Image upload failed');
-    }
-  };
-
-  // Custom upload function
-  const customUpload = ({ file, onSuccess }) => {
-    // Simulate upload - in real app, upload to your server
-    setTimeout(() => {
-      onSuccess();
-    }, 1000);
-  };
-
-  // Handle image URL input
-  const handleImageUrlChange = (url) => {
-    setProp(props => {
-      props.src = url;
-    });
-  };
-
-  // Resize handles
-  const resizeHandles = [
-    { key: 'nw', style: { top: -5, left: -5, cursor: 'nw-resize' } },
-    { key: 'ne', style: { top: -5, right: -5, cursor: 'ne-resize' } },
-    { key: 'sw', style: { bottom: -5, left: -5, cursor: 'sw-resize' } },
-    { key: 'se', style: { bottom: -5, right: -5, cursor: 'se-resize' } },
-    { key: 'n', style: { top: -5, left: '50%', transform: 'translateX(-50%)', cursor: 'n-resize' } },
-    { key: 's', style: { bottom: -5, left: '50%', transform: 'translateX(-50%)', cursor: 's-resize' } },
-    { key: 'w', style: { top: '50%', left: -5, transform: 'translateY(-50%)', cursor: 'w-resize' } },
-    { key: 'e', style: { top: '50%', right: -5, transform: 'translateY(-50%)', cursor: 'e-resize' } },
-  ];
-
-  // Setup resize interaction
-  useEffect(() => {
-    if (!selected || !imageRef.current) return;
-
-    const element = imageRef.current;
-    
-    // Make image resizable
-    interact(element).resizable({
-      edges: { left: true, right: true, bottom: true, top: true },
-      listeners: {
-        start() {
-          setIsResizing(true);
-        },
-        move(event) {
-          const { width: newWidth, height: newHeight } = event.rect;
-          
-          setImageState(prev => ({
-            ...prev,
-            width: Math.max(newWidth, minWidth),
-            height: Math.max(newHeight, minHeight)
-          }));
-          
-          setProp(props => {
-            props.width = Math.max(newWidth, minWidth);
-            props.height = Math.max(newHeight, minHeight);
-          });
-        },
-        end() {
-          setIsResizing(false);
-        }
-      },
-      modifiers: [
-        interact.modifiers.restrictSize({
-          min: { width: minWidth, height: minHeight },
-          max: { width: maxWidth || 2000, height: maxHeight || 2000 }
-        })
-      ]
-    });
-
-    return () => {
-      interact(element).unset();
+    const connectElements = () => {
+      if (imageRef.current) {
+        // Connect both selection and dragging to the main element
+        connect(drag(imageRef.current));
+      }
     };
-  }, [selected, minWidth, minHeight, maxWidth, maxHeight, setProp]);
+
+    // Always connect on mount and when dependencies change
+    connectElements();
+    
+    // Reconnect when selection state changes
+    const timer = setTimeout(connectElements, 50);
+    return () => clearTimeout(timer);
+  }, [connect, drag, isSelected, isClient]);
+
+  // Update box position when selected or hovered changes
+  useEffect(() => {
+    if (isSelected || isHovered) {
+      updateBoxPosition();
+      
+      // Update position on scroll and resize
+      const handleScroll = () => updateBoxPosition();
+      const handleResize = () => updateBoxPosition();
+      
+      window.addEventListener('scroll', handleScroll);
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isSelected, isHovered]);
+
+  // Handle resize start
+  const handleResizeStart = (e, direction) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = imageRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    
+    setIsResizing(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      // Calculate new dimensions based on resize direction
+      switch (direction) {
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      // Apply minimum constraints
+      newWidth = Math.max(newWidth, minWidth || 50);
+      newHeight = Math.max(newHeight, minHeight || 50);
+      
+      // Apply maximum constraints if set
+      if (maxWidth) newWidth = Math.min(newWidth, maxWidth);
+      if (maxHeight) newHeight = Math.min(newHeight, maxHeight);
+      
+      // Update dimensions using Craft.js setProp
+      setProp(props => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle custom drag for position changes
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Update position using Craft.js setProp
+      setProp(props => {
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Handle media selection from library
+  const handleMediaSelect = (item, itemType) => {
+    if (itemType === 'image') {
+      setProp(props => {
+        props.src = item.url;
+        props.alt = item.name || 'Selected image';
+      });
+    }
+  };
 
   // Helper function to process values
   const processValue = (value, property) => {
+    if (value === undefined || value === null || value === "") return undefined;
     if (typeof value === 'number' && !['opacity', 'zIndex'].includes(property)) {
       return `${value}px`;
     }
     return value;
   };
 
+  // Build computed styles
+  const computedStyles = {
+    width: processValue(width, 'width'),
+    height: processValue(height, 'height'),
+    minWidth: processValue(minWidth, 'minWidth'),
+    maxWidth: processValue(maxWidth, 'maxWidth'),
+    minHeight: processValue(minHeight, 'minHeight'),
+    maxHeight: processValue(maxHeight, 'maxHeight'),
+    display,
+    position,
+    top: processValue(top, 'top'),
+    right: processValue(right, 'right'),
+    bottom: processValue(bottom, 'bottom'),
+    left: processValue(left, 'left'),
+    zIndex,
+    margin: processValue(margin, 'margin'),
+    padding: processValue(padding, 'padding'),
+    borderWidth: processValue(borderWidth, 'borderWidth'),
+    borderStyle,
+    borderColor,
+    borderRadius: processValue(borderRadius, 'borderRadius'),
+    boxShadow,
+    opacity,
+    objectFit,
+    objectPosition,
+  };
+
+  // Remove undefined values
+  Object.keys(computedStyles).forEach(key => {
+    if (computedStyles[key] === undefined) {
+      delete computedStyles[key];
+    }
+  });
+
+  // Don't render until client-side
+  if (!isClient) {
+    return (
+      <div style={computedStyles}>
+        <img
+          src={src}
+          alt={alt}
+          style={{ width: '100%', height: '100%', objectFit, objectPosition }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
-      ref={imageRef}
-      style={{
-        position,
-        top: processValue(top, 'top'),
-        left: processValue(left, 'left'),
-        zIndex,
-        margin: processValue(margin, 'margin'),
-        padding: processValue(padding, 'padding'),
-        border: getBorderStyle(), // Use the computed border
-        borderRadius: processValue(borderRadius, 'borderRadius'),
-        boxShadow,
-        opacity,
-        width: processValue(width, 'width'),
-        height: processValue(height, 'height'),
-        display: 'inline-block',
-        overflow: 'visible',
-        cursor: isResizing ? 'nwse-resize' : 'pointer',
+      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      ref={(el) => {
+        imageRef.current = el;
+        if (el) {
+          // Immediate connection when element is available
+          connect(drag(el));
+        }
       }}
+      style={{
+        position: 'relative',
+        cursor: 'default',
+        userSelect: 'none',
+        pointerEvents: 'auto',
+        ...computedStyles
+      }}
+      id={id}
       title={title}
-      hidden={hidden}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        updateBoxPosition();
+      }}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Image element */}
+      {/* Portal controls rendered outside this container to avoid overflow clipping */}
+      {isClient && isSelected && (
+        <PortalControls
+          boxPosition={boxPosition}
+          handleDragStart={handleDragStart}
+          handleResizeStart={handleResizeStart}
+          handleEditClick={() => setShowMediaLibrary(true)}
+        />
+      )}
+
+      {/* Main image */}
       <img
         src={src}
         alt={alt}
@@ -220,110 +339,244 @@ export const Image = ({
           objectFit,
           objectPosition,
           display: 'block',
-          userSelect: 'none',
-          border: getBorderStyle(), // Use the computed border
-        borderRadius: processValue(borderRadius, 'borderRadius'),
-          
+          pointerEvents: 'none' // Allow clicks to pass through to parent for selection
         }}
-        draggable={false}
         onError={(e) => {
+          // Fallback to placeholder if image fails to load
           e.target.src = placeholderURL;
         }}
       />
 
-      {/* Upload overlay when selected and no image */}
-      {selected && (!src || src.includes('placeholder')) && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '14px',
-            textAlign: 'center',
-            padding: '20px',
-            border: getBorderStyle(), // Use the computed border
-          }}
-        >
-          <Upload
-            accept="image/*"
-            showUploadList={false}
-            customRequest={customUpload}
-            onChange={handleImageUpload}
-          >
-            <div style={{ cursor: 'pointer' }}>
-              <UploadOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
-              <div>Click to upload image</div>
-              <div style={{ fontSize: '12px', opacity: 0.8 }}>
-                or drag and drop
-              </div>
-            </div>
-          </Upload>
-        </div>
-      )}
+      {/* Media Library Modal */}
+      <MediaLibrary
+        visible={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        onSelect={handleMediaSelect}
+        type="images" // Only show images for Image component
+        title="Select Image"
+      />
+    </div>
+  );
+};
 
-      {/* Edit button when selected */}
-      {selected && src && !src.includes('placeholder') && (
+// Portal Controls Component - renders outside of the Image to avoid overflow clipping
+const PortalControls = ({ 
+  boxPosition, 
+  handleDragStart, 
+  handleResizeStart,
+  handleEditClick 
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+
+  return createPortal(
+    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
+      {/* Control pills */}
+      <div style={{
+        position: 'absolute',
+        top: boxPosition.top - 35,
+        left: boxPosition.left,
+        display: 'flex',
+        pointerEvents: 'auto'
+      }}>
+        {/* Left - POS (Position/custom drag) */}
         <div
           style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            width: 28,
-            height: 28,
             background: '#52c41a',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            zIndex: 1000,
+            color: 'white',
+            padding: '6px 8px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'move',
             display: 'flex',
             alignItems: 'center',
+            gap: '2px',
+            minWidth: '40px',
             justifyContent: 'center',
+            transition: 'background 0.2s ease',
+            fontSize: '11px',
+            fontWeight: 'bold'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
+        </div>
+
+        {/* Right - EDIT (Open media library) */}
+        <div
+          style={{
+            background: '#faad14',
             color: 'white',
-            fontSize: 14,
-            border: '2px solid white',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+            padding: '6px 8px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '45px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease',
+            fontSize: '11px',
+            fontWeight: 'bold'
           }}
-          onClick={() => {
-            const newSrc = prompt('Enter image URL:', src);
-            if (newSrc) {
-              handleImageUrlChange(newSrc);
-            }
-          }}
+          onClick={handleEditClick}
           title="Change image"
         >
-          <EditOutlined />
+          🖼️ EDIT
         </div>
-      )}
+      </div>
 
       {/* Resize handles */}
-      {selected && isClient && resizeHandles.map(handle => (
-        <div
-          key={handle.key}
-          style={{
-            position: 'absolute',
-            width: 10,
-            height: 10,
-            background: '#1890ff',
-            border: '2px solid white',
-            borderRadius: '50%',
-            zIndex: 1001,
-            ...handle.style
-          }}
-        />
-      ))}
-    </div>
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+      />
+
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'n-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 's-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height / 2 - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'w-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height / 2 - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'e-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+      />
+    </div>,
+    document.body
   );
 };
 
 // CraftJS configuration
 Image.craft = {
+  displayName: "Image",
   props: {
     src: placeholderURL,
     alt: "Image",
@@ -337,21 +590,18 @@ Image.craft = {
     top: 0,
     left: 0,
     zIndex: 1,
-    margin: "none",
+    margin: "10px 0",
     padding: 0,
-    border: "none",
-    borderRadius: 0,
-    borderWidth: 0,        // ADD THIS
-    borderStyle: "solid",  // ADD THIS
-    borderColor: "#000000", // ADD THIS
+    borderWidth: 0,
+    borderStyle: "solid",
+    borderColor: "#e0e0e0",
+    borderRadius: 4,
     boxShadow: "none",
     opacity: 1,
     objectFit: "cover",
     objectPosition: "center",
     title: "",
     className: "",
-    hidden: false,
-    draggable: false,
   },
   rules: {
     canDrag: () => true,
@@ -385,7 +635,9 @@ Image.craft = {
         "padding",
         
         // Visual Styling
-        "border",
+        "borderWidth",
+        "borderStyle", 
+        "borderColor",
         "borderRadius",
         "boxShadow",
         "opacity",
