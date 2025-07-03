@@ -193,7 +193,7 @@ placeContent,
     id: node.id,
     selected: node.events.selected,
   }));
-  const { actions } = useEditor();
+  const { actions: editorActions } = useEditor();
 
   const cardRef = useRef(null);
   const dragRef = useRef(null);
@@ -310,8 +310,8 @@ placeContent,
       newWidth = Math.max(newWidth, 50);
       newHeight = Math.max(newHeight, 20);
       
-      // Update dimensions using Craft.js setProp
-      setProp(props => {
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(200).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -343,8 +343,8 @@ placeContent,
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
       
-      // Update position using Craft.js setProp
-      setProp(props => {
+      // Update position using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(200).setProp(nodeId, (props) => {
         props.left = currentLeft + deltaX;
         props.top = currentTop + deltaY;
       });

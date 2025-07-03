@@ -6,25 +6,29 @@ import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined } from
 import { useEditor } from "@craftjs/core";
 
 export const Topbar = () => {
-  const { actions, query, enabled, canUndo, canRedo } = useEditor((state, query) => ({
+  const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
     enabled: state.options.enabled,
     canUndo: query.history.canUndo(),
-    canRedo: query.history.canRedo()
+    canRedo: query.history.canRedo(),
+    // Monitor the actual state to trigger history updates
+    editorState: state
   }));
 
-  // Track history for dropdown
+  // Track history for dropdown - using Craft.js's internal history
   const [historyEntries, setHistoryEntries] = useState([]);
-  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
-  const [lastKnownState, setLastKnownState] = useState(null);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const [lastStateSnapshot, setLastStateSnapshot] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Enhanced helper function to detect what changed
+  // Helper function to detect what changed between states
   const detectChanges = (previousState, currentState) => {
     try {
-      const prev = previousState ? JSON.parse(previousState) : {};
-      const curr = JSON.parse(currentState);
+      if (!previousState || !currentState) return 'State change';
       
-      // Compare node counts first
+      const prev = typeof previousState === 'string' ? JSON.parse(previousState) : previousState;
+      const curr = typeof currentState === 'string' ? JSON.parse(currentState) : currentState;
+      
+      // Compare node counts
       const prevNodes = Object.keys(prev).length;
       const currNodes = Object.keys(curr).length;
       
@@ -47,7 +51,7 @@ export const Topbar = () => {
         }
         return 'Deleted component';
       } else {
-        // Check for property changes more thoroughly
+        // Check for property changes
         for (const nodeId in curr) {
           if (prev[nodeId]) {
             const prevNode = prev[nodeId];
@@ -79,17 +83,9 @@ export const Topbar = () => {
               
               return `Modified ${componentName}`;
             }
-            
-            // Check for parent/child relationship changes
-            const prevParent = prevNode.parent;
-            const currParent = currNode.parent;
-            if (prevParent !== currParent) {
-              const componentName = currNode.displayName || currNode.type?.resolvedName || 'Component';
-              return `Moved ${componentName}`;
-            }
           }
         }
-        return 'Updated layout';
+        return 'Layout updated';
       }
     } catch (error) {
       console.warn('Error detecting changes:', error);
@@ -97,48 +93,86 @@ export const Topbar = () => {
     }
   };
 
-  // Helper function to get a human-readable action description
-  const getActionDescription = (actionType, nodeId, props) => {
-    const actionMap = {
-      'ADD_NODE': 'Added component',
-      'DELETE_NODE': 'Deleted component', 
-      'MOVE_NODE': 'Moved component',
-      'SET_PROP': 'Modified properties',
-      'SET_CUSTOM_PROP': 'Updated styling',
-      'REPLACE_NODES': 'Replaced component'
-    };
-
-    const baseDescription = actionMap[actionType] || 'Performed action';
-    
-    // Try to get component name from nodeId if available
-    try {
-      const node = query.node(nodeId).get();
-      const componentName = node.data?.displayName || node.data?.name || 'Component';
-      return `${baseDescription} (${componentName})`;
-    } catch {
-      return baseDescription;
-    }
-  };
-
-  // Handle undo with history tracking
+  // Handle undo with history sync
   const handleUndo = () => {
     if (canUndo) {
       actions.history.undo();
-      
-      // Don't add undo/redo actions to our custom history
-      // The state change will be detected by the main history listener
+      setCurrentHistoryIndex(prev => Math.max(0, prev - 1));
     }
   };
 
-  // Handle redo with history tracking  
+  // Handle redo with history sync
   const handleRedo = () => {
     if (canRedo) {
       actions.history.redo();
-      
-      // Don't add undo/redo actions to our custom history
-      // The state change will be detected by the main history listener
+      setCurrentHistoryIndex(prev => Math.min(historyEntries.length - 1, prev + 1));
     }
   };
+
+  // Listen to state changes to build history entries
+  useEffect(() => {
+    const updateHistory = () => {
+      try {
+        const currentState = query.serialize();
+        const timestamp = new Date().toLocaleTimeString();
+        
+        // Initialize history if not done yet
+        if (!isInitialized) {
+          const initialEntry = {
+            id: 0,
+            description: 'Initial state',
+            timestamp: timestamp,
+            state: currentState
+          };
+          setHistoryEntries([initialEntry]);
+          setCurrentHistoryIndex(0);
+          setLastStateSnapshot(currentState);
+          setIsInitialized(true);
+          console.log('History initialized');
+          return;
+        }
+
+        // Check if state actually changed
+        if (lastStateSnapshot && lastStateSnapshot !== currentState) {
+          const changeDescription = detectChanges(lastStateSnapshot, currentState);
+          
+          // Add new entry
+          const newEntry = {
+            id: Date.now(), // Use timestamp for unique ID
+            description: changeDescription,
+            timestamp: timestamp,
+            state: currentState
+          };
+          
+          setHistoryEntries(prev => [...prev, newEntry]);
+          setCurrentHistoryIndex(prev => prev + 1);
+          setLastStateSnapshot(currentState);
+          
+          console.log('History entry added:', changeDescription);
+        }
+      } catch (error) {
+        console.warn('Could not update history:', error);
+      }
+    };
+
+    // Throttle updates to avoid excessive entries
+    const timeoutId = setTimeout(updateHistory, 300);
+    return () => clearTimeout(timeoutId);
+  }, [editorState, isInitialized]); // Monitor editor state changes
+
+  // Sync history index with undo/redo state
+  useEffect(() => {
+    if (isInitialized && historyEntries.length > 0) {
+      const currentState = query.serialize();
+      
+      // Find matching state in history
+      const matchingIndex = historyEntries.findIndex(entry => entry.state === currentState);
+      if (matchingIndex !== -1 && matchingIndex !== currentHistoryIndex) {
+        setCurrentHistoryIndex(matchingIndex);
+        console.log(`History index synced to: ${matchingIndex}`);
+      }
+    }
+  }, [canUndo, canRedo, isInitialized]);
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -162,94 +196,32 @@ export const Topbar = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [canUndo, canRedo, handleUndo, handleRedo]);
+  }, [canUndo, canRedo]);
 
-  // Listen to editor state changes to build history
-  useEffect(() => {
-    const updateHistory = () => {
-      try {
-        const currentState = query.serialize();
-        const timestamp = new Date().toLocaleTimeString();
-        
-        // Initialize with current state
-        if (!isInitialized) {
-          const initialEntry = {
-            id: 0,
-            description: 'Initial state',
-            timestamp: timestamp,
-            state: currentState
-          };
-          setHistoryEntries([initialEntry]);
-          setCurrentHistoryIndex(0);
-          setLastKnownState(currentState);
-          setIsInitialized(true);
-          return;
-        }
-
-        // Only track changes if state actually changed
-        if (lastKnownState && lastKnownState !== currentState) {
-          const changeDescription = detectChanges(lastKnownState, currentState);
-          
-          // Create new history entry
-          const newEntry = {
-            id: Date.now(), // Use timestamp as unique ID
-            description: changeDescription,
-            timestamp: timestamp,
-            state: currentState
-          };
-          
-          setHistoryEntries(prev => {
-            // Remove any future entries when making a new change
-            const currentEntries = prev.slice(0, currentHistoryIndex + 1);
-            return [...currentEntries, newEntry];
-          });
-          
-          setCurrentHistoryIndex(prev => prev + 1);
-          setLastKnownState(currentState);
-          
-          console.log('History updated:', changeDescription);
-        }
-      } catch (error) {
-        console.warn('Could not update history:', error);
-      }
-    };
-
-    // Debounce the history updates to avoid too many entries
-    const timeoutId = setTimeout(updateHistory, 500);
-    return () => clearTimeout(timeoutId);
-  }, [query, lastKnownState, detectChanges, isInitialized, currentHistoryIndex]);
-
-  // Separate effect to monitor undo/redo state changes
-  useEffect(() => {
-    if (isInitialized) {
-      const currentState = query.serialize();
-      
-      // If the current state matches a previous history entry, update the index
-      const matchingEntryIndex = historyEntries.findIndex(entry => entry.state === currentState);
-      if (matchingEntryIndex !== -1 && matchingEntryIndex !== currentHistoryIndex) {
-        setCurrentHistoryIndex(matchingEntryIndex);
-        setLastKnownState(currentState);
-      }
-    }
-  }, [canUndo, canRedo, query, isInitialized, historyEntries, currentHistoryIndex]);
-
-  // Jump to a specific point in history
+  // Jump to specific history point using Craft.js undo/redo
   const jumpToHistoryPoint = (targetIndex) => {
-    if (targetIndex < 0 || targetIndex >= historyEntries.length) return;
+    const currentIndex = currentHistoryIndex;
+    const diff = targetIndex - currentIndex;
     
-    const targetEntry = historyEntries[targetIndex];
-    if (!targetEntry.state) return;
+    if (diff === 0) return;
     
-    try {
-      // Deserialize and load the target state
-      actions.deserialize(targetEntry.state);
-      setCurrentHistoryIndex(targetIndex);
-      setLastKnownState(targetEntry.state);
-      
-      console.log(`Jumped to history point: ${targetEntry.description}`);
-    } catch (error) {
-      console.error('Failed to jump to history point:', error);
+    if (diff > 0) {
+      // Need to redo
+      for (let i = 0; i < diff; i++) {
+        if (query.history.canRedo()) {
+          actions.history.redo();
+        }
+      }
+    } else {
+      // Need to undo
+      for (let i = 0; i < Math.abs(diff); i++) {
+        if (query.history.canUndo()) {
+          actions.history.undo();
+        }
+      }
     }
+    
+    setCurrentHistoryIndex(targetIndex);
   };
 
   // Create history dropdown menu items
