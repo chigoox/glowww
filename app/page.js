@@ -116,14 +116,14 @@ useEffect(() => {
         )}
 
         {/* Main Editor Area */}
-        <div className="flex-1 flex min-w-0">
+        <div className="flex-1 flex ">
         {/* Canvas Area */}
-          <div className="flex-1 p-4 overflow-auto bg-gray-100 min-w-0">
+          <div className="flex-1 p-4 overflow-auto bg-gray-100">
             <div className="w-full max-w-none">
               <Frame className="w-full min-h-[600px]">
                 <Element 
-                  is={FlexBox} 
-                  padding={10} 
+                  is={Box} 
+                  padding={20} 
                   background="#ffffff" 
                   canvas
                   className="min-h-[600px] w-full"
@@ -140,7 +140,7 @@ useEffect(() => {
 
           {/* Right Sidebar - Style Menu */}
           {enabled && (
-            <div className="w-80 bg-white border-l border-gray-200 shadow-sm flex-shrink-0">
+            <div className="w-80 bg-white border-l border-gray-200 shadow-sm min-w-48 flex-shrink-0">
               <div className="h-full overflow-y-auto">
                 <StyleMenu />
               </div>

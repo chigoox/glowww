@@ -795,6 +795,9 @@ const PortalControls = ({
 GridBox.craft = {
   displayName: "GridBox",
   props: {
+    // Canvas property for containers
+    canvas: true,
+    
     // Layout & Position
     width: "auto",
     height: "auto",

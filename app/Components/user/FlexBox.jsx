@@ -791,6 +791,9 @@ const PortalControls = ({
 FlexBox.craft = {
   displayName: "FlexBox",
   props: {
+    // Canvas property for containers
+    canvas: true,
+    
     // Layout & Position
     width: "auto",
     height: "auto",
