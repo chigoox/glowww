@@ -3,6 +3,8 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 import { 
   Modal, 
   Input, 
@@ -697,6 +699,9 @@ export const Link = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeData, setResizeData] = useState(null);
 
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+
   // Function to update link position for portal positioning
   const updateLinkPosition = () => {
     if (linkRef.current) {
@@ -1097,6 +1102,7 @@ export const Link = ({
         onDoubleClick={handleDoubleClick}
         onMouseEnter={() => setTimeout(() => setIsHovered(true), 0)}
         onMouseLeave={() => setTimeout(() => setIsHovered(false), 0)}
+        onContextMenu={handleContextMenu}
         data-craft-id={nodeId}
       >
         {/* Link content */}
@@ -1141,6 +1147,14 @@ export const Link = ({
         onClose={() => setModalVisible(false)}
         nodeId={nodeId}
         currentProps={currentProps}
+      />
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
       />
     </>
   );

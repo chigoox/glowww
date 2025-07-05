@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import MediaLibrary from '../support/MediaLibrary';
+import ContextMenu from "../support/ContextMenu";
 
 const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -65,6 +66,46 @@ export const Image = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+
+  // Handle context menu (right-click)
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Calculate position to keep menu on screen
+    const menuWidth = 320;
+    const menuHeight = 500;
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Adjust if menu would go off right edge
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    
+    // Adjust if menu would go off bottom edge
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    // Ensure minimum margins
+    x = Math.max(10, x);
+    y = Math.max(10, y);
+    
+    setContextMenu({
+      visible: true,
+      x: x,
+      y: y
+    });
+  };
+
+  // Close context menu
+  const closeContextMenu = () => {
+    setContextMenu({ visible: false, x: 0, y: 0 });
+  };
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -318,6 +359,7 @@ export const Image = ({
         updateBoxPosition();
       }}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
       {isClient && isSelected && (
@@ -354,6 +396,14 @@ export const Image = ({
         onSelect={handleMediaSelect}
         type="images" // Only show images for Image component
         title="Select Image"
+      />
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
       />
     </div>
   );

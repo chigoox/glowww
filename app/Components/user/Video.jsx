@@ -5,6 +5,8 @@ import { useNode } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import { PlayCircleOutlined } from '@ant-design/icons';
 import MediaLibrary from '../support/MediaLibrary';
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 
 export const Video = ({
   // Video Source
@@ -57,7 +59,8 @@ export const Video = ({
   id = "",
   title = "",
 }) => {
-  const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+    id: node.id,
     selected: node.events.selected,
   }));
 
@@ -68,6 +71,9 @@ export const Video = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -429,6 +435,7 @@ export const Video = ({
         updateBoxPosition();
       }}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={handleContextMenu}
     >
       {/* Portal controls rendered outside this container */}
       {isClient && isSelected && (
@@ -473,6 +480,14 @@ export const Video = ({
         onSelect={handleMediaSelect}
         type="videos" // Only show videos for Video component
         title="Select Video"
+      />
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
       />
     </div>
   );

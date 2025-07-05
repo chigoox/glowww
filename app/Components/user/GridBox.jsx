@@ -3,6 +3,8 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 
 export const GridBox = ({
   // Layout & Position
@@ -200,6 +202,9 @@ placeContent,
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -542,6 +547,7 @@ placeContent,
         updateBoxPosition();
       }}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
       {isSelected && (
@@ -553,6 +559,14 @@ placeContent,
         />
       )}
       {children}
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
+      />
     </div>
   );
 };

@@ -3,6 +3,8 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor, Element } from "@craftjs/core";
 import { createPortal } from 'react-dom';
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -882,6 +884,9 @@ export const Carousel = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
 
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
     if (carouselRef.current) {
@@ -1147,6 +1152,7 @@ export const Carousel = ({
           updateBoxPosition();
         }}
         onMouseLeave={() => setIsHovered(false)}
+        onContextMenu={handleContextMenu}
       >
         {/* Portal controls rendered outside this container to avoid overflow clipping */}
         {isClient && selected && (
@@ -1289,6 +1295,14 @@ export const Carousel = ({
         onClose={() => setModalVisible(false)}
         carousel={getCurrentCarouselData()}
         onUpdate={updateCarousel}
+      />
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
       />
     </>
   );

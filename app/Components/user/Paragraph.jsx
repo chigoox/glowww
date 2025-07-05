@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
 import { EditOutlined } from '@ant-design/icons';
 import dynamic from 'next/dynamic';
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 
 // Dynamically import the Editor to avoid SSR issues
 const Editor = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
@@ -78,6 +80,9 @@ export const Paragraph = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [currentContent, setCurrentContent] = useState(content); // Track current editing content
+
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -353,6 +358,7 @@ export const Paragraph = ({
         updateBoxPosition();
       }}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={handleContextMenu}
       // Remove problematic onClick to allow proper Craft.js selection
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
@@ -429,6 +435,14 @@ export const Paragraph = ({
           }}
         />
       )}
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
+      />
     </div>
   );
 };

@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
+import ContextMenu from "../support/ContextMenu";
 
 export const FlexBox = ({
   // Layout & Position
@@ -200,6 +201,46 @@ placeContent,
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+
+  // Handle context menu (right-click)
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Calculate position to keep menu on screen
+    const menuWidth = 320;
+    const menuHeight = 500;
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Adjust if menu would go off right edge
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    
+    // Adjust if menu would go off bottom edge
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    // Ensure minimum margins
+    x = Math.max(10, x);
+    y = Math.max(10, y);
+    
+    setContextMenu({
+      visible: true,
+      x: x,
+      y: y
+    });
+  };
+
+  // Close context menu
+  const closeContextMenu = () => {
+    setContextMenu({ visible: false, x: 0, y: 0 });
+  };
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -538,6 +579,7 @@ placeContent,
         updateBoxPosition();
       }}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
       {isSelected && (
@@ -549,6 +591,14 @@ placeContent,
         />
       )}
       {children}
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
+      />
     </div>
   );
 };

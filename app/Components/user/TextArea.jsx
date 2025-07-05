@@ -3,6 +3,8 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { EditOutlined } from '@ant-design/icons';
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 
 export const TextArea = ({
   // TextArea Content
@@ -100,6 +102,9 @@ export const TextArea = ({
   const [localValue, setLocalValue] = useState(value);
   const [isFocused, setIsFocused] = useState(false);
   const [characterCount, setCharacterCount] = useState(value.length);
+
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   useEffect(() => {
     if (!isEditing) {
@@ -263,6 +268,7 @@ export const TextArea = ({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
       />
 
       {/* Edit indicator */}
@@ -327,6 +333,14 @@ export const TextArea = ({
           *
         </span>
       )}
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
+      />
     </div>
   );
 };

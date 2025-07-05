@@ -4,6 +4,8 @@ import { EditOutlined, UploadOutlined, CalendarOutlined, ClockCircleOutlined } f
 import { Element, useNode } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import { useState, useEffect, useRef } from "react";
+import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 import { 
   Button, 
   ColorPicker, 
@@ -152,7 +154,7 @@ export const FormInput = ({
     title = "",
     children
 }) => {
-    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected, id } = useNode((node) => ({
+    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected, id: nodeId } = useNode((node) => ({
         selected: node.events.selected,
         id: node.id
     }));
@@ -163,6 +165,9 @@ export const FormInput = ({
     const [isClient, setIsClient] = useState(false);
     const [isInputHovered, setIsInputHovered] = useState(false);
     const [inputPosition, setInputPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+
+    // Context menu functionality
+    const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
     const inputRef = useRef(null);
     // Function to update input position for portal positioning
@@ -333,6 +338,7 @@ export const FormInput = ({
             status: (hasError || showError) ? 'error' : undefined,
             onMouseEnter: () => setTimeout(() => setIsInputHovered(true), 0),
             onMouseLeave: () => setTimeout(() => setIsInputHovered(false), 0),
+            onContextMenu: handleContextMenu,
             onClick: (e) => {
                 e.stopPropagation();
                 // Defer position update to avoid render cycle issues
@@ -818,6 +824,14 @@ export const FormInput = ({
                     rangeStep
                 }} />
             </Modal>
+            
+            {/* Context Menu */}
+            <ContextMenu
+                visible={contextMenu.visible}
+                position={{ x: contextMenu.x, y: contextMenu.y }}
+                onClose={closeContextMenu}
+                targetNodeId={nodeId}
+            />
         </>
     );
 };

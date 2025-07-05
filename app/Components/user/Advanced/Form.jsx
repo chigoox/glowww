@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNode, useEditor, Element } from "@craftjs/core";
+import ContextMenu from "../../support/ContextMenu";
+import { useContextMenu } from "../../support/useContextMenu";
 import { 
   EditOutlined, 
   DatabaseOutlined, 
@@ -152,7 +154,7 @@ export const Form = ({
     actions: { setProp }, 
     selected: isSelected, 
     hovered: isHovered,
-    id 
+    id: nodeId 
   } = useNode((node) => ({
     selected: node.events.selected,
     hovered: node.events.hovered,
@@ -166,10 +168,25 @@ export const Form = ({
   const [formPosition, setFormPosition] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isPositionTracked, setIsPositionTracked] = useState(false);
 
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+
   // Use the correct Craft.js way to get descendants and detect FormInputs
-const { inputFields, descendants } = useEditor((state, query) => {
-  try {
-    const formDescendants = query.node(query.node(id).descendants()[0]).descendants();
+  const { inputFields, descendants } = useEditor((state, query) => {
+    try {
+      // Check if nodeId exists
+      if (!nodeId || !state.nodes[nodeId]) {
+        return { inputFields: [], descendants: [] };
+      }
+      
+      const currentNode = query.node(nodeId);
+      const nodeDescendants = currentNode.descendants();
+      
+      if (nodeDescendants.length === 0) {
+        return { inputFields: [], descendants: [] };
+      }
+      
+      const formDescendants = query.node(nodeDescendants[0]).descendants();
     
     const formInputs = formDescendants
       .map(nodeId => {
@@ -262,7 +279,7 @@ useEffect(() => {
 
 // Enhanced debugging
 useEffect(() => {
-  console.log(`📊 Form ${id} - Input fields with values:`, {
+  console.log(`📊 Form ${nodeId} - Input fields with values:`, {
     fieldCount: inputFields.length,
     fields: inputFields.map(f => ({
       labelText: f.labelText,
@@ -273,7 +290,7 @@ useEffect(() => {
     })),
     formData
   });
-}, [inputFields, formData, id]);
+}, [inputFields, formData, nodeId]);
 
   
   
@@ -342,11 +359,11 @@ useEffect(() => {
 
   // Log input detection for debugging
   useEffect(() => {
-    console.log(`📊 Form ${id} - Input fields detected:`, inputFields.length);
+    console.log(`📊 Form ${nodeId} - Input fields detected:`, inputFields.length);
     if (inputFields.length > 0) {
       console.log('Fields:', inputFields.map(f => ({ label: f.labelText, type: f.inputType })));
     }
-  }, [inputFields.length, id]);
+  }, [inputFields.length, nodeId]);
 
   // Form submission handler
   const handleSubmit = useCallback(async (e) => {
@@ -397,7 +414,7 @@ useEffect(() => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [inputFields, formData, databaseName, showSuccessMessage, successMessage, resetAfterSubmit, redirectAfterSubmit, redirectUrl, id, formTitle]);
+  }, [inputFields, formData, databaseName, showSuccessMessage, successMessage, resetAfterSubmit, redirectAfterSubmit, redirectUrl, nodeId, formTitle]);
 
   // Create new database
   const createNewDatabase = useCallback((name) => {
@@ -546,6 +563,7 @@ useEffect(() => {
           outlineOffset: isSelected || isHovered ? '2px' : '0',
         }}
         onSubmit={handleSubmit}
+        onContextMenu={handleContextMenu}
       >
         {/* Form Header */}
         <div style={{ marginBottom: 24 }}>
@@ -588,7 +606,7 @@ useEffect(() => {
         <Element 
           canvas 
           is={FormInputDropArea}
-          id={`${id}_drop_area`}
+          id={`${nodeId}_drop_area`}
           style={{ 
             marginBottom: 24,
             minHeight: '100px'
@@ -761,6 +779,14 @@ useEffect(() => {
           overflowY={overflowY}
         />
       </Modal>
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onClose={closeContextMenu}
+        targetNodeId={nodeId}
+      />
     </>
   );
 };

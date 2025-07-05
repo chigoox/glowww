@@ -13,6 +13,7 @@ import {
   message 
 } from 'antd';
 import { Text } from "./Text";
+import ContextMenu from "../support/ContextMenu";
 
 // Built-in action types
 const ACTION_TYPES = [
@@ -743,6 +744,46 @@ export const Button = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeData, setResizeData] = useState(null);
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+
+  // Handle context menu (right-click)
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Calculate position to keep menu on screen
+    const menuWidth = 320;
+    const menuHeight = 500;
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Adjust if menu would go off right edge
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    
+    // Adjust if menu would go off bottom edge
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    // Ensure minimum margins
+    x = Math.max(10, x);
+    y = Math.max(10, y);
+    
+    setContextMenu({
+      visible: true,
+      x: x,
+      y: y
+    });
+  };
+
+  // Close context menu
+  const closeContextMenu = () => {
+    setContextMenu({ visible: false, x: 0, y: 0 });
+  };
+
   // Function to update button position for portal positioning
   const updateButtonPosition = () => {
     if (buttonRef.current) {
@@ -1340,6 +1381,7 @@ export const Button = ({
         onDoubleClick={handleDoubleClick}
         onMouseEnter={() => setTimeout(() => setIsHovered(true), 0)}
         onMouseLeave={() => setTimeout(() => setIsHovered(false), 0)}
+        onContextMenu={handleContextMenu}
         data-craft-id={nodeId}
       >
         {/* Script indicator */}
@@ -1385,6 +1427,14 @@ export const Button = ({
         )}
         
         {children}
+        
+        {/* Context Menu */}
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
       </ButtonElement>
 
       {/* Button Portal Controls - show when button is hovered or component is selected */}

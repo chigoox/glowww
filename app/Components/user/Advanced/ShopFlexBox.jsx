@@ -5,6 +5,8 @@ import { Element, useNode } from "@craftjs/core";
 import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
 import { useEffect, useState } from "react";
 import { FlexBox } from "../FlexBox";
+import ContextMenu from "../../support/ContextMenu";
+import { useContextMenu } from "../../support/useContextMenu";
 
 
 // Mock Stripe Products Data
@@ -363,9 +365,13 @@ export const ShopFlexBox = ({
     className = "",
     children
 }) => {
-    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected, id: nodeId } = useNode((node) => ({
         selected: node.events.selected,
+        id: node.id,
     }));
+
+    // Context menu functionality
+    const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState({});
@@ -741,6 +747,7 @@ export const ShopFlexBox = ({
                     position: 'relative',
                     minHeight: displayProducts.length === 0 ? '200px' : 'auto'
                 }}
+                onContextMenu={handleContextMenu}
             >
                 {/* Edit Button */}
                 {isSelected && (
@@ -917,6 +924,14 @@ export const ShopFlexBox = ({
                     </div>
                 )}
             </Modal>
+            
+            {/* Context Menu */}
+            <ContextMenu
+                visible={contextMenu.visible}
+                position={{ x: contextMenu.x, y: contextMenu.y }}
+                onClose={closeContextMenu}
+                targetNodeId={nodeId}
+            />
         </>
     );
 };

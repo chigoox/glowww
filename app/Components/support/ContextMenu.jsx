@@ -34,9 +34,9 @@ const ContextMenu = ({
   targetNodeId 
 }) => {
   const { actions, query } = useEditor();
-  const { recentComponents, addToRecent } = useRecentComponents();
+  const { recentComponents, addToRecent, clearRecent } = useRecentComponents();
   
-  // All available components
+  // All available components - using displayName for consistency
   const allComponents = [
     { name: 'Box', component: Box, icon: '⬜' },
     { name: 'Text', component: Text, icon: 'T' },
@@ -45,7 +45,7 @@ const ContextMenu = ({
     { name: 'FlexBox', component: FlexBox, icon: '📦' },
     { name: 'GridBox', component: GridBox, icon: '▦' }
   ];
-  
+
   // Get display components (recent first, then fallback to default)
   const displayComponents = recentComponents.length > 0 
     ? recentComponents.slice(0, 3)
@@ -104,56 +104,224 @@ const ContextMenu = ({
   }, [visible, onClose]);
 
   // Add component to target node
-  const addComponent = (Component, componentName) => {
+  const addComponent = (componentNameOrClass, componentName) => {
     if (targetNodeId) {
       try {
-        const targetNode = query.node(targetNodeId).get();
-        // Check if target is canvas or can accept children
-        if (targetNode && targetNode.data) {
-          const isCanvas = targetNode.data.props && targetNode.data.props.canvas;
+        // Map component name to actual component class if needed
+        let Component;
+        if (typeof componentNameOrClass === 'string') {
+          // If we got a string (component name), map it to the actual component
+          const componentMap = {
+            'Box': Box,
+            'Text': Text,
+            'Button': CustomButton,
+            'Image': Image,
+            'FlexBox': FlexBox,
+            'GridBox': GridBox
+          };
+          Component = componentMap[componentNameOrClass];
+          componentName = componentNameOrClass;
+        } else {
+          // If we got the actual component class
+          Component = componentNameOrClass;
+        }
+
+        if (!Component) {
+          console.error('❌ Component not found for:', componentNameOrClass);
+          return;
+        }
+
+        // Find suitable parent for adding the component
+        const findSuitableParent = (startNodeId) => {
+          let currentId = startNodeId;
+          let attempts = 0;
           
-          if (isCanvas) {
-            const newNode = query.createNode(React.createElement(Component));
-            actions.add(newNode, targetNodeId);
-            
-            // Add to recent components
-            const componentInfo = allComponents.find(comp => comp.name === componentName);
-            if (componentInfo) {
-              addToRecent(componentInfo);
+          while (currentId && currentId !== 'ROOT' && attempts < 10) {
+            attempts++;
+            try {
+              const currentNode = query.node(currentId).get();
+              if (currentNode && currentNode.data) {
+                // Check multiple ways to determine if this can accept children
+                const hasCanvasProp = currentNode.data.props && currentNode.data.props.canvas;
+                const isKnownContainer = currentNode.data.displayName === 'Box' || 
+                                       currentNode.data.displayName === 'FlexBox' || 
+                                       currentNode.data.displayName === 'GridBox';
+                
+                // Check if the node has been set up to accept children via CraftJS rules
+                const canAcceptChildren = hasCanvasProp || isKnownContainer;
+                
+                console.log(`🔍 Checking node ${currentId} (${currentNode.data.displayName}):`, {
+                  hasCanvasProp,
+                  isKnownContainer,
+                  canAcceptChildren
+                });
+                
+                if (canAcceptChildren) {
+                  console.log('✅ Found suitable parent for component:', currentNode.data.displayName);
+                  return currentId;
+                }
+                
+                currentId = currentNode.data.parent;
+              } else {
+                console.warn('⚠️ Node or node data is null for:', currentId);
+                break;
+              }
+            } catch (error) {
+              console.warn('⚠️ Error checking node:', currentId, error);
+              break;
             }
-          } else {
-            console.warn('Cannot add component to this target - not a canvas');
+          }
+          
+          // Last resort: use ROOT
+          console.log('🔄 Using ROOT as fallback for component');
+          return 'ROOT';
+        };
+
+        const parentId = findSuitableParent(targetNodeId);
+        
+        // Create and add the new component with proper props for containers
+        let componentProps = {};
+        
+        // For container components, ensure canvas prop is set
+        if (componentName === 'Box' || componentName === 'FlexBox' || componentName === 'GridBox') {
+          componentProps.canvas = true;
+          if (componentName === 'Box') {
+            componentProps.padding = 10;
+          } else if (componentName === 'FlexBox') {
+            componentProps.display = 'flex';
+            componentProps.flexDirection = 'row';
+            componentProps.padding = 10;
+          } else if (componentName === 'GridBox') {
+            componentProps.display = 'grid';
+            componentProps.gridTemplateColumns = 'repeat(3, 1fr)';
+            componentProps.padding = 10;
           }
         }
+        
+        // Merge with any default craft props (but prioritize our container props)
+        if (Component.craft?.props) {
+          componentProps = { ...Component.craft.props, ...componentProps };
+        }
+        
+        const newNode = query.createNode(React.createElement(Component, componentProps));
+        actions.add(newNode, parentId);
+        
+        // Note: Recent components tracking is now handled automatically by useRecentComponents hook
+        console.log('✅ Successfully added component:', componentName, 'with props:', componentProps);
       } catch (error) {
-        console.error('Error adding component:', error);
+        console.error('❌ Error adding component:', error);
       }
     }
     onClose();
   };
 
-  // Context menu actions
+  // Helper function to generate unique IDs
+  const generateNodeId = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  };
+
+  // Helper function to serialize node tree for clipboard (based on GitHub issue solutions)
+  const serializeNodeForClipboard = (nodeId) => {
+    try {
+      const nodeTree = query.node(nodeId).toNodeTree();
+      
+      // Serialize the tree, converting component classes to strings
+      const serializedTree = JSON.parse(
+        JSON.stringify(nodeTree, (key, value) => {
+          if (key === 'type' && typeof value === 'function') {
+            return value.displayName || value.name; // Convert component class to string
+          }
+          if (['dom', 'rules', 'events'].includes(key)) {
+            return undefined; // Exclude non-serializable fields
+          }
+          return value;
+        })
+      );
+      
+      return serializedTree;
+    } catch (error) {
+      console.error('Error serializing node:', error);
+      return null;
+    }
+  };
+
+  // Helper function to clone node tree with new IDs (based on GitHub issue solutions)
+  const cloneNodeTree = (originalTree) => {
+    try {
+      // Component mapping
+      const componentMap = {
+        'Box': Box,
+        'Text': Text,
+        'Button': CustomButton,
+        'Image': Image,
+        'FlexBox': FlexBox,
+        'GridBox': GridBox
+      };
+
+      // Create mapping of old IDs to new IDs
+      const idMapping = {};
+      Object.keys(originalTree.nodes).forEach(oldId => {
+        idMapping[oldId] = generateNodeId();
+      });
+
+      // Clone the tree with new IDs
+      let clonedTreeJson = JSON.stringify(originalTree);
+      
+      // Replace all old IDs with new IDs
+      Object.entries(idMapping).forEach(([oldId, newId]) => {
+        const regex = new RegExp(`"${oldId}"`, 'g');
+        clonedTreeJson = clonedTreeJson.replace(regex, `"${newId}"`);
+      });
+
+      const clonedTree = JSON.parse(clonedTreeJson);
+      
+      // Update the root ID
+      clonedTree.rootNodeId = idMapping[originalTree.rootNodeId];
+
+      // Restore component types and reset events
+      Object.entries(clonedTree.nodes).forEach(([nodeId, node]) => {
+        const originalNodeId = Object.keys(idMapping).find(oldId => idMapping[oldId] === nodeId);
+        const originalNode = originalTree.nodes[originalNodeId];
+        
+        if (originalNode) {
+          // Restore the component type from string back to component class
+          if (typeof node.data.type === 'string') {
+            node.data.type = componentMap[node.data.type] || node.data.type;
+          }
+          
+          // Copy rules from original node
+          node.rules = originalNode.rules;
+          
+          // Reset events
+          node.events = {
+            dragged: false,
+            hovered: false,
+            selected: false
+          };
+        }
+      });
+
+      return clonedTree;
+    } catch (error) {
+      console.error('Error cloning node tree:', error);
+      return null;
+    }
+  };
+
+  // Context menu actions - FIXED with proper tree cloning
   const cutNode = () => {
     if (targetNodeId && targetNodeId !== 'ROOT') {
       try {
-        const node = query.node(targetNodeId).get();
-        if (node && node.data) {
-          // Store only the essential data needed to recreate the node
-          const nodeData = {
-            componentName: node.data.displayName, // Store component name instead of function
-            props: { ...node.data.props },
-            displayName: node.data.displayName,
-            custom: node.data.custom
-          };
-          
+        const serializedTree = serializeNodeForClipboard(targetNodeId);
+        if (serializedTree) {
           const clipboardData = {
             type: 'cut',
-            nodeData: nodeData,
-            sourceNodeId: targetNodeId
+            nodeTree: serializedTree,
+            sourceNodeId: targetNodeId,
+            timestamp: Date.now()
           };
-          
           localStorage.setItem('craft-clipboard', JSON.stringify(clipboardData));
-          console.log('Cut node to clipboard:', nodeData.displayName, clipboardData); // Debug log
+          console.log('✂️ Cut complete node tree with children to clipboard');
           actions.delete(targetNodeId);
         }
       } catch (error) {
@@ -166,24 +334,16 @@ const ContextMenu = ({
   const copyNode = () => {
     if (targetNodeId && targetNodeId !== 'ROOT') {
       try {
-        const node = query.node(targetNodeId).get();
-        if (node && node.data) {
-          // Store only the essential data needed to recreate the node
-          const nodeData = {
-            componentName: node.data.displayName, // Store component name instead of function
-            props: { ...node.data.props },
-            displayName: node.data.displayName,
-            custom: node.data.custom
-          };
-          
+        const serializedTree = serializeNodeForClipboard(targetNodeId);
+        if (serializedTree) {
           const clipboardData = {
             type: 'copy',
-            nodeData: nodeData,
-            sourceNodeId: targetNodeId
+            nodeTree: serializedTree,
+            sourceNodeId: targetNodeId,
+            timestamp: Date.now()
           };
-          
           localStorage.setItem('craft-clipboard', JSON.stringify(clipboardData));
-          console.log('Copied node to clipboard:', nodeData.displayName, clipboardData); // Debug log
+          console.log('📋 Copied complete node tree with children to clipboard');
         }
       } catch (error) {
         console.error('Error copying node:', error);
@@ -196,102 +356,80 @@ const ContextMenu = ({
     if (targetNodeId) {
       try {
         const clipboardData = localStorage.getItem('craft-clipboard');
-        console.log('Clipboard data:', clipboardData); // Debug log
-        console.log('LocalStorage keys:', Object.keys(localStorage)); // Debug log
         
         if (clipboardData) {
           const parsed = JSON.parse(clipboardData);
-          console.log('Parsed clipboard:', parsed); // Debug log
+          console.log('📌 Pasting node tree from clipboard');
           
-          // Handle the correct data structure - data is nested under nodeData
-          const nodeData = parsed.nodeData || parsed; // Support both formats
-          if (nodeData && nodeData.componentName) {
-            // Map component name to actual component
-            const componentMap = {
-              'Box': Box,
-              'Text': Text,
-              'Button': CustomButton,
-              'Image': Image,
-              'FlexBox': FlexBox,
-              'GridBox': GridBox
-            };
+          if (parsed.nodeTree) {
+            // Clone the tree with new IDs
+            const clonedTree = cloneNodeTree(parsed.nodeTree);
             
-            const ComponentClass = componentMap[nodeData.componentName];
-            if (!ComponentClass) {
-              console.error('Unknown component:', nodeData.componentName);
-              return;
-            }
-            
-            // Check if target node can accept children
-            const targetNode = query.node(targetNodeId).get();
-            if (targetNode && targetNode.data) {
-              // Check both canvas prop and canDrop rule
-              const isCanvas = targetNode.data.props && targetNode.data.props.canvas;
-              const canDrop = query.node(targetNodeId).isDraggable() !== false; // Basic check
-              
-              console.log('Target is canvas:', isCanvas, 'Can drop:', canDrop, 'Target node:', targetNode.data.displayName); // Debug log
-              
-              // Try to paste into current target first
-              if (isCanvas || targetNode.data.displayName === 'Box' || targetNode.data.displayName === 'FlexBox' || targetNode.data.displayName === 'GridBox') {
-                try {
-                  const newNode = query.createNode(React.createElement(ComponentClass, nodeData.props));
-                  actions.add(newNode, targetNodeId);
-                  console.log('Successfully pasted node into:', targetNode.data.displayName); // Debug log
-                  onClose();
-                  return;
-                } catch (error) {
-                  console.warn('Failed to paste into target, trying parent:', error.message);
-                }
-              }
-              
-              // If target can't accept children, try to find parent that can
-              console.warn('Cannot paste into this target - trying parent containers');
-              let parentId = targetNode.data.parent;
-              let attempts = 0;
-              while (parentId && parentId !== 'ROOT' && attempts < 5) {
-                attempts++;
-                const parentNode = query.node(parentId).get();
-                if (parentNode && parentNode.data) {
-                  const parentIsCanvas = parentNode.data.props && parentNode.data.props.canvas;
-                  const parentCanAccept = parentNode.data.displayName === 'Box' || 
-                                        parentNode.data.displayName === 'FlexBox' || 
-                                        parentNode.data.displayName === 'GridBox' ||
-                                        parentIsCanvas;
-                  
-                  if (parentCanAccept) {
-                    try {
-                      const newNode = query.createNode(React.createElement(ComponentClass, nodeData.props));
-                      actions.add(newNode, parentId);
-                      console.log('Pasted into parent container:', parentNode.data.displayName); // Debug log
-                      onClose();
-                      return;
-                    } catch (error) {
-                      console.warn('Failed to paste into parent, trying next level:', error.message);
+            if (clonedTree) {
+              // Find suitable parent for pasting
+              const findSuitableParent = (startNodeId) => {
+                let currentId = startNodeId;
+                let attempts = 0;
+                
+                while (currentId && currentId !== 'ROOT' && attempts < 10) {
+                  attempts++;
+                  try {
+                    const currentNode = query.node(currentId).get();
+                    if (currentNode && currentNode.data) {
+                      const isCanvas = currentNode.data.props && currentNode.data.props.canvas;
+                      const canAcceptChildren = isCanvas || 
+                                              currentNode.data.displayName === 'Box' || 
+                                              currentNode.data.displayName === 'FlexBox' || 
+                                              currentNode.data.displayName === 'GridBox';
+                      
+                      if (canAcceptChildren) {
+                        console.log('✅ Found suitable parent:', currentNode.data.displayName);
+                        return currentId;
+                      }
+                      
+                      currentId = currentNode.data.parent;
+                    } else {
+                      break;
                     }
+                  } catch (error) {
+                    console.warn('⚠️ Error checking node:', currentId, error);
+                    break;
                   }
-                  parentId = parentNode.data.parent;
                 }
-              }
+                
+                // Last resort: use ROOT
+                console.log('🔄 Using ROOT as fallback');
+                return 'ROOT';
+              };
+
+              const pasteParentId = findSuitableParent(targetNodeId);
               
-              // Last resort: try to paste into ROOT if it's the only option
-              if (parentId === 'ROOT') {
-                try {
-                  const newNode = query.createNode(React.createElement(ComponentClass, nodeData.props));
-                  actions.add(newNode, 'ROOT');
-                  console.log('Pasted into ROOT as last resort'); // Debug log
-                } catch (error) {
-                  console.error('Failed to paste anywhere:', error);
-                }
+              // Add the cloned tree
+              actions.addNodeTree(clonedTree, pasteParentId);
+              
+              // Use the fix from GitHub issues - serialize/deserialize to ensure proper state
+              setTimeout(() => {
+                actions.deserialize(query.serialize());
+                actions.selectNode(clonedTree.rootNodeId);
+                console.log('✅ Successfully pasted node tree with all children');
+              }, 100);
+              
+              // If it was a cut operation, clean up clipboard
+              if (parsed.type === 'cut') {
+                localStorage.removeItem('craft-clipboard');
+                console.log('🗑️ Cleared clipboard after cut operation');
               }
+            } else {
+              console.error('❌ Failed to clone node tree');
             }
           } else {
-            console.warn('Invalid clipboard data structure - missing componentName');
+            console.warn('⚠️ Invalid clipboard data - no nodeTree found');
           }
         } else {
-          console.warn('No clipboard data found');
+          console.warn('⚠️ No clipboard data found');
         }
       } catch (error) {
-        console.error('Error pasting node:', error);
+        console.error('❌ Error pasting node:', error);
       }
     }
     onClose();
@@ -303,32 +441,39 @@ const ContextMenu = ({
         const node = query.node(targetNodeId).get();
         if (node && node.data && node.data.parent) {
           const parentId = node.data.parent;
+          const parentNode = query.node(parentId).get();
           
-          // Map component name to actual component
-          const componentMap = {
-            'Box': Box,
-            'Text': Text,
-            'Button': CustomButton,
-            'Image': Image,
-            'FlexBox': FlexBox,
-            'GridBox': GridBox
-          };
-          
-          const ComponentClass = componentMap[node.data.displayName];
-          if (ComponentClass) {
-            // Create a new node with the same component and props
-            const newNode = query.createNode(React.createElement(
-              ComponentClass,
-              { ...node.data.props }
-            ));
-            actions.add(newNode, parentId);
-            console.log('Duplicated node:', node.data.displayName);
-          } else {
-            console.error('Unknown component for duplication:', node.data.displayName);
+          if (parentNode) {
+            // Get the index where to insert the duplicate
+            const nodeIndex = parentNode.data.nodes.indexOf(targetNodeId);
+            
+            // Serialize the node tree
+            const serializedTree = serializeNodeForClipboard(targetNodeId);
+            
+            if (serializedTree) {
+              // Clone the tree with new IDs
+              const clonedTree = cloneNodeTree(serializedTree);
+              
+              if (clonedTree) {
+                // Add the cloned tree next to the original
+                actions.addNodeTree(clonedTree, parentId, nodeIndex + 1);
+                
+                // Use the fix from GitHub issues - serialize/deserialize to ensure proper state
+                setTimeout(() => {
+                  actions.deserialize(query.serialize());
+                  actions.selectNode(clonedTree.rootNodeId);
+                  console.log('✅ Successfully duplicated node tree with all children');
+                }, 100);
+              } else {
+                console.error('❌ Failed to clone node tree for duplication');
+              }
+            } else {
+              console.error('❌ Failed to serialize node for duplication');
+            }
           }
         }
       } catch (error) {
-        console.error('Error duplicating node:', error);
+        console.error('❌ Error duplicating node:', error);
       }
     }
     onClose();
@@ -455,7 +600,7 @@ const ContextMenu = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        zIndex: 10000,
+        zIndex: 99998,
         pointerEvents: 'none'
       }}
     >
@@ -470,7 +615,8 @@ const ContextMenu = ({
           boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
           borderRadius: 8,
           overflow: 'hidden',
-          border: '1px solid #e8e8e8'
+          border: '1px solid #e8e8e8',
+          zIndex: 99999 // Ensure tooltips appear above everything
         }}
         bodyStyle={{ padding: 12 }}
       >
@@ -505,9 +651,26 @@ const ContextMenu = ({
             marginBottom: 6,
             fontWeight: 500,
             textTransform: 'uppercase',
-            letterSpacing: 0.5
+            letterSpacing: 0.5,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            Quick Add
+            Quick Add ({recentComponents.length > 0 ? 'Recent' : 'Default'})
+            {/* Debug: Clear recent button */}
+            {recentComponents.length > 0 && (
+              <Button 
+                size="small" 
+                type="text" 
+                style={{ fontSize: 8, padding: '0 4px', height: 16 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearRecent();
+                }}
+              >
+                Clear
+              </Button>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {displayComponents.map((comp, index) => (
@@ -523,10 +686,18 @@ const ContextMenu = ({
                     justifyContent: 'center',
                     fontSize: 14,
                     fontWeight: 'bold',
-                    background: '#f5f5f5',
-                    border: '1px solid #d9d9d9'
+                    background: recentComponents.length > 0 && index < recentComponents.length ? '#e6f7ff' : '#f5f5f5',
+                    border: recentComponents.length > 0 && index < recentComponents.length ? '1px solid #91d5ff' : '1px solid #d9d9d9'
                   }}
-                  onClick={() => addComponent(comp.component, comp.name)}
+                  onClick={() => {
+                    // For recent components, we only have name and icon, so pass the name
+                    if (recentComponents.length > 0 && index < recentComponents.length) {
+                      addComponent(comp.name, comp.name);
+                    } else {
+                      // For default components, we have the actual component class
+                      addComponent(comp.component, comp.name);
+                    }
+                  }}
                 >
                     {comp.icon}
                 </Button>
