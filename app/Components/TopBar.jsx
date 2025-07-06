@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Switch, Button, Dropdown, Menu, Tooltip } from "antd";
 import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { useEditor } from "@craftjs/core";
+import SaveLoadExport from "./support/SaveLoadExport";
 
 export const Topbar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
@@ -365,27 +366,31 @@ export const Topbar = () => {
           </div>
         </div>
 
-        {/* Serialize Button */}
+        {/* Save/Load/Export and Serialize Controls */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs text-gray-600 hidden md:inline">
-            History: {historyEntries.length} entries
-          </span>
-          <Button 
-            onClick={() => {
-              try {
-                const serialized = query.serialize();
-                console.log('Serialized JSON:', serialized);
-                console.log('Current history entries:', historyEntries);
-              } catch (error) {
-                console.error('Error serializing:', error);
-              }
-            }}
-            size="small" 
-            type="default" 
-            danger
-          >
-            Serialize JSON to console
-          </Button>
+          <SaveLoadExport />
+          
+          <div className="border-l border-gray-300 pl-2">
+            <span className="text-xs text-gray-600 hidden md:inline">
+              History: {historyEntries.length} entries
+            </span>
+            <Button 
+              onClick={() => {
+                try {
+                  const serialized = query.serialize();
+                  console.log('Serialized JSON:', serialized);
+                  console.log('Current history entries:', historyEntries);
+                } catch (error) {
+                  console.error('Error serializing:', error);
+                }
+              }}
+              size="small" 
+              type="default" 
+              danger
+            >
+              Serialize JSON to console
+            </Button>
+          </div>
         </div>
       </div>
     </div>

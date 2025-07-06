@@ -16,7 +16,8 @@ import {
   DeleteOutlined,
   LockOutlined,
   UnlockOutlined,
-  SnippetsOutlined
+  SnippetsOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { useEditor, useNode } from '@craftjs/core';
 import { Box } from '../user/Box';
@@ -25,6 +26,14 @@ import { Button as CustomButton } from '../user/Button';
 import { Image } from '../user/Image';
 import { FlexBox } from '../user/FlexBox';
 import { GridBox } from '../user/GridBox';
+import { Paragraph } from '../user/Paragraph';
+import { Video } from '../user/Video';
+import { Carousel } from '../user/Carousel';
+import { FormInput } from '../user/Input';
+import { TextArea } from '../user/TextArea';
+import { Link } from '../user/Link';
+import { Form } from '../user/Advanced/Form';
+import { ShopFlexBox } from '../user/Advanced/ShopFlexBox';
 import { useRecentComponents } from './useRecentComponents';
 
 const ContextMenu = ({ 
@@ -35,6 +44,8 @@ const ContextMenu = ({
 }) => {
   const { actions, query } = useEditor();
   const { recentComponents, addToRecent, clearRecent } = useRecentComponents();
+  const menuRef = useRef(null);
+  const drawerRef = useRef(null);
   
   // All available components - using displayName for consistency
   const allComponents = [
@@ -43,16 +54,28 @@ const ContextMenu = ({
     { name: 'Button', component: CustomButton, icon: '🔘' },
     { name: 'Image', component: Image, icon: '🖼️' },
     { name: 'FlexBox', component: FlexBox, icon: '📦' },
-    { name: 'GridBox', component: GridBox, icon: '▦' }
+    { name: 'GridBox', component: GridBox, icon: '▦' },
+    { name: 'Paragraph', component: Paragraph, icon: '¶' },
+    { name: 'Video', component: Video, icon: '🎥' },
+    { name: 'Carousel', component: Carousel, icon: '🎠' },
+    { name: 'FormInput', component: FormInput, icon: '📝' },
+    { name: 'TextArea', component: TextArea, icon: '📄' },
+    { name: 'Link', component: Link, icon: '🔗' },
+    { name: 'Form', component: Form, icon: '📋' },
+    { name: 'ShopFlexBox', component: ShopFlexBox, icon: '🛒' }
   ];
 
-  // Get display components (recent first, then fallback to default)
-  const displayComponents = recentComponents.length > 0 
-    ? recentComponents.slice(0, 3)
-    : allComponents.slice(0, 3);
   
   const [activeControl, setActiveControl] = useState(null);
   const [lockedControls, setLockedControls] = useState(new Set());
+  const [isRecentLocked, setIsRecentLocked] = useState(false);
+  const [showComponentDrawer, setShowComponentDrawer] = useState(false);
+  const [selectedComponentForSlot, setSelectedComponentForSlot] = useState(null);
+  const [manualSlots, setManualSlots] = useState({
+    1: 'Box',
+    2: 'Text', 
+    3: 'Button'
+  }); // Manual slot assignments when locked
   const [styleValues, setStyleValues] = useState({
     borderRadius: 0,
     padding: 4,
@@ -63,7 +86,36 @@ const ContextMenu = ({
     backgroundColor: '#ffffff'
   });
 
-  const menuRef = useRef(null);
+
+
+
+
+  // Get display components based on lock status and manual/recent selections
+  const displayComponents = (() => {
+    if (isRecentLocked) {
+      // Use manual slot assignments, fill empty slots with recent components
+      const slots = [1, 2, 3];
+      return slots.map(slotNum => {
+        if (manualSlots[slotNum]) {
+          // Return manually assigned component
+          return allComponents.find(comp => comp.name === manualSlots[slotNum]);
+        } else if (recentComponents.length >= slotNum) {
+          // Fill empty slots with recent components
+          return recentComponents[slotNum - 1];
+        } else {
+          // Fallback to default components
+          return allComponents[slotNum - 1];
+        }
+      }).filter(Boolean);
+    } else {
+      // When unlocked, use recent components or fallback to defaults
+      if (recentComponents.length > 0) {
+        return recentComponents.slice(0, 3);
+      } else {
+        return allComponents.slice(0, 3);
+      }
+    }
+  })();
 
   // Get current node props to initialize slider values
   useEffect(() => {
@@ -92,16 +144,63 @@ const ContextMenu = ({
   // Handle clicks outside menu
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        onClose();
+      // Check if click is within main menu
+      if (menuRef.current && menuRef.current.contains(event.target)) {
+        return;
       }
+      
+      // Check if click is within component drawer (if open)
+      if (showComponentDrawer && drawerRef.current && drawerRef.current.contains(event.target)) {
+        return;
+      }
+      
+      // If click is outside both menu and drawer, close the menu
+      onClose();
     };
 
     if (visible) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [visible, onClose]);
+  }, [visible, onClose, showComponentDrawer]);
+
+  // Handle recent components lock toggle
+  const toggleRecentLock = () => {
+    setIsRecentLocked(prev => !prev);
+  };
+
+  // Handle slot assignment in drawer
+  const assignComponentToSlot = (componentName, slotNumber) => {
+    setManualSlots(prev => ({
+      ...prev,
+      [slotNumber]: componentName
+    }));
+    setSelectedComponentForSlot(null); // Clear selection after assignment
+  };
+
+  // Handle component drawer visibility toggle
+  const toggleComponentDrawer = () => {
+    setShowComponentDrawer(prev => !prev);
+    setSelectedComponentForSlot(null); // Clear selection when closing
+  };
+
+  // Centralized component mapping - single source of truth
+  const getComponentMap = () => ({
+    'Box': Box,
+    'Text': Text,
+    'Button': CustomButton,
+    'Image': Image,
+    'FlexBox': FlexBox,
+    'GridBox': GridBox,
+    'Paragraph': Paragraph,
+    'Video': Video,
+    'Carousel': Carousel,
+    'FormInput': FormInput,
+    'TextArea': TextArea,
+    'Link': Link,
+    'Form': Form,
+    'ShopFlexBox': ShopFlexBox
+  });
 
   // Add component to target node
   const addComponent = (componentNameOrClass, componentName) => {
@@ -111,14 +210,7 @@ const ContextMenu = ({
         let Component;
         if (typeof componentNameOrClass === 'string') {
           // If we got a string (component name), map it to the actual component
-          const componentMap = {
-            'Box': Box,
-            'Text': Text,
-            'Button': CustomButton,
-            'Image': Image,
-            'FlexBox': FlexBox,
-            'GridBox': GridBox
-          };
+          const componentMap = getComponentMap();
           Component = componentMap[componentNameOrClass];
           componentName = componentNameOrClass;
         } else {
@@ -203,8 +295,10 @@ const ContextMenu = ({
           componentProps = { ...Component.craft.props, ...componentProps };
         }
         
-        const newNode = query.createNode(React.createElement(Component, componentProps));
-        actions.add(newNode, parentId);
+        // Use the new parseReactElement method instead of deprecated createNode
+        const reactElement = React.createElement(Component, componentProps);
+        const nodeTree = query.parseReactElement(reactElement).toNodeTree();
+        actions.addNodeTree(nodeTree, parentId);
         
         // Note: Recent components tracking is now handled automatically by useRecentComponents hook
         console.log('✅ Successfully added component:', componentName, 'with props:', componentProps);
@@ -248,15 +342,8 @@ const ContextMenu = ({
   // Helper function to clone node tree with new IDs (based on GitHub issue solutions)
   const cloneNodeTree = (originalTree) => {
     try {
-      // Component mapping
-      const componentMap = {
-        'Box': Box,
-        'Text': Text,
-        'Button': CustomButton,
-        'Image': Image,
-        'FlexBox': FlexBox,
-        'GridBox': GridBox
-      };
+      // Component mapping - Use centralized mapping
+      const componentMap = getComponentMap();
 
       // Create mapping of old IDs to new IDs
       const idMapping = {};
@@ -600,7 +687,7 @@ const ContextMenu = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        zIndex: 99998,
+        zIndex: 99999,
         pointerEvents: 'none'
       }}
     >
@@ -616,7 +703,7 @@ const ContextMenu = ({
           borderRadius: 8,
           overflow: 'hidden',
           border: '1px solid #e8e8e8',
-          zIndex: 99999 // Ensure tooltips appear above everything
+          zIndex: 999 // Ensure tooltips appear above everything
         }}
         bodyStyle={{ padding: 12 }}
       >
@@ -625,10 +712,12 @@ const ContextMenu = ({
           position: 'absolute', 
           top: 12, 
           right: 12,
-          zIndex: 1
+          zIndex: 99999999999
         }}>
           <ColorPicker
+          zIndex={99999}
             value={styleValues.backgroundColor}
+            
             onChange={(color) => {
               const colorStr = color.toHexString();
               setStyleValues(prev => ({ ...prev, backgroundColor: colorStr }));
@@ -638,7 +727,9 @@ const ContextMenu = ({
             size="small"
             style={{
               width: 24,
-              height: 24
+              height: 24,
+              zIndex: 99999999999,
+
             }}
           />
         </div>
@@ -656,25 +747,68 @@ const ContextMenu = ({
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            Quick Add ({recentComponents.length > 0 ? 'Recent' : 'Default'})
-            {/* Debug: Clear recent button */}
-            {recentComponents.length > 0 && (
+            Quick Add ({isRecentLocked ? 'Manual' : 'Recent'})
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              {/* Lock/Unlock button for recent components */}
               <Button 
                 size="small" 
                 type="text" 
-                style={{ fontSize: 8, padding: '0 4px', height: 16 }}
+                style={{ 
+                  fontSize: 10, 
+                  padding: '2px 4px', 
+                  height: 16,
+                  color: isRecentLocked ? '#1890ff' : '#8c8c8c',
+                  fontWeight: 'bold'
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  clearRecent();
+                  toggleRecentLock();
                 }}
+                title={isRecentLocked ? 'Switch to Auto (Recent components)' : 'Switch to Manual (Custom slots)'}
               >
-                Clear
+                {isRecentLocked ? 'M' : 'A'}
               </Button>
-            )}
+              
+              {/* Component selection drawer toggle */}
+              <Button 
+                size="small" 
+                type="text" 
+                style={{ 
+                  fontSize: 10, 
+                  padding: '2px 4px', 
+                  height: 16,
+                  color: showComponentDrawer ? '#1890ff' : '#8c8c8c'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleComponentDrawer();
+                }}
+                title="Toggle component selector"
+              >
+                <AppstoreOutlined />
+              </Button>
+              
+              {/* Debug: Clear recent button */}
+              {recentComponents.length > 0 && !isRecentLocked && (
+                <Button 
+                  size="small" 
+                  type="text" 
+                  style={{ fontSize: 8, padding: '0 4px', height: 16 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearRecent();
+                  }}
+                  title="Clear recent components"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {displayComponents.map((comp, index) => (
-              <Tooltip key={comp.name} title={`Add ${comp.name}`}>
+                    
+              <Tooltip key={comp.name} zIndex={99999} title={`Add ${comp.name}`}>
                 <Button
                   shape="circle"
                   size="small"
@@ -722,19 +856,19 @@ const ContextMenu = ({
             display: 'flex', 
             gap: 4
           }}>
-            <Tooltip title="Cut">
+            <Tooltip zIndex={99999} title="Cut">
               <Button size="small" icon={<ScissorOutlined />} onClick={cutNode} style={{ width: 28, height: 28 }} />
             </Tooltip>
-            <Tooltip title="Copy">
+            <Tooltip zIndex={99999} title="Copy">
               <Button size="small" icon={<CopyOutlined />} onClick={copyNode} style={{ width: 28, height: 28 }} />
             </Tooltip>
-            <Tooltip title="Paste">
+            <Tooltip zIndex={99999} title="Paste">
               <Button size="small" icon={<SnippetsOutlined />} onClick={pasteNode} style={{ width: 28, height: 28 }} />
             </Tooltip>
-            <Tooltip title="Duplicate">
+            <Tooltip zIndex={99999} title="Duplicate">
               <Button size="small" icon={<CopyFilled />} onClick={duplicateNode} style={{ width: 28, height: 28 }} />
             </Tooltip>
-            <Tooltip title="Delete">
+            <Tooltip zIndex={99999} title="Delete">
               <Button size="small" icon={<DeleteOutlined />} onClick={deleteNode} danger style={{ width: 28, height: 28 }} />
             </Tooltip>
           </div>
@@ -762,7 +896,7 @@ const ContextMenu = ({
           }}>
             {controlButtons.map((control) => (
               <div key={control.key} style={{ position: 'relative' }}>
-                <Tooltip title={control.label}>
+                <Tooltip zIndex={99999} title={control.label}>
                   <Button
                     size="small"
                     type={activeControl === control.key ? 'primary' : 'default'}
@@ -847,6 +981,158 @@ const ContextMenu = ({
           )}
         </div>
       </Card>
+
+      {/* Component Selection Drawer */}
+      {showComponentDrawer && (
+        <Card
+          ref={drawerRef}
+          style={{
+            position: 'absolute',
+            top: position.y,
+            left: position.x + 230, // Position to the right of main menu
+            width: 300,
+            maxHeight: 400,
+            overflowY: 'auto',
+            pointerEvents: 'auto',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            borderRadius: 8,
+            border: '1px solid #e8e8e8',
+            zIndex: 99999999999999,
+            background: '#fff'
+          }}
+          bodyStyle={{ padding: 12 }}
+          onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+          onMouseLeave={() => {
+            // Close drawer when mouse leaves
+            setShowComponentDrawer(false);
+            setSelectedComponentForSlot(null); // Also clear selection
+          }}
+        >
+          <div style={{ 
+            fontSize: 12, 
+            fontWeight: 600, 
+            marginBottom: 12,
+            color: '#262626',
+            borderBottom: '1px solid #f0f0f0',
+            paddingBottom: 8
+          }}>
+            Component Slot Assignment
+          </div>
+          
+          {/* Slot indicators */}
+          <div style={{ 
+            display: 'flex', 
+            gap: 8, 
+            marginBottom: 12,
+            padding: 8,
+            background: '#f8f8f8',
+            borderRadius: 6
+          }}>
+            {[1, 2, 3].map(slotNum => {
+              const assignedComponent = manualSlots[slotNum];
+              const component = allComponents.find(comp => comp.name === assignedComponent);
+              return (
+                <Button
+                  key={slotNum} 
+                  style={{
+                    flex: 1,
+                    height: 60,
+                    padding: 8,
+                    background: selectedComponentForSlot && !assignedComponent ? '#fff7e6' : '#fff',
+                    border: selectedComponentForSlot && !assignedComponent ? '2px dashed #ffa940' : '1px solid #e8e8e8',
+                    borderRadius: 4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 10,
+                    cursor: selectedComponentForSlot ? 'pointer' : 'default'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (selectedComponentForSlot) {
+                      assignComponentToSlot(selectedComponentForSlot, slotNum);
+                    }
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Slot {slotNum}</div>
+                  <div style={{ fontSize: 16, marginBottom: 2 }}>
+                    {component?.icon || (selectedComponentForSlot ? '📍' : '❓')}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#666' }}>
+                    {assignedComponent || (selectedComponentForSlot ? 'Click here' : 'Empty')}
+                  </div>
+                </Button>
+              );
+            })}
+          </div>
+          
+          {/* Component selection */}
+          <div style={{ 
+            fontSize: 10, 
+            color: '#666', 
+            marginBottom: 8,
+            fontWeight: 500
+          }}>
+            {selectedComponentForSlot 
+              ? `Selected: ${selectedComponentForSlot} - Click a slot to assign` 
+              : 'Click a component to select it:'
+            }
+          </div>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(4, 1fr)', 
+            gap: 6 
+          }}>
+            {allComponents.map((comp) => (
+              <Button
+                key={comp.name}
+                size="small"
+                style={{
+                  height: 50,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                  background: selectedComponentForSlot === comp.name ? '#e6f7ff' : '#fafafa',
+                  border: selectedComponentForSlot === comp.name ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                  borderRadius: 4,
+                  fontSize: 8,
+                  transition: 'all 0.2s ease'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedComponentForSlot(selectedComponentForSlot === comp.name ? null : comp.name);
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{comp.icon}</span>
+                <span>{comp.name}</span>
+              </Button>
+            ))}
+          </div>
+          
+          <div style={{ 
+            marginTop: 12, 
+            paddingTop: 8, 
+            borderTop: '1px solid #f0f0f0',
+            display: 'flex',
+            gap: 8
+          }}>
+            <Button 
+              size="small" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setManualSlots({ 1: null, 2: null, 3: null });
+              }}
+              style={{ flex: 1 }}
+            >
+              Clear All Slots
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>,
     document.body
   );
