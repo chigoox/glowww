@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Glowww Project Debug Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        h1, h2, h3 {
+            color: #2563eb;
+        }
+        h2 {
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 8px;
+            margin-top: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        pre {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        button.danger {
+            background: #dc2626;
+        }
+        button.danger:hover {
+            background: #b91c1c;
+        }
+        button.secondary {
+            background: #4b5563;
+        }
+        button.secondary:hover {
+            background: #374151;
+        }
+        button.success {
+            background: #10b981;
+        }
+        button.success:hover {
+            background: #059669;
+        }
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .status-ok {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: #f59e0b;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #dc2626;
+            font-weight: bold;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 16px;
+        }
+        .tab {
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .tab.active {
+            border-bottom: 2px solid #2563eb;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        #loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #2563eb;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .textarea-container {
+            margin-bottom: 16px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #e5e7eb;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Glowww Project Debug Tool</h1>
+        <p>Use this tool to diagnose and fix issues with saved projects and preview mode.</p>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="projects">Projects</div>
+            <div class="tab" data-tab="fix">Fix Issues</div>
+            <div class="tab" data-tab="export">Export/Import</div>
+            <div class="tab" data-tab="storage">LocalStorage</div>
+        </div>
+        
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+        
+        <div id="tab-projects" class="tab-content active">
+            <div id="project-summary"></div>
+            <div id="project-details"></div>
+        </div>
+        
+        <div id="tab-fix" class="tab-content">
+            <h2>Fix Common Issues</h2>
+            
+            <div class="card">
+                <h3>Set Active Project</h3>
+                <p>If preview isn't loading the correct project, you can set the active project:</p>
+                <div id="active-project-selector"></div>
+            </div>
+            
+            <div class="card">
+                <h3>Copy Auto-Save to Manual Save</h3>
+                <p>If you have an auto-saved version that's not showing in preview:</p>
+                <div id="autosave-to-manual"></div>
+            </div>
+            
+            <div class="card">
+                <h3>Repair Project Structure</h3>
+                <p>Fix projects with missing or invalid pages array:</p>
+                <div id="repair-projects"></div>
+            </div>
+        </div>
+        
+        <div id="tab-export" class="tab-content">
+            <h2>Export/Import Projects</h2>
+            
+            <div class="card">
+                <h3>Export Project</h3>
+                <p>Save a project to file for backup:</p>
+                <div id="export-projects"></div>
+            </div>
+            
+            <div class="card">
+                <h3>Import Project</h3>
+                <p>Import a project from file or compressed data:</p>
+                <div class="textarea-container">
+                    <textarea id="import-data" placeholder="Paste compressed project data here..."></textarea>
+                </div>
+                <div>
+                    <input type="file" id="import-file" accept=".glow,.json,.txt" />
+                </div>
+                <div style="margin-top: 10px;">
+                    <button id="btn-import">Import Project</button>
+                </div>
+                <div id="import-result"></div>
+            </div>
+        </div>
+        
+        <div id="tab-storage" class="tab-content">
+            <h2>LocalStorage Information</h2>
+            <div id="storage-info"></div>
+            
+            <div class="card">
+                <h3>Clear Storage</h3>
+                <p>⚠️ Warning: Use these options with caution!</p>
+                <button id="btn-clear-specific" class="secondary">Clear Specific Key</button>
+                <button id="btn-clear-all" class="danger">Clear All LocalStorage</button>
+                <div id="clear-specific-container" style="display:none; margin-top: 10px;">
+                    <select id="clear-key-selector"></select>
+                    <button id="btn-execute-clear" class="danger">Delete Key</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let pakoLoaded = false;
+        let allProjects = {};
+        let decompressedProjects = {};
+        
+        // Wait for pako to load
+        function loadPako() {
+            return new Promise((resolve, reject) => {
+                if (pakoLoaded) {
+                    resolve();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js';
+                script.onload = () => {
+                    pakoLoaded = true;
+                    resolve();
+                };
+                script.onerror = () => {
+                    reject(new Error('Failed to load pako.js'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Decompress data utility function
+        function decompressData(compressedString) {
+            const binaryString = atob(compressedString);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const decompressed = pako.inflate(bytes, { to: 'string' });
+            return decompressed;
+        }
+        
+        // Compress data utility function
+        function compressData(jsonString) {
+            const compressed = pako.deflate(jsonString);
+            return btoa(String.fromCharCode.apply(null, compressed));
+        }
+        
+        // Fetch all projects from localStorage
+        async function fetchProjects() {
+            await loadPako();
+            
+            const allKeys = Object.keys(localStorage);
+            const projectKeys = allKeys.filter(key => key.startsWith('glowproject_'));
+            const activeProject = localStorage.getItem('glow_active_project');
+            
+            allProjects = {};
+            decompressedProjects = {};
+            
+            for (const key of projectKeys) {
+                try {
+                    const data = localStorage.getItem(key);
+                    const projectName = key.replace('glowproject_', '').replace('_autosave', '');
+                    const type = key.includes('_autosave') ? 'autosave' : 'manual';
+                    
+                    allProjects[key] = {
+                        name: projectName,
+                        data,
+                        type,
+                        size: data.length,
+                        isActive: projectName === activeProject
+                    };
+                    
+                    try {
+                        const decompressed = decompressData(data);
+                        const parsed = JSON.parse(decompressed);
+                        decompressedProjects[key] = parsed;
+                        allProjects[key].valid = true;
+                        allProjects[key].pageCount = parsed.pages?.length || 0;
+                        allProjects[key].timestamp = parsed.timestamp;
+                        allProjects[key].currentPage = parsed.currentPage;
+                    } catch (error) {
+                        allProjects[key].valid = false;
+                        allProjects[key].error = error.message;
+                    }
+                } catch (error) {
+                    console.error(`Error processing key ${key}:`, error);
+                }
+            }
+            
+            return {
+                projects: allProjects,
+                activeProject,
+                projectKeys,
+                allKeys
+            };
+        }
+        
+        // Update the UI with project information
+        function updateProjectUI(data) {
+            const { projects, activeProject, projectKeys, allKeys } = data;
+            
+            // Project summary
+            document.getElementById('project-summary').innerHTML = `
+                <div class="card">
+                    <h2>Project Summary</h2>
+                    <p><strong>Active Project:</strong> ${activeProject || '<none>'}</p>
+                    <p><strong>Total Projects:</strong> ${Object.keys(projects).length}</p>
+                    <p><strong>Manual Saves:</strong> ${Object.values(projects).filter(p => p.type === 'manual').length}</p>
+                    <p><strong>Auto-Saves:</strong> ${Object.values(projects).filter(p => p.type === 'autosave').length}</p>
+                    <p><strong>Valid Projects:</strong> ${Object.values(projects).filter(p => p.valid).length}</p>
+                    <p><strong>Invalid Projects:</strong> ${Object.values(projects).filter(p => !p.valid).length}</p>
+                    <p><strong>LocalStorage Usage:</strong> ${(JSON.stringify(localStorage).length / 1024).toFixed(2)} KB</p>
+                    
+                    <div style="margin-top: 16px;">
+                        <button id="btn-refresh-projects">Refresh</button>
+                        <button id="btn-test-preview" class="success">Test Preview</button>
+                    </div>
+                </div>
+            `;
+            
+            // Project details
+            let detailsHTML = '<h2>Project Details</h2>';
+            
+            if (Object.keys(projects).length === 0) {
+                detailsHTML += '<p class="status-warning">No projects found in localStorage!</p>';
+            } else {
+                for (const key of projectKeys) {
+                    const project = projects[key];
+                    
+                    detailsHTML += `
+                        <div class="card">
+                            <h3>${project.name} (${project.type})</h3>
+                            <p>
+                                <strong>Status:</strong> 
+                                ${project.valid 
+                                    ? `<span class="status-ok">Valid ✓</span>` 
+                                    : `<span class="status-error">Invalid ✗</span>`}
+                                ${project.isActive 
+                                    ? `<span class="status-ok">[ACTIVE]</span>` 
+                                    : ''}
+                            </p>
+                            <p><strong>Storage Key:</strong> ${key}</p>
+                            <p><strong>Size:</strong> ${(project.size / 1024).toFixed(2)} KB</p>
+                    `;
+                    
+                    if (project.valid) {
+                        const projectData = decompressedProjects[key];
+                        detailsHTML += `
+                            <p><strong>Timestamp:</strong> ${new Date(project.timestamp).toLocaleString()}</p>
+                            <p><strong>Pages:</strong> ${project.pageCount}</p>
+                            <p><strong>Current Page:</strong> ${project.currentPage}</p>
+                            <details>
+                                <summary>Show Page List</summary>
+                                <ul>
+                                    ${projectData.pages?.map(page => `
+                                        <li>
+                                            <strong>${page.title}</strong> 
+                                            (key: ${page.key}, path: ${page.path || '/'})
+                                            ${page.serializedData ? `✓` : `<span class="status-warning">No data</span>`}
+                                        </li>
+                                    `).join('') || 'No pages found'}
+                                </ul>
+                            </details>
+                        `;
+                    } else {
+                        detailsHTML += `
+                            <p class="status-error"><strong>Error:</strong> ${project.error}</p>
+                        `;
+                    }
+                    
+                    detailsHTML += `
+                        <div style="margin-top: 10px;">
+                            <button class="view-project" data-key="${key}">View Data</button>
+                            ${!project.isActive ? 
+                                `<button class="set-active" data-name="${project.name}">Set as Active</button>` : 
+                                ''}
+                        </div>
+                    </div>`;
+                }
+            }
+            
+            document.getElementById('project-details').innerHTML = detailsHTML;
+            
+            // Add event listeners
+            document.querySelectorAll('.view-project').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const key = btn.getAttribute('data-key');
+                    viewProjectData(key);
+                });
+            });
+            
+            document.querySelectorAll('.set-active').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const name = btn.getAttribute('data-name');
+                    setActiveProject(name);
+                });
+            });
+            
+            document.getElementById('btn-refresh-projects').addEventListener('click', initializeApp);
+            
+            document.getElementById('btn-test-preview').addEventListener('click', () => {
+                window.location.href = '/Preview';
+            });
+        }
+        
+        // View project data
+        function viewProjectData(key) {
+            const project = allProjects[key];
+            const projectData = decompressedProjects[key];
+            
+            // Create modal to show project data
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            modal.style.display = 'flex';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.style.zIndex = '1000';
+            
+            const content = document.createElement('div');
+            content.style.backgroundColor = 'white';
+            content.style.borderRadius = '8px';
+            content.style.padding = '20px';
+            content.style.maxWidth = '80%';
+            content.style.maxHeight = '80%';
+            content.style.overflow = 'auto';
+            content.style.position = 'relative';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerText = 'Close';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '10px';
+            closeBtn.style.right = '10px';
+            
+            const title = document.createElement('h2');
+            title.innerText = `Project: ${project.name} (${project.type})`;
+            
+            const projectJSON = document.createElement('pre');
+            projectJSON.innerText = project.valid 
+                ? JSON.stringify(projectData, null, 2)
+                : 'Invalid project data: ' + project.error;
+            
+            content.appendChild(closeBtn);
+            content.appendChild(title);
+            content.appendChild(projectJSON);
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            closeBtn.addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+            
+            // Close when clicking outside
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            });
+        }
+        
+        // Set active project
+        function setActiveProject(name) {
+            localStorage.setItem('glow_active_project', name);
+            alert(`Set "${name}" as the active project. Refresh the page to see changes.`);
+            initializeApp();
+        }
+        
+        // Update storage info tab
+        function updateStorageInfoUI(data) {
+            const { allKeys } = data;
+            const storageSize = JSON.stringify(localStorage).length;
+            
+            document.getElementById('storage-info').innerHTML = `
+                <div class="card">
+                    <p><strong>Total Keys:</strong> ${allKeys.length}</p>
+                    <p><strong>Storage Size:</strong> ${(storageSize / 1024).toFixed(2)} KB 
+                        ${storageSize > 5000000 ? 
+                            '<span class="status-warning">(Large - may cause performance issues)</span>' : 
+                            ''}
+                    </p>
+                    <details>
+                        <summary>Show All Keys</summary>
+                        <ul>
+                            ${allKeys.map(key => `
+                                <li>${key} (${(localStorage.getItem(key).length / 1024).toFixed(2)} KB)</li>
+                            `).join('')}
+                        </ul>
+                    </details>
+                </div>
+            `;
+            
+            // Populate clear key selector
+            const selector = document.getElementById('clear-key-selector');
+            selector.innerHTML = '';
+            allKeys.forEach(key => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.innerText = key;
+                selector.appendChild(option);
+            });
+        }
+        
+        // Update fix tab UI
+        function updateFixUI(data) {
+            const { projects, activeProject } = data;
+            
+            // Active project selector
+            const projectNames = [...new Set(Object.values(projects).map(p => p.name))];
+            document.getElementById('active-project-selector').innerHTML = `
+                <select id="active-project-select">
+                    ${projectNames.map(name => `
+                        <option value="${name}" ${name === activeProject ? 'selected' : ''}>
+                            ${name}
+                        </option>
+                    `).join('')}
+                </select>
+                <button id="btn-set-active-project">Set Active Project</button>
+            `;
+            
+            // AutoSave to manual save
+            const autoSaveProjects = Object.values(projects)
+                .filter(p => p.type === 'autosave' && p.valid);
+            
+            if (autoSaveProjects.length > 0) {
+                document.getElementById('autosave-to-manual').innerHTML = `
+                    <select id="autosave-select">
+                        ${autoSaveProjects.map(p => `
+                            <option value="${p.name}">${p.name} (${new Date(p.timestamp).toLocaleString()})</option>
+                        `).join('')}
+                    </select>
+                    <button id="btn-copy-autosave">Copy Auto-Save to Manual Save</button>
+                `;
+            } else {
+                document.getElementById('autosave-to-manual').innerHTML = `
+                    <p class="status-warning">No valid auto-saved projects found.</p>
+                `;
+            }
+            
+            // Repair projects
+            const invalidProjects = Object.entries(projects).filter(([key, p]) => !p.valid);
+            if (invalidProjects.length > 0) {
+                document.getElementById('repair-projects').innerHTML = `
+                    <select id="repair-select">
+                        ${invalidProjects.map(([key, p]) => `
+                            <option value="${key}">${p.name} (${p.type}) - Error: ${p.error}</option>
+                        `).join('')}
+                    </select>
+                    <button id="btn-repair-project">Attempt Repair</button>
+                `;
+            } else {
+                document.getElementById('repair-projects').innerHTML = `
+                    <p class="status-ok">No invalid projects found.</p>
+                `;
+            }
+            
+            // Update export projects
+            const validProjects = Object.values(projects).filter(p => p.valid);
+            if (validProjects.length > 0) {
+                document.getElementById('export-projects').innerHTML = `
+                    <select id="export-select">
+                        ${validProjects.map(p => `
+                            <option value="${p.name}_${p.type}">${p.name} (${p.type}) - ${new Date(p.timestamp).toLocaleString()}</option>
+                        `).join('')}
+                    </select>
+                    <button id="btn-export">Export Project</button>
+                `;
+            } else {
+                document.getElementById('export-projects').innerHTML = `
+                    <p class="status-warning">No valid projects found to export.</p>
+                `;
+            }
+            
+            // Add event listeners
+            document.getElementById('btn-set-active-project')?.addEventListener('click', () => {
+                const select = document.getElementById('active-project-select');
+                const name = select.value;
+                setActiveProject(name);
+            });
+            
+            document.getElementById('btn-copy-autosave')?.addEventListener('click', copyAutoSaveToManual);
+            document.getElementById('btn-repair-project')?.addEventListener('click', repairProject);
+            document.getElementById('btn-export')?.addEventListener('click', exportProject);
+        }
+        
+        // Copy auto-save to manual save
+        function copyAutoSaveToManual() {
+            const select = document.getElementById('autosave-select');
+            const name = select.value;
+            
+            if (!name) {
+                alert('Please select a project to copy.');
+                return;
+            }
+            
+            const autoSaveKey = `glowproject_${name}_autosave`;
+            const manualKey = `glowproject_${name}`;
+            
+            try {
+                const autoSaveData = localStorage.getItem(autoSaveKey);
+                
+                if (!autoSaveData) {
+                    alert('Auto-save data not found.');
+                    return;
+                }
+                
+                // Decompress and update timestamp
+                const decompressed = decompressData(autoSaveData);
+                const projectData = JSON.parse(decompressed);
+                projectData.timestamp = new Date().toISOString(); // Update timestamp
+                
+                // Compress and save back
+                const compressed = compressData(JSON.stringify(projectData));
+                localStorage.setItem(manualKey, compressed);
+                
+                alert(`Successfully copied auto-saved project "${name}" to manual save.`);
+                initializeApp();
+            } catch (error) {
+                alert(`Failed to copy auto-save: ${error.message}`);
+            }
+        }
+        
+        // Repair project
+        function repairProject() {
+            const select = document.getElementById('repair-select');
+            const key = select.value;
+            
+            if (!key) {
+                alert('Please select a project to repair.');
+                return;
+            }
+            
+            try {
+                const projectData = localStorage.getItem(key);
+                const projectName = key.replace('glowproject_', '').replace('_autosave', '');
+                const type = key.includes('_autosave') ? 'autosave' : 'manual';
+                
+                // Try to decompress
+                let decompressed;
+                try {
+                    decompressed = decompressData(projectData);
+                    const parsed = JSON.parse(decompressed);
+                    
+                    // Check if there are specific issues to repair
+                    let fixed = false;
+                    
+                    // 1. Fix missing pages array
+                    if (!parsed.pages || !Array.isArray(parsed.pages)) {
+                        parsed.pages = [
+                            {
+                                key: 'home',
+                                title: 'Home',
+                                path: '/',
+                                folderPath: '',
+                                parentKey: null,
+                                isHome: true,
+                                serializedData: null,
+                                children: []
+                            }
+                        ];
+                        fixed = true;
+                    }
+                    
+                    // 2. Fix missing currentPage
+                    if (!parsed.currentPage) {
+                        parsed.currentPage = 'home';
+                        fixed = true;
+                    }
+                    
+                    // 3. Fix missing timestamp
+                    if (!parsed.timestamp) {
+                        parsed.timestamp = new Date().toISOString();
+                        fixed = true;
+                    }
+                    
+                    if (fixed) {
+                        // Save repaired project
+                        const compressed = compressData(JSON.stringify(parsed));
+                        localStorage.setItem(key, compressed);
+                        alert(`Project "${projectName}" has been repaired.`);
+                        initializeApp();
+                    } else {
+                        alert(`Project "${projectName}" seems valid but was reported as invalid. Attempted to re-validate.`);
+                        initializeApp();
+                    }
+                } catch (error) {
+                    // If decompression fails, create a new project structure
+                    alert(`Could not repair project "${projectName}". Creating a new project structure.`);
+                    
+                    const newProject = {
+                        name: projectName,
+                        pages: [
+                            {
+                                key: 'home',
+                                title: 'Home',
+                                path: '/',
+                                folderPath: '',
+                                parentKey: null,
+                                isHome: true,
+                                serializedData: null,
+                                children: []
+                            }
+                        ],
+                        currentPage: 'home',
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    const compressed = compressData(JSON.stringify(newProject));
+                    localStorage.setItem(key, compressed);
+                    initializeApp();
+                }
+            } catch (error) {
+                alert(`Failed to repair project: ${error.message}`);
+            }
+        }
+        
+        // Export project
+        function exportProject() {
+            const select = document.getElementById('export-select');
+            const value = select.value;
+            
+            if (!value) {
+                alert('Please select a project to export.');
+                return;
+            }
+            
+            const [name, type] = value.split('_');
+            const key = `glowproject_${name}${type === 'autosave' ? '_autosave' : ''}`;
+            
+            try {
+                const projectData = localStorage.getItem(key);
+                const decompressed = decompressData(projectData);
+                const parsed = JSON.parse(decompressed);
+                
+                // Create a downloadable file
+                const blob = new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${name}_${type}_${new Date().toISOString().replace(/[:.]/g, '-')}.glow.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Also copy to clipboard
+                navigator.clipboard.writeText(projectData)
+                    .then(() => alert(`Project exported to file and compressed data copied to clipboard.`))
+                    .catch(() => alert(`Project exported to file. (Clipboard copy failed)`));
+                
+            } catch (error) {
+                alert(`Failed to export project: ${error.message}`);
+            }
+        }
+        
+        // Import project
+        async function importProject() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                await loadPako();
+                
+                let inputData = document.getElementById('import-data').value;
+                const fileInput = document.getElementById('import-file');
+                const resultContainer = document.getElementById('import-result');
+                
+                // If file is selected, read it
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const reader = new FileReader();
+                    
+                    const fileContent = await new Promise((resolve) => {
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsText(file);
+                    });
+                    
+                    // If it's a JSON file, try to compress it
+                    if (file.name.endsWith('.json') || file.name.includes('.glow.json')) {
+                        try {
+                            const jsonData = JSON.parse(fileContent);
+                            inputData = compressData(JSON.stringify(jsonData));
+                        } catch (error) {
+                            // If not valid JSON, assume it's already compressed
+                            inputData = fileContent;
+                        }
+                    } else {
+                        // Assume it's compressed data
+                        inputData = fileContent;
+                    }
+                }
+                
+                if (!inputData) {
+                    resultContainer.innerHTML = `<p class="status-error">No input data provided.</p>`;
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+                
+                // Try to decompress to validate
+                let projectData;
+                try {
+                    const decompressed = decompressData(inputData);
+                    projectData = JSON.parse(decompressed);
+                } catch (error) {
+                    // If decompression fails, try to parse as JSON
+                    try {
+                        projectData = JSON.parse(inputData);
+                        // If parsed successfully, compress it
+                        inputData = compressData(JSON.stringify(projectData));
+                    } catch (jsonError) {
+                        resultContainer.innerHTML = `<p class="status-error">Invalid data format: ${error.message}</p>`;
+                        document.getElementById('loading').style.display = 'none';
+                        return;
+                    }
+                }
+                
+                // Validate project structure
+                if (!projectData.name || !projectData.pages || !Array.isArray(projectData.pages)) {
+                    resultContainer.innerHTML = `
+                        <p class="status-error">Invalid project structure. Missing required fields.</p>
+                        <p>Project must have 'name' and 'pages' array properties.</p>
+                    `;
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
+                
+                // Save to localStorage
+                const key = `glowproject_${projectData.name}`;
+                localStorage.setItem(key, inputData);
+                localStorage.setItem('glow_active_project', projectData.name);
+                
+                resultContainer.innerHTML = `
+                    <p class="status-ok">Project "${projectData.name}" imported successfully!</p>
+                    <p>Saved as: ${key}</p>
+                    <p>Set as active project.</p>
+                    <p>Pages: ${projectData.pages.length}</p>
+                `;
+                
+                initializeApp();
+            } catch (error) {
+                document.getElementById('import-result').innerHTML = `
+                    <p class="status-error">Error importing project: ${error.message}</p>
+                `;
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        // Initialize UI
+        async function initializeApp() {
+            document.getElementById('loading').style.display = 'block';
+            
+            try {
+                const data = await fetchProjects();
+                updateProjectUI(data);
+                updateStorageInfoUI(data);
+                updateFixUI(data);
+                
+                // Set up tab navigation
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        const tabName = tab.getAttribute('data-tab');
+                        
+                        // Update active tab
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        
+                        // Show active content
+                        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                        document.getElementById(`tab-${tabName}`).classList.add('active');
+                    });
+                });
+                
+                // Set up event listeners
+                document.getElementById('btn-import')?.addEventListener('click', importProject);
+                
+                document.getElementById('btn-clear-specific')?.addEventListener('click', () => {
+                    document.getElementById('clear-specific-container').style.display = 'block';
+                });
+                
+                document.getElementById('btn-execute-clear')?.addEventListener('click', () => {
+                    const key = document.getElementById('clear-key-selector').value;
+                    if (confirm(`Are you sure you want to delete "${key}" from localStorage?`)) {
+                        localStorage.removeItem(key);
+                        alert(`Key "${key}" removed.`);
+                        initializeApp();
+                    }
+                });
+                
+                document.getElementById('btn-clear-all')?.addEventListener('click', () => {
+                    if (confirm('⚠️ WARNING: This will delete ALL data in localStorage. Are you sure?')) {
+                        if (confirm('Are you REALLY sure? This cannot be undone!')) {
+                            localStorage.clear();
+                            alert('All localStorage data has been cleared.');
+                            initializeApp();
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error initializing app:', error);
+                document.getElementById('project-summary').innerHTML = `
+                    <div class="card">
+                        <h2>Error</h2>
+                        <p class="status-error">Failed to initialize: ${error.message}</p>
+                        <button id="btn-refresh-error">Retry</button>
+                    </div>
+                `;
+                document.getElementById('btn-refresh-error')?.addEventListener('click', initializeApp);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        // Start the app
+        initializeApp();
+    </script>
+</body>
+</html>

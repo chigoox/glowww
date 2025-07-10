@@ -1,106 +1,76 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Button, Modal, Input, message, Tooltip } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Button, Modal, Input, message, Tooltip, Divider } from 'antd';
 import { 
-  SaveOutlined, 
-  FolderOpenOutlined, 
-  CopyOutlined,
-  DownloadOutlined
+  FolderOpenOutlined,
+  SaveOutlined
 } from '@ant-design/icons';
 import { useEditor } from '@craftjs/core';
-import pako from 'pako';
-import copy from 'copy-to-clipboard';
+import useSaveOperations from './useSaveOperations';
 
 const SaveLoad = () => {
   const { actions, query } = useEditor();
   
+  // Use the shared save operations hook
+  const { 
+    decompressData,
+    getSavedProjects,
+    getAutoSavedProjects,
+    loadProject
+  } = useSaveOperations();
+  
   // State for modals
-  const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [loadModalVisible, setLoadModalVisible] = useState(false);
   
   // State for inputs
-  const [saveData, setSaveData] = useState('');
   const [loadData, setLoadData] = useState('');
-  const [projectName, setProjectName] = useState('my-website');
 
-  // Compression functions
-  const compressData = (jsonString) => {
-    try {
-      const compressed = pako.deflate(jsonString);
-      return btoa(String.fromCharCode.apply(null, compressed));
-    } catch (error) {
-      console.error('Compression error:', error);
-      throw new Error('Failed to compress data');
-    }
-  };
-
-  const decompressData = (compressedString) => {
-    try {
-      const binaryString = atob(compressedString);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const decompressed = pako.inflate(bytes, { to: 'string' });
-      return decompressed;
-    } catch (error) {
-      console.error('Decompression error:', error);
-      throw new Error('Failed to decompress data - invalid format');
-    }
-  };
-
-  // Save functionality
-  const handleSave = () => {
-    try {
-      const serialized = query.serialize();
-      const compressed = compressData(serialized);
-      setSaveData(compressed);
-      setSaveModalVisible(true);
-    } catch (error) {
-      message.error('Failed to save: ' + error.message);
-    }
-  };
-
-  const copyToClipboard = () => {
-    copy(saveData);
-    message.success('Saved state copied to clipboard!');
-    setSaveModalVisible(false);
-  };
-
-  const downloadSaveFile = () => {
-    const blob = new Blob([saveData], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${projectName}-save.glow`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    message.success('Save file downloaded!');
-    setSaveModalVisible(false);
-  };
-
-  // Load functionality
-  const handleLoad = () => {
+  // Load functionality for projects using the direct PageManager function
+  const handleLoadProject = () => {
     setLoadData('');
     setLoadModalVisible(true);
   };
 
-  const loadFromData = () => {
+  const loadProjectFromData = () => {
     try {
       if (!loadData.trim()) {
-        message.error('Please paste the save data');
+        message.error('Please paste the project data or upload a file');
         return;
       }
       
-      const decompressed = decompressData(loadData.trim());
-      actions.deserialize(decompressed);
-      message.success('Project loaded successfully!');
-      setLoadModalVisible(false);
-      setLoadData('');
+      // Use the hook to decompress and parse the data
+      const projectData = loadProject(loadData.trim());
+      
+      if (!projectData) {
+        message.error('Failed to load project data');
+        return;
+      }
+      
+      // Check if this is a project file or single page file
+      if (projectData.pages && Array.isArray(projectData.pages)) {
+        // This is a full project - use direct function call to PageManager
+        console.log('Loading full project with direct function call');
+        
+        if (window.pageManagerLoad && typeof window.pageManagerLoad === 'function') {
+          const success = window.pageManagerLoad(projectData);
+          if (success) {
+            message.success('Project loaded successfully! Use the Pages manager to navigate between pages.');
+            setLoadModalVisible(false);
+            setLoadData('');
+          }
+        } else {
+          message.error('PageManager load function not available');
+        }
+      } else {
+        // This is a single page (legacy format)
+        actions.deserialize(JSON.stringify(projectData));
+        message.success('Single page loaded successfully!');
+        setLoadModalVisible(false);
+        setLoadData('');
+      }
     } catch (error) {
+      console.error('Failed to load project:', error);
       message.error('Failed to load: ' + error.message);
     }
   };
@@ -116,96 +86,139 @@ const SaveLoad = () => {
     }
   };
 
+  // Load auto-saved project directly
+  const loadAutoSavedProject = (projectData) => {
+    setLoadData(projectData.data);
+    loadProjectFromData();
+  };
+
+  // Get saved and auto-saved projects from the hook
+  const savedProjects = getSavedProjects();
+  const autoSavedProjects = getAutoSavedProjects();
+  const allProjects = [...savedProjects, ...autoSavedProjects].sort((a, b) => 
+    new Date(b.timestamp) - new Date(a.timestamp)
+  );
+
+  // Save Project functionality using direct function call to PageManager
+  const saveProject = () => {
+    if (window.pageManagerSave && typeof window.pageManagerSave === 'function') {
+      console.log('Executing manual save with direct function call');
+      window.pageManagerSave();
+    } else {
+      message.error('PageManager save function not available');
+    }
+  };
+
   return (
     <div className="flex items-center space-x-1">
-      {/* Save Button */}
-      <Tooltip title="Save current project">
-        <Button
-          icon={<SaveOutlined />}
-          size="small"
-          type="text"
-          onClick={handleSave}
-          className="hover:bg-green-50 hover:text-green-600 transition-colors"
-        />
-      </Tooltip>
-
-      {/* Load Button */}
+      {/* Load Project Button */}
       <Tooltip title="Load saved project">
         <Button
           icon={<FolderOpenOutlined />}
           size="small"
           type="text"
-          onClick={handleLoad}
+          onClick={handleLoadProject}
           className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
         />
       </Tooltip>
 
-      {/* Save Modal */}
-      <Modal
-        title="Save Project"
-        open={saveModalVisible}
-        onCancel={() => setSaveModalVisible(false)}
-        footer={[
-          <Button key="copy" icon={<CopyOutlined />} onClick={copyToClipboard}>
-            Copy to Clipboard
-          </Button>,
-          <Button key="download" type="primary" icon={<DownloadOutlined />} onClick={downloadSaveFile}>
-            Download File
-          </Button>
-        ]}
-        width={600}
-      >
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Project Name:</label>
-          <Input
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            placeholder="Enter project name"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-2">Save Data:</label>
-          <Input.TextArea
-            value={saveData}
-            readOnly
-            rows={6}
-            placeholder="Your compressed save data will appear here..."
-          />
-          <p className="text-xs text-gray-500 mt-2">
-            This compressed data contains your entire project. Save it to load your project later.
-          </p>
-        </div>
-      </Modal>
+      {/* Save Project Button */}
+      <Tooltip title="Save project">
+        <Button
+          icon={<SaveOutlined />}
+          size="small"
+          type="text"
+          onClick={saveProject}
+          className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+        />
+      </Tooltip>
 
       {/* Load Modal */}
       <Modal
         title="Load Project"
         open={loadModalVisible}
-        onCancel={() => setLoadModalVisible(false)}
-        onOk={loadFromData}
+        onCancel={() => {
+          setLoadModalVisible(false);
+          setLoadData('');
+        }}
+        onOk={loadProjectFromData}
         okText="Load Project"
-        width={600}
+        width={700}
       >
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Upload Save File:</label>
-          <input
-            type="file"
-            accept=".glow,.txt"
-            onChange={handleFileUpload}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-2">Or Paste Save Data:</label>
-          <Input.TextArea
-            value={loadData}
-            onChange={(e) => setLoadData(e.target.value)}
-            rows={6}
-            placeholder="Paste your saved project data here..."
-          />
-          <p className="text-xs text-gray-500 mt-2">
-            Paste the compressed data from a previous save or upload a .glow file.
-          </p>
+        <div className="space-y-4">
+          {/* Saved projects */}
+          {allProjects.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Saved Projects:</label>
+              <div className="grid gap-2 max-h-32 overflow-y-auto">
+                {allProjects.map((project, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center justify-between p-2 border rounded hover:bg-gray-50 cursor-pointer"
+                    onClick={() => {
+                      setLoadData(project.data);
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-sm">{project.name}</span>
+                        {project.type === 'auto-saved' && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            Auto-saved
+                          </span>
+                        )}
+                        {project.type === 'saved' && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                            Saved
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(project.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    <Button 
+                      size="small" 
+                      type="primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLoadData(project.data);
+                        loadProjectFromData();
+                      }}
+                    >
+                      Load
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Divider />
+            </div>
+          )}
+          
+          {/* File upload */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Upload Project File:</label>
+            <input
+              type="file"
+              accept=".glowproj,.glow,.txt"
+              onChange={handleFileUpload}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
+          </div>
+          
+          {/* Manual paste */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Or Paste Project Data:</label>
+            <Input.TextArea
+              value={loadData}
+              onChange={(e) => setLoadData(e.target.value)}
+              rows={6}
+              placeholder="Paste your saved project data here..."
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Supports both project files (.glowproj) and legacy single page saves (.glow).
+            </p>
+          </div>
         </div>
       </Modal>
     </div>
