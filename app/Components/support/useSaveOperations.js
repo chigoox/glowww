@@ -37,47 +37,6 @@ const useSaveOperations = () => {
     }
   }, []);
 
-  // Save project to localStorage
-  const saveProject = useCallback((projectData) => {
-    if (!projectData) {
-      message.error('No project data available to save');
-      return false;
-    }
-
-    console.log('Saving project:', {
-      name: projectData.name,
-      pageCount: projectData.pages?.length || 0,
-      currentPage: projectData.currentPage
-    });
-
-    const finalProjectData = {
-      name: projectData.name,
-      pages: projectData.pages,
-      currentPage: projectData.currentPage,
-      autoSaveSettings: projectData.autoSaveSettings,
-      timestamp: new Date().toISOString()
-    };
-    
-    try {
-      const compressed = compressData(JSON.stringify(finalProjectData));
-      
-      // Save to localStorage
-      const storageKey = `glowproject_${finalProjectData.name}`;
-      localStorage.setItem(storageKey, compressed);
-      localStorage.setItem('glow_active_project', finalProjectData.name);
-      
-      console.log(`Project "${finalProjectData.name}" saved to local storage!`);
-      message.success(`Project "${finalProjectData.name}" saved successfully!`);
-      
-      setLastSaveTime(new Date());
-      return true;
-    } catch (error) {
-      console.error('Failed to save project:', error);
-      message.error('Failed to save project: ' + error.message);
-      return false;
-    }
-  }, [compressData]);
-  
   // Auto-save project to localStorage
   const autoSaveProject = useCallback((projectData) => {
     if (!projectData) {
@@ -106,6 +65,8 @@ const useSaveOperations = () => {
       // Save to localStorage with auto-save suffix
       const storageKey = `glowproject_${finalProjectData.name}_autosave`;
       localStorage.setItem(storageKey, compressed);
+      // Set as active project since this is now the only save method
+      localStorage.setItem('glow_active_project', finalProjectData.name);
       
       console.log(`Project "${finalProjectData.name}" auto-saved to local storage!`);
       setLastSaveTime(new Date());
@@ -209,37 +170,29 @@ const useSaveOperations = () => {
     }).filter(Boolean);
   }, [decompressData]);
   
-  // Get current project data from localStorage
+  // Get current project data from localStorage (auto-save only)
   const getProjectData = useCallback((projectNameToGet = null) => {
     const nameToUse = projectNameToGet || projectName;
     
     try {
-      // Try regular save first
-      const storageKey = `glowproject_${nameToUse}`;
-      let compressed = localStorage.getItem(storageKey);
-      let source = 'regular';
+      // Only look for auto-save version now
+      const autoSaveKey = `glowproject_${nameToUse}_autosave`;
+      const compressed = localStorage.getItem(autoSaveKey);
       
-      // Fall back to autosave if needed
       if (!compressed) {
-        const autoSaveKey = `glowproject_${nameToUse}_autosave`;
-        compressed = localStorage.getItem(autoSaveKey);
-        source = 'autosave';
-        
-        if (!compressed) {
-          // If no project found with this name, try to find the active project
-          if (!projectNameToGet) {
-            const activeProjectName = localStorage.getItem('glow_active_project');
-            if (activeProjectName && activeProjectName !== nameToUse) {
-              console.log('No project found with name, trying active project:', activeProjectName);
-              return getProjectData(activeProjectName);
-            }
+        // If no project found with this name, try to find the active project
+        if (!projectNameToGet) {
+          const activeProjectName = localStorage.getItem('glow_active_project');
+          if (activeProjectName && activeProjectName !== nameToUse) {
+            console.log('No project found with name, trying active project:', activeProjectName);
+            return getProjectData(activeProjectName);
           }
-          console.warn(`No project data found for "${nameToUse}" (regular or autosave)`);
-          return null;
         }
+        console.warn(`No auto-saved project data found for "${nameToUse}"`);
+        return null;
       }
       
-      console.log(`Found project "${nameToUse}" from ${source} storage`);
+      console.log(`Found project "${nameToUse}" from auto-save storage`);
       const decompressed = decompressData(compressed);
       const projectData = JSON.parse(decompressed);
       
@@ -272,10 +225,8 @@ const useSaveOperations = () => {
     setLastSaveTime,
     compressData,
     decompressData,
-    saveProject,
     autoSaveProject,
     loadProject,
-    getSavedProjects,
     getAutoSavedProjects,
     getProjectData
   };

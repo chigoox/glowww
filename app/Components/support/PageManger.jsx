@@ -51,12 +51,12 @@ const { Option } = Select;
 const PageManager = () => {
   const { actions, query } = useEditor();
   
-  // Use the shared save operations hook
+  // Use the shared save operations hook (auto-save only now)
   const { 
     projectName, setProjectName, 
     lastSaveTime, setLastSaveTime, 
     compressData, decompressData,
-    saveProject, autoSaveProject, loadProject
+    autoSaveProject, loadProject
   } = useSaveOperations();
   
   // Modal states
@@ -92,9 +92,9 @@ const PageManager = () => {
   // Unsaved changes tracking
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   
-  // Auto-save states
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
-  const [autoSaveInterval, setAutoSaveInterval] = useState(30); // seconds
+  // Auto-save states (updated range: 5 seconds to 5 minutes)
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true); // Enable by default
+  const [autoSaveInterval, setAutoSaveInterval] = useState(15); // Default to 15 seconds (5-300 range)
   const autoSaveTimerRef = useRef(null);
   
   // Load Page states
@@ -457,8 +457,7 @@ const PageManager = () => {
     };
   }, [autoSaveEnabled, autoSaveInterval, projectName, currentPageKey, autoSaveProject]);
 
-  // Store active project name in localStorage ONLY when manually saving
-  // This is now handled in the manual save functions only
+  // Active project name is now managed by auto-save
 
   // Initialize with the last active project on component mount
   useEffect(() => {
@@ -579,50 +578,6 @@ const PageManager = () => {
     const interval = setInterval(checkForChanges, 1000);
     return () => clearInterval(interval);
   }, [unsavedChanges, currentPageKey]);
-
-  // Save project manually - this will be called directly from SaveLoad component
-  const manualSaveProject = () => {
-    console.log('Manual save project initiated');
-    
-    // First ensure current page data is saved
-    const currentPageSaved = saveCurrentPageData();
-    
-    if (!currentPageSaved) {
-      console.error('Failed to save current page data during manual save');
-      message.error('Failed to save project: could not save current page data');
-      return false;
-    }
-    
-    // Prepare project data for saving
-    const projectData = {
-      name: projectName,
-      pages: pages,
-      currentPage: currentPageKey,
-      autoSaveSettings: {
-        enabled: autoSaveEnabled,
-        interval: autoSaveInterval
-      },
-      timestamp: new Date().toISOString()
-    };
-    
-    // Use the hook's saveProject function
-    return saveProject(projectData);
-  };
-  
-  // Make manualSaveProject available to parent components
-  useEffect(() => {
-    // Attach the save function to the component instance for external access
-    if (window) {
-      window.pageManagerSave = manualSaveProject;
-    }
-    
-    return () => {
-      // Clean up
-      if (window) {
-        delete window.pageManagerSave;
-      }
-    };
-  }, [pages, projectName, currentPageKey, autoSaveEnabled, autoSaveInterval]);
 
   // Recursive function to build tree node with proper nesting
   const buildTreeNode = (page) => ({
@@ -815,6 +770,27 @@ const PageManager = () => {
       reader.readAsText(file);
     }
   };
+
+  // Expose current page info to window for PreviewButton access
+  useEffect(() => {
+    const currentPage = pages.find(p => p.key === currentPageKey);
+    if (window && currentPage) {
+      window.currentPageInfo = {
+        key: currentPage.key,
+        title: currentPage.title,
+        path: currentPage.path,
+        folderPath: currentPage.folderPath,
+        parentKey: currentPage.parentKey,
+        isHome: currentPage.isHome
+      };
+    }
+    
+    return () => {
+      if (window) {
+        delete window.currentPageInfo;
+      }
+    };
+  }, [currentPageKey, pages]);
 
   return (
     <>
@@ -1033,14 +1009,17 @@ const PageManager = () => {
           
           {autoSaveEnabled && (
             <div>
-              <Text>Auto-Save Interval (seconds)</Text>
+              <Text>Auto-Save Interval (5 seconds - 5 minutes)</Text>
               <InputNumber
                 value={autoSaveInterval}
                 onChange={setAutoSaveInterval}
-                min={10}
+                min={5}
                 max={300}
                 className="w-full mt-1"
               />
+              <div className="text-xs text-gray-500 mt-1">
+                Range: 5 seconds to 300 seconds (5 minutes)
+              </div>
             </div>
           )}
           

@@ -4,9 +4,10 @@ import React, { useState, useEffect } from "react";
 import { Switch, Button, Dropdown, Menu, Tooltip } from "antd";
 import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { useEditor } from "@craftjs/core";
-import SaveLoad from "./support/SaveLoad";
+import LoadProject from "./support/SaveLoad";
 import ExportManager from "./support/ExportManager";
 import PageManager from "./support/PageManger";
+import PreviewButton from "./support/PreviewButton";
 
 export const Topbar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
@@ -368,10 +369,11 @@ export const Topbar = () => {
           </div>
         </div>
 
-        {/* Save/Load/Export and Serialize Controls */}
+        {/* Load/Export and Page Management Controls */}
         <div className="flex items-center space-x-2">
           <PageManager />
-          <SaveLoad />
+          <PreviewButton />
+          <LoadProject />
           <ExportManager />
           
           
