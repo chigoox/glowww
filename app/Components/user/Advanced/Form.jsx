@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useNode, useEditor, Element } from "@craftjs/core";
 import ContextMenu from "../../support/ContextMenu";
 import { useContextMenu } from "../../support/useContextMenu";
+import useEditorDisplay from "../../support/useEditorDisplay";
 import { 
   EditOutlined, 
   DatabaseOutlined, 
@@ -170,6 +171,7 @@ export const Form = ({
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  const { hideEditorUI } = useEditorDisplay();
 
   // Use the correct Craft.js way to get descendants and detect FormInputs
   const { inputFields, descendants } = useEditor((state, query) => {
@@ -559,11 +561,11 @@ useEffect(() => {
         style={{
           ...dynamicStyles,
           position: 'relative',
-          outline: isSelected ? '2px solid #1890ff' : isHovered ? '2px solid #40a9ff' : 'none',
-          outlineOffset: isSelected || isHovered ? '2px' : '0',
+          outline: (isSelected && !hideEditorUI) ? '2px solid #1890ff' : (isHovered && !hideEditorUI) ? '2px solid #40a9ff' : 'none',
+          outlineOffset: ((isSelected || isHovered) && !hideEditorUI) ? '2px' : '0',
         }}
         onSubmit={handleSubmit}
-        onContextMenu={handleContextMenu}
+        onContextMenu={hideEditorUI ? undefined : handleContextMenu}
       >
         {/* Form Header */}
         <div style={{ marginBottom: 24 }}>
@@ -781,12 +783,14 @@ useEffect(() => {
       </Modal>
       
       {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </>
   );
 };

@@ -39,6 +39,7 @@ import { ShopFlexBox } from "./user/Advanced/ShopFlexBox";
 import { FormInput } from "./user/Input";
 import { Form } from "./user/Advanced/Form";
 import {Carousel} from "./user/Carousel";
+import { NavBar } from "./user/Nav/NavBar";
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const { connectors } = useEditor();
@@ -59,6 +60,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const formInputRef = useRef(null);
   const formRef = useRef(null);
   const carouselRef = useRef(null);
+  const navBarRef = useRef(null);
 
   // Component categories
   const sections = [
@@ -149,7 +151,21 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         },
       ]
     },
-
+    {
+      id: 'navigation',
+      title: 'Navigation',
+      icon: <MenuOutlined />,
+      description: 'Navigation components',
+      components: [
+        {
+          ref: navBarRef,
+          name: 'Nav Bar',
+          icon: <MenuOutlined />,
+          description: 'Navigation bar with pages',
+          element: <Element is={NavBar} canvas />
+        }
+      ]
+    },
     {
       id: 'interactive',
       title: 'Interactive',

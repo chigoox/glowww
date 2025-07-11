@@ -5,6 +5,7 @@ import { useNode, useEditor } from "@craftjs/core";
 import { EditOutlined } from '@ant-design/icons';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 
 export const TextArea = ({
   // TextArea Content
@@ -96,6 +97,7 @@ export const TextArea = ({
   }));
   
   const { actions } = useEditor();
+  const { hideEditorUI } = useEditorDisplay();
   
   const textAreaRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -241,7 +243,7 @@ export const TextArea = ({
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <textarea
-        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${className}`}
         ref={textAreaRef}
         style={computedStyles}
         value={isEditing ? localValue : value}
@@ -264,15 +266,15 @@ export const TextArea = ({
         autoComplete={autocomplete}
         spellCheck={spellCheck}
         onChange={handleChange}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        onDoubleClick={handleDoubleClick}
-        onContextMenu={handleContextMenu}
+        onFocus={hideEditorUI ? undefined : handleFocus}
+        onBlur={hideEditorUI ? undefined : handleBlur}
+        onKeyDown={hideEditorUI ? undefined : handleKeyDown}
+        onDoubleClick={hideEditorUI ? undefined : handleDoubleClick}
+        onContextMenu={hideEditorUI ? undefined : handleContextMenu}
       />
 
       {/* Edit indicator */}
-      {selected && !isEditing && (
+      {selected && !isEditing && !hideEditorUI && (
         <div
           style={{
             position: "absolute",
@@ -323,9 +325,9 @@ export const TextArea = ({
         <span
           style={{
             position: "absolute",
-            top: 8,
-            right: 8,
-            color: "#ff4d4f",
+            top: 0,
+            left: -7,
+            color: "red",
             fontSize: "12px",
             pointerEvents: "none"
           }}
@@ -335,12 +337,14 @@ export const TextArea = ({
       )}
       
       {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </div>
   );
 };

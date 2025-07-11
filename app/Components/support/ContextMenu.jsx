@@ -124,11 +124,25 @@ const ContextMenu = ({
         const node = query.node(targetNodeId).get();
         if (node && node.data && node.data.props) {
           const props = node.data.props;
+          
+          // Helper function to safely parse margin values
+          const parseMargin = (margin) => {
+            if (typeof margin === 'number') {
+              return margin;
+            }
+            if (typeof margin === 'string') {
+              // Try to extract first number from string like "0 4px" or "10px"
+              const match = margin.match(/\d+/);
+              return match ? parseInt(match[0]) : 5;
+            }
+            return 5; // default fallback
+          };
+          
           setStyleValues(prev => ({
             ...prev,
             borderRadius: parseInt(props.borderRadius) || 0,
             padding: parseInt(props.padding) || 4,
-            margin: parseInt(props.margin?.replace('px 0', '')) || 5,
+            margin: parseMargin(props.margin),
             zIndex: parseInt(props.zIndex) || 1,
             rotation: 0, // We'll add this as a new feature
             order: parseInt(props.order) || 0,

@@ -7,6 +7,7 @@ import { PlayCircleOutlined } from '@ant-design/icons';
 import MediaLibrary from '../support/MediaLibrary';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 
 export const Video = ({
   // Video Source
@@ -71,6 +72,9 @@ export const Video = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  
+  // Use our shared editor display hook
+  const { hideEditorUI } = useEditorDisplay();
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
@@ -414,7 +418,7 @@ export const Video = ({
 
   return (
     <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
       ref={(el) => {
         videoRef.current = el;
         if (el) {
@@ -430,15 +434,15 @@ export const Video = ({
       }}
       id={id}
       title={title}
-      onMouseEnter={() => {
+      onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
       }}
-      onMouseLeave={() => setIsHovered(false)}
-      onContextMenu={handleContextMenu}
+      onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
-      {/* Portal controls rendered outside this container */}
-      {isClient && isSelected && (
+      {/* Portal controls rendered outside this container - hide in preview mode */}
+      {isClient && isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
           handleDragStart={handleDragStart}
@@ -482,13 +486,15 @@ export const Video = ({
         title="Select Video"
       />
       
-      {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {/* Context Menu - hide in preview mode */}
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </div>
   );
 };

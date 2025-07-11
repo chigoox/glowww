@@ -148,11 +148,11 @@ const useSaveOperations = () => {
   // Get all auto-saved projects from localStorage
   const getAutoSavedProjects = useCallback(() => {
     const autoSavedKeys = Object.keys(localStorage).filter(key => 
-      key.startsWith('glowproject_') && key.endsWith('_autosave')
+      key.endsWith('_autosave')
     );
     
     return autoSavedKeys.map(key => {
-      const projectName = key.replace('glowproject_', '').replace('_autosave', '');
+      const projectName = key.replace('_autosave', '');
       try {
         const compressed = localStorage.getItem(key);
         const decompressed = decompressData(compressed);
@@ -161,7 +161,8 @@ const useSaveOperations = () => {
           name: projectName,
           timestamp: projectData.timestamp,
           data: compressed,
-          type: 'auto-saved'
+          type: 'auto-saved',
+          key: key // Add the key for deletion
         };
       } catch (error) {
         console.error('Error loading auto-saved project:', error);
@@ -169,6 +170,31 @@ const useSaveOperations = () => {
       }
     }).filter(Boolean);
   }, [decompressData]);
+  
+  // Delete a project from localStorage
+  const deleteProject = useCallback((projectKey) => {
+    try {
+      if (!projectKey) {
+        console.warn('No project key provided for deletion');
+        return false;
+      }
+      
+      // Check if project exists
+      if (!localStorage.getItem(projectKey)) {
+        console.warn(`Project with key ${projectKey} does not exist`);
+        return false;
+      }
+      
+      // Remove from localStorage
+      localStorage.removeItem(projectKey);
+      message.success('Project deleted successfully!');
+      return true;
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      message.error('Failed to delete project: ' + error.message);
+      return false;
+    }
+  }, []);
   
   // Get current project data from localStorage (auto-save only)
   const getProjectData = useCallback((projectNameToGet = null) => {
@@ -209,14 +235,7 @@ const useSaveOperations = () => {
     }
   }, [projectName, decompressData]);
 
-  // Initialize with the last active project on component mount
-  useEffect(() => {
-    const storedActiveProject = localStorage.getItem('glow_active_project');
-    
-    if (storedActiveProject) {
-      setProjectName(storedActiveProject);
-    }
-  }, []);
+
 
   return {
     projectName,
@@ -228,7 +247,8 @@ const useSaveOperations = () => {
     autoSaveProject,
     loadProject,
     getAutoSavedProjects,
-    getProjectData
+    getProjectData,
+    deleteProject
   };
 };
 

@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../support/ContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 
 export const FlexBox = ({
   // Layout & Position
@@ -201,6 +202,9 @@ placeContent,
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  
+  // Use our shared editor display hook
+  const { hideEditorUI } = useEditorDisplay();
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
@@ -552,7 +556,7 @@ placeContent,
 
   return (
     <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
       ref={flexBoxRef}
       style={{
         ...computedStyles,
@@ -574,15 +578,15 @@ placeContent,
       dir={dir}
       lang={lang}
       hidden={hidden}
-      onMouseEnter={() => {
+      onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
       }}
-      onMouseLeave={() => setIsHovered(false)}
-      onContextMenu={handleContextMenu}
+      onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
-      {/* Portal controls rendered outside this container to avoid overflow clipping */}
-      {isSelected && (
+      {/* Portal controls rendered outside this container to avoid overflow clipping (hide in preview mode) */}
+      {isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
@@ -593,12 +597,15 @@ placeContent,
       {children}
       
       {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {/* Hide context menu in preview mode */}
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </div>
   );
 };
@@ -875,8 +882,8 @@ FlexBox.craft = {
     borderRadius: 0,
     
     // Typography
-    fontFamily: "Arial",
-    fontSize: 16,
+    fontFamily: "inherit",
+    fontSize: 'inherit',
     fontWeight: "400",
     fontStyle: "normal",
     lineHeight: 1.4,

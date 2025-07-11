@@ -7,6 +7,7 @@ import { EditOutlined } from '@ant-design/icons';
 import dynamic from 'next/dynamic';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 
 // Dynamically import the Editor to avoid SSR issues
 const Editor = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
@@ -68,6 +69,7 @@ export const Paragraph = ({
     selected: node.events.selected,
   }));
   const { actions } = useEditor();
+  const { hideEditorUI } = useEditorDisplay();
 
   const paragraphRef = useRef(null);
   const dragRef = useRef(null);
@@ -338,7 +340,7 @@ export const Paragraph = ({
 
   return (
     <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
       ref={(el) => {
         paragraphRef.current = el;
         if (el) {
@@ -353,16 +355,16 @@ export const Paragraph = ({
       }}
       id={id}
       title={title}
-      onMouseEnter={() => {
+      onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
       }}
-      onMouseLeave={() => setIsHovered(false)}
-      onContextMenu={handleContextMenu}
+      onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onContextMenu={hideEditorUI ? undefined : handleContextMenu}
       // Remove problematic onClick to allow proper Craft.js selection
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
-      {isSelected && !isEditing && (
+      {isSelected && !isEditing && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
@@ -430,19 +432,20 @@ export const Paragraph = ({
           style={{
             minHeight: '20px',
             cursor: 'default',
-            pointerEvents: 'none', // Allow clicks to pass through to parent for selection
-            userSelect: 'none' // Prevent text selection interference
+            pointerEvents: 'none' // Allow clicks to pass through to parent for selection
           }}
         />
       )}
       
       {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </div>
   );
 };

@@ -1,10 +1,13 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
+import { usePages } from "../PagesContext";
+import { connectCraftElement } from "../support/craftUtils";
+import useEditorDisplay from "../support/useEditorDisplay";
 import { 
   Modal, 
   Input, 
@@ -14,7 +17,8 @@ import {
   Tabs,
   ColorPicker,
   Slider,
-  InputNumber
+  InputNumber,
+  Radio
 } from 'antd';
 import { EditOutlined, LinkOutlined } from '@ant-design/icons';
 
@@ -26,13 +30,27 @@ const LinkSettingsModal = ({
   currentProps 
 }) => {
   const { actions } = useEditor();
+  const { pages, isPreviewMode } = usePages();
   const [activeTab, setActiveTab] = useState('content');
+  const [linkType, setLinkType] = useState('external');
 
   // Local state for form values
   const [formData, setFormData] = useState(currentProps);
+  
+  // Get internal pages for dropdown
+  const pageOptions = pages.map(page => ({
+    label: page.title,
+    value: page.key
+  }));
 
   useEffect(() => {
     setFormData(currentProps);
+    // Detect if the current href is an internal page
+    if (currentProps.href && !currentProps.href.startsWith('http') && !currentProps.href.startsWith('#')) {
+      setLinkType('internal');
+    } else {
+      setLinkType('external');
+    }
   }, [currentProps]);
 
   const updateProp = (key, value) => {
@@ -60,7 +78,7 @@ const LinkSettingsModal = ({
       onCancel={handleCancel}
       width={700}
       zIndex={999999}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
         <Tabs
@@ -85,14 +103,60 @@ const LinkSettingsModal = ({
 
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                      URL
+                      Link Type
                     </label>
-                    <Input
-                      value={formData.href}
-                      onChange={(e) => updateProp('href', e.target.value)}
-                      placeholder="https://example.com"
-                    />
+                    <Radio.Group 
+                      value={linkType} 
+                      onChange={(e) => {
+                        setLinkType(e.target.value);
+                        // Reset href when switching between internal and external
+                        if (e.target.value === 'internal') {
+                          updateProp('href', pages[0]?.path || '/');
+                        } else {
+                          updateProp('href', 'https://');
+                        }
+                      }}
+                      style={{ marginBottom: 16 }}
+                    >
+                      <Radio.Button value="internal">Internal Page</Radio.Button>
+                      <Radio.Button value="external">External URL</Radio.Button>
+                    </Radio.Group>
                   </div>
+
+                  {linkType === 'internal' ? (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                        Select Page
+                      </label>
+                      <Select
+                        style={{ width: '100%' }}
+                        value={pageOptions.find(p => {
+                          // Match by path
+                          const pagePath = p.value === 'home' ? '/' : `/${p.value}`;
+                          return formData.href === pagePath;
+                        })?.value || pageOptions[0]?.value}
+                        onChange={(value) => {
+                          const selectedPage = pages.find(p => p.key === value);
+                          if (selectedPage) {
+                            const pagePath = selectedPage.key === 'home' ? '/' : `/${selectedPage.key}`;
+                            updateProp('href', pagePath);
+                          }
+                        }}
+                        options={pageOptions}
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                        URL
+                      </label>
+                      <Input
+                        value={formData.href}
+                        onChange={(e) => updateProp('href', e.target.value)}
+                        placeholder="https://example.com"
+                      />
+                    </div>
+                  )}
 
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -722,8 +786,8 @@ export const Link = ({
   useEffect(() => {
     const connectElements = () => {
       if (linkRef.current) {
-        // Connect both selection and dragging to the main element - makes whole link draggable
-        connect(drag(linkRef.current));
+        // Use our utility function to connect the element
+        connectCraftElement(connect, drag, linkRef.current);
       }
     };
 
@@ -932,6 +996,36 @@ export const Link = ({
     }
   };
 
+  // Get pages context
+  const { pages } = usePages();
+  
+  // Use our shared editor display hook
+  const { hideEditorUI, isPreviewMode } = useEditorDisplay();
+  
+  // Check if link is internal (starts with / but not with //)
+  const isInternalLink = useMemo(() => {
+    if (!href) return false;
+    
+    // A link is internal if:
+    // 1. It starts with / but not // (standard internal link format)
+    // 2. OR it matches a page key in our pages array
+    // 3. Does not contain a domain (.com, .org, etc.)
+    
+    // Check for standard internal link format
+    if (href.startsWith('/') && !href.startsWith('//')) {
+      return true;
+    }
+    
+    // Check if href contains a domain (.com, .org, etc.) or protocol (http:, https:)
+    if (href.match(/\.[a-z]{2,}\//) || href.includes('://')) {
+      return false;
+    }
+    
+    // Check if this matches any page key
+    const path = href.startsWith('/') ? href.substring(1) : href;
+    return pages.some(page => page.key === path || page.path === href);
+  }, [href, pages]);
+
   // Handle link click
   const handleClick = (e) => {
     if (isEditing || !href) {
@@ -940,10 +1034,62 @@ export const Link = ({
     }
     
     // In editor mode, prevent navigation for safety
-    if (selected) {
+    // But allow navigation in preview mode
+    if (selected && !hideEditorUI) {
       e.preventDefault();
       console.log('Link clicked (editor mode):', href);
       return;
+    }
+
+    // For internal links, handle navigation differently based on preview mode
+    if (isInternalLink) {
+      e.preventDefault();
+      
+      // Get the path without leading slash
+      let path = href.startsWith('/') ? href.substring(1) : href;
+      
+      // Handle home page case
+      if (path === '' || path === '/') {
+        path = 'home';
+      }
+      
+      // Find the page that matches this path
+      const targetPage = pages.find(p => p.key === path || p.path === href);
+      
+      if (targetPage) {
+        // In preview mode, navigate to /Preview/[path]
+        // In production mode, navigate directly to /[path]
+        const navigationPath = isPreviewMode 
+          ? `/Preview/${targetPage.key === 'home' ? '' : targetPage.key}`
+          : href;
+        
+        // Use window.location for navigation
+        window.location.href = navigationPath;
+        console.log('Navigating to internal page:', navigationPath);
+      } else {
+        // If page is not found in our pages list, but has a leading slash,
+        // still treat it as an internal path (could be a custom route)
+        if (href.startsWith('/')) {
+          // For paths starting with slash that aren't in pages list
+          const navigationPath = isPreviewMode 
+            ? `/Preview/${path === 'home' ? '' : path}`
+            : href;
+          
+          window.location.href = navigationPath;
+          console.log('Navigating to custom internal path:', navigationPath);
+        } 
+        // Only treat as external URL if it doesn't look like an internal path
+        else if (!href.startsWith('/')) {
+          console.log('Treating as external URL:', href);
+          
+          // If it doesn't start with http/https, add it
+          if (!href.startsWith('http')) {
+            window.location.href = `https://${href}`;
+          } else {
+            window.location.href = href;
+          }
+        }
+      }
     }
   };
 
@@ -959,7 +1105,11 @@ export const Link = ({
   const getLinkIcon = () => {
     if (!showIcon) return null;
     
+    // Determine if link is external or internal
+    // External: starts with http/https or //
+    // Internal: starts with / but not with //
     const isExternal = href && (href.startsWith('http') || href.startsWith('//'));
+    const isInternal = isInternalLink;
     
     if (isExternal) {
       // External link - custom SVG icon with link color
@@ -976,15 +1126,37 @@ export const Link = ({
             marginRight: iconPosition === 'before' ? '4px' : '0',
             color: isHovered ? colorHover : color,
           }}
+          title="External Link"
         >
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
           <polyline points="15,3 21,3 21,9"></polyline>
           <line x1="10" y1="14" x2="21" y2="3"></line>
         </svg>
       );
+    } else if (isInternal) {
+      // Internal page link - different icon
+      return (
+        <svg 
+          width="0.8em" 
+          height="0.8em" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+          style={{ 
+            marginLeft: iconPosition === 'after' ? '4px' : '0',
+            marginRight: iconPosition === 'before' ? '4px' : '0',
+            color: isHovered ? colorHover : color,
+          }}
+          title="Internal Page Link"
+        >
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+      );
     }
     
-    // Internal link - LinkOutlined with link color
+    // Default link icon
     return (
       <LinkOutlined 
         style={{ 
@@ -1049,8 +1221,8 @@ export const Link = ({
     
     // Interaction
     cursor: isEditing ? 'text' : 'pointer',
-    outline: selected ? '2px solid #1890ff' : 'none',
-    outlineOffset: '2px',
+    outline: (selected && !hideEditorUI) ? '2px solid #1890ff' : 'none',
+    outlineOffset: (selected && !hideEditorUI) ? '2px' : 'none',
     
     // Link specific
     textDecorationColor: isHovered ? colorHover : color,
@@ -1084,7 +1256,7 @@ export const Link = ({
   return (
     <>
       <a
-        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${className}`}
         ref={linkRef}
         style={computedStyles}
         href={href}
@@ -1099,10 +1271,10 @@ export const Link = ({
         aria-describedby={ariaDescribedBy}
         tabIndex={tabIndex}
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setTimeout(() => setIsHovered(true), 0)}
-        onMouseLeave={() => setTimeout(() => setIsHovered(false), 0)}
-        onContextMenu={handleContextMenu}
+        onDoubleClick={hideEditorUI ? undefined : handleDoubleClick}
+        onMouseEnter={hideEditorUI ? undefined : () => setTimeout(() => setIsHovered(true), 0)}
+        onMouseLeave={hideEditorUI ? undefined : () => setTimeout(() => setIsHovered(false), 0)}
+        onContextMenu={hideEditorUI ? undefined : handleContextMenu}
         data-craft-id={nodeId}
       >
         {/* Link content */}
@@ -1129,8 +1301,8 @@ export const Link = ({
         {children}
       </a>
 
-      {/* Link Portal Controls - show when link is hovered or component is selected */}
-      {(isHovered || selected) && !isEditing && isClient && (
+      {/* Link Portal Controls - show when link is hovered or component is selected, but not in preview mode */}
+      {(isHovered || selected) && !isEditing && isClient && !hideEditorUI && (
         <LinkPortalControls
           linkPosition={linkPosition}
           setModalVisible={setModalVisible}
@@ -1141,21 +1313,25 @@ export const Link = ({
         />
       )}
 
-      {/* Settings Modal */}
-      <LinkSettingsModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        nodeId={nodeId}
-        currentProps={currentProps}
-      />
+      {/* Settings Modal - hidden in preview mode */}
+      {!hideEditorUI && (
+        <LinkSettingsModal
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          nodeId={nodeId}
+          currentProps={currentProps}
+        />
+      )}
       
-      {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {/* Context Menu - hidden in preview mode */}
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </>
   );
 };

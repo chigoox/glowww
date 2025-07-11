@@ -15,14 +15,16 @@ const LoadProject = () => {
   const { 
     decompressData,
     getAutoSavedProjects,
-    loadProject
+    loadProject,
+    deleteProject
   } = useSaveOperations();
   
   // State for modals
   const [loadModalVisible, setLoadModalVisible] = useState(false);
-  
   // State for inputs
   const [loadData, setLoadData] = useState('');
+  // State to trigger refresh of the projects list
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Load functionality for projects using the direct PageManager function
   const handleLoadProject = () => {
@@ -96,6 +98,19 @@ const LoadProject = () => {
     new Date(b.timestamp) - new Date(a.timestamp)
   );
 
+  // Handle deleting a project
+  const handleDeleteProject = (project, e) => {
+    e.stopPropagation();
+    if (!project.key) {
+      message.error('Cannot delete project: Missing key');
+      return;
+    }
+    const success = deleteProject(project.key);
+    if (success) {
+      setRefreshTrigger(prev => prev + 1); // Force refresh
+    }
+  };
+
   return (
     <div className="flex items-center space-x-1">
       {/* Load Project Button */}
@@ -108,7 +123,6 @@ const LoadProject = () => {
           className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
         />
       </Tooltip>
-
       {/* Load Modal */}
       <Modal
         title="Load Auto-Saved Project"
@@ -135,27 +149,13 @@ const LoadProject = () => {
                       setLoadData(project.data);
                     }}
                   >
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-sm">{project.name}</span>
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                          Auto-saved
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(project.timestamp).toLocaleString()}
-                      </div>
-                    </div>
-                    <Button 
-                      size="small" 
-                      type="primary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLoadData(project.data);
-                        loadProjectFromData();
-                      }}
+                    <span className="font-medium text-sm">{project.name}</span>
+                    <Button
+                      size="small"
+                      danger
+                      onClick={(e) => handleDeleteProject(project, e)}
                     >
-                      Load
+                      Delete
                     </Button>
                   </div>
                 ))}

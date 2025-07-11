@@ -5,6 +5,7 @@ import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import MediaLibrary from '../support/MediaLibrary';
 import ContextMenu from "../support/ContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 
 const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -58,6 +59,9 @@ export const Image = ({
     selected: node.events.selected,
   }));
   const { actions } = useEditor();
+  
+  // Use our shared editor display hook
+  const { hideEditorUI } = useEditorDisplay();
 
   const imageRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
@@ -337,7 +341,7 @@ export const Image = ({
 
   return (
     <div
-      className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
       ref={(el) => {
         imageRef.current = el;
         if (el) {
@@ -354,15 +358,15 @@ export const Image = ({
       }}
       id={id}
       title={title}
-      onMouseEnter={() => {
+      onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
       }}
-      onMouseLeave={() => setIsHovered(false)}
-      onContextMenu={handleContextMenu}
+      onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
-      {isClient && isSelected && (
+      {isClient && isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
           handleDragStart={handleDragStart}
@@ -381,7 +385,10 @@ export const Image = ({
           objectFit,
           objectPosition,
           display: 'block',
-          pointerEvents: 'none' // Allow clicks to pass through to parent for selection
+          pointerEvents: 'none', // Allow clicks to pass through to parent for selection,
+          borderRadius: borderRadius,
+          opacity: opacity,
+
         }}
         onError={(e) => {
           // Fallback to placeholder if image fails to load
@@ -398,13 +405,15 @@ export const Image = ({
         title="Select Image"
       />
       
-      {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {/* Context Menu - hide in preview mode */}
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </div>
   );
 };
@@ -691,6 +700,10 @@ Image.craft = {
         "borderRadius",
         "boxShadow",
         "opacity",
+
+        // Border Radius - All corners
+        'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
+        'borderBottomLeftRadius', 'borderBottomRightRadius',
         
         // HTML Attributes
         "title",

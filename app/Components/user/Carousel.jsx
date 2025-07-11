@@ -5,6 +5,7 @@ import { useNode, useEditor, Element } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -886,6 +887,7 @@ export const Carousel = ({
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  const { hideEditorUI } = useEditorDisplay();
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -1131,7 +1133,7 @@ export const Carousel = ({
   return (
     <>
       <div
-        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className}`}
         ref={(el) => {
           carouselRef.current = el;
           if (el) {
@@ -1147,15 +1149,15 @@ export const Carousel = ({
         }}
         id={id}
         title={title}
-        onMouseEnter={() => {
+        onMouseEnter={hideEditorUI ? undefined : () => {
           setIsHovered(true);
           updateBoxPosition();
         }}
-        onMouseLeave={() => setIsHovered(false)}
-        onContextMenu={handleContextMenu}
+        onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+        onContextMenu={hideEditorUI ? undefined : handleContextMenu}
       >
         {/* Portal controls rendered outside this container to avoid overflow clipping */}
-        {isClient && selected && (
+        {isClient && selected && !hideEditorUI && (
           <PortalControls
             boxPosition={boxPosition}
             handleDragStart={handleDragStart}
@@ -1298,12 +1300,14 @@ export const Carousel = ({
       />
       
       {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        position={{ x: contextMenu.x, y: contextMenu.y }}
-        onClose={closeContextMenu}
-        targetNodeId={nodeId}
-      />
+      {!hideEditorUI && (
+        <ContextMenu
+          visible={contextMenu.visible}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={closeContextMenu}
+          targetNodeId={nodeId}
+        />
+      )}
     </>
   );
 };

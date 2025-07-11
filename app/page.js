@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 
 import { Toolbox } from './Components/ToolBox';
-import { Topbar } from './Components/TopBar';
+import { TopBar } from './Components/TopBar';
 
 import { Editor, Element, Frame, useEditor } from "@craftjs/core";
 import { Box } from './Components/user/Box';
@@ -21,6 +21,7 @@ import { FormInput } from './Components/user/Input';
 import EditorLayers from './Components/EditorLayers';
 import { Form, FormInputDropArea } from './Components/user/Advanced/Form';
 import {Carousel} from './Components/user/Carousel';
+import { NavBar, NavItem } from './Components/user/Nav/NavBar';
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
@@ -92,7 +93,7 @@ useEffect(() => {
     <div className="h-screen overflow-hidden bg-gray-50">
       {/* Top Bar */}
       <div className="fixed top-0 left-0 right-0 z-50">
-        <Topbar />
+        <TopBar />
       </div>
 
       {/* Main Layout Container */}
@@ -156,7 +157,7 @@ export default function App() {
   return (
     <Editor resolver={{
       Box, FlexBox, GridBox, Text, Image, Button, TextArea, Link, FormInputDropArea,
-      Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel
+      Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel, NavBar, NavItem
     }}> 
       <EditorLayout />
     </Editor>

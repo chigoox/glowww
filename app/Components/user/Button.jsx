@@ -14,6 +14,7 @@ import {
 } from 'antd';
 import { Text } from "./Text";
 import ContextMenu from "../support/ContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 
 // Built-in action types
 const ACTION_TYPES = [
@@ -743,6 +744,9 @@ export const Button = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeData, setResizeData] = useState(null);
+  
+  // Use our shared editor display hook
+  const { hideEditorUI } = useEditorDisplay();
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
@@ -1359,7 +1363,7 @@ export const Button = ({
   return (
     <>
       <ButtonElement
-        className={`${selected ? 'ring-2 ring-blue-500' : ''} ${isHovered ? 'ring-1 ring-gray-300' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className}`}
         ref={buttonRef}
         style={{
           ...computedStyles,
@@ -1378,10 +1382,10 @@ export const Button = ({
         aria-label={ariaLabel || text}
         tabIndex={tabIndex}
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setTimeout(() => setIsHovered(true), 0)}
-        onMouseLeave={() => setTimeout(() => setIsHovered(false), 0)}
-        onContextMenu={handleContextMenu}
+        onDoubleClick={hideEditorUI ? undefined : handleDoubleClick}
+        onMouseEnter={hideEditorUI ? undefined : () => setTimeout(() => setIsHovered(true), 0)}
+        onMouseLeave={hideEditorUI ? undefined : () => setTimeout(() => setIsHovered(false), 0)}
+        onContextMenu={hideEditorUI ? undefined : handleContextMenu}
         data-craft-id={nodeId}
       >
         {/* Script indicator */}
@@ -1428,17 +1432,19 @@ export const Button = ({
         
         {children}
         
-        {/* Context Menu */}
-        <ContextMenu
-          visible={contextMenu.visible}
-          position={{ x: contextMenu.x, y: contextMenu.y }}
-          onClose={closeContextMenu}
-          targetNodeId={nodeId}
-        />
+        {/* Context Menu - hide in preview mode */}
+        {!hideEditorUI && (
+          <ContextMenu
+            visible={contextMenu.visible}
+            position={{ x: contextMenu.x, y: contextMenu.y }}
+            onClose={closeContextMenu}
+            targetNodeId={nodeId}
+          />
+        )}
       </ButtonElement>
 
-      {/* Button Portal Controls - show when button is hovered or component is selected */}
-      {(isHovered || selected) && !isEditing && (
+      {/* Button Portal Controls - show when button is hovered or component is selected (hide in preview mode) */}
+      {(isHovered || selected) && !isEditing && !hideEditorUI && (
         <ButtonPortalControls
           buttonPosition={buttonPosition}
           setModalVisible={setModalVisible}

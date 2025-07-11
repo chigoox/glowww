@@ -459,18 +459,7 @@ const PageManager = () => {
 
   // Active project name is now managed by auto-save
 
-  // Initialize with the last active project on component mount
-  useEffect(() => {
-    const storedActiveProject = localStorage.getItem('glow_active_project');
-    console.log('PageManager: Stored active project on init:', storedActiveProject);
-    
-    if (storedActiveProject && storedActiveProject !== projectName) {
-      console.log('PageManager: Setting project name to stored value:', storedActiveProject);
-      setProjectName(storedActiveProject);
-    }
-    // Note: We no longer automatically set active project from available projects
-    // The active project should only change when user manually saves
-  }, []); // Run only on mount
+
 
   // Method to handle project loading from SaveLoad component
   const handleProjectLoad = (projectData) => {

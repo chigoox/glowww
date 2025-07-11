@@ -4,12 +4,12 @@ import React, { useState, useEffect } from "react";
 import { Switch, Button, Dropdown, Menu, Tooltip } from "antd";
 import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { useEditor } from "@craftjs/core";
-import LoadProject from "./support/SaveLoad";
+import LoadProject from "./support/LoadProject";
 import ExportManager from "./support/ExportManager";
-import PageManager from "./support/PageManger";
+import PageManager from "./support/PageManager";
 import PreviewButton from "./support/PreviewButton";
 
-export const Topbar = () => {
+export const TopBar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
     enabled: state.options.enabled,
     canUndo: query.history.canUndo(),

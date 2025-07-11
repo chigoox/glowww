@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { FlexBox } from "../FlexBox";
 import ContextMenu from "../../support/ContextMenu";
 import { useContextMenu } from "../../support/useContextMenu";
+import useEditorDisplay from "../../support/useEditorDisplay";
 
 
 // Mock Stripe Products Data
@@ -372,6 +373,7 @@ export const ShopFlexBox = ({
 
     // Context menu functionality
     const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+    const { hideEditorUI } = useEditorDisplay();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState({});
@@ -747,10 +749,10 @@ export const ShopFlexBox = ({
                     position: 'relative',
                     minHeight: displayProducts.length === 0 ? '200px' : 'auto'
                 }}
-                onContextMenu={handleContextMenu}
+                onContextMenu={hideEditorUI ? undefined : handleContextMenu}
             >
                 {/* Edit Button */}
-                {isSelected && (
+                {isSelected && !hideEditorUI && (
                     <div
                         style={{
                             position: "absolute",
@@ -926,12 +928,14 @@ export const ShopFlexBox = ({
             </Modal>
             
             {/* Context Menu */}
-            <ContextMenu
-                visible={contextMenu.visible}
-                position={{ x: contextMenu.x, y: contextMenu.y }}
-                onClose={closeContextMenu}
-                targetNodeId={nodeId}
-            />
+            {!hideEditorUI && (
+                <ContextMenu
+                    visible={contextMenu.visible}
+                    position={{ x: contextMenu.x, y: contextMenu.y }}
+                    onClose={closeContextMenu}
+                    targetNodeId={nodeId}
+                />
+            )}
         </>
     );
 };

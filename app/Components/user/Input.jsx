@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { useState, useEffect, useRef } from "react";
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
+import useEditorDisplay from "../support/useEditorDisplay";
 import { 
   Button, 
   ColorPicker, 
@@ -158,6 +159,8 @@ export const FormInput = ({
         selected: node.events.selected,
         id: node.id
     }));
+    
+    const { hideEditorUI } = useEditorDisplay();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
@@ -327,19 +330,19 @@ export const FormInput = ({
             disabled,
             value: inputValue,
             onChange: handleInputChange,
-            onFocus: handleFocus,
-            onBlur: handleBlur,
+            onFocus: hideEditorUI ? undefined : handleFocus,
+            onBlur: hideEditorUI ? undefined : handleBlur,
             style: {
                 ...inputStyles,
-                outline: isSelected ? '2px solid #1890ff' : 'none',
+                outline: isSelected && !hideEditorUI ? '2px solid #1890ff' : 'none',
                 outlineOffset: '2px',
                 position: 'relative'
             },
             status: (hasError || showError) ? 'error' : undefined,
-            onMouseEnter: () => setTimeout(() => setIsInputHovered(true), 0),
-            onMouseLeave: () => setTimeout(() => setIsInputHovered(false), 0),
-            onContextMenu: handleContextMenu,
-            onClick: (e) => {
+            onMouseEnter: hideEditorUI ? undefined : () => setTimeout(() => setIsInputHovered(true), 0),
+            onMouseLeave: hideEditorUI ? undefined : () => setTimeout(() => setIsInputHovered(false), 0),
+            onContextMenu: hideEditorUI ? undefined : handleContextMenu,
+            onClick: hideEditorUI ? undefined : (e) => {
                 e.stopPropagation();
                 // Defer position update to avoid render cycle issues
                 setTimeout(() => updateInputPosition(), 0);
@@ -764,7 +767,7 @@ export const FormInput = ({
             </FlexBox>
 
             {/* Input Portal Controls - show when input is hovered or component is selected */}
-            {(isInputHovered || isSelected) && (
+            {(isInputHovered || isSelected) && !hideEditorUI && (
                 <InputPortalControls
                     inputPosition={{...inputPosition, inputType}}
                     setIsEditModalOpen={setIsEditModalOpen}
