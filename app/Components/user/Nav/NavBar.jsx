@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import ContextMenu from "../../support/ContextMenu";
 import { useContextMenu } from "../../support/useContextMenu";
 import useEditorDisplay from "../../support/useEditorDisplay";
+import MediaLibrary from "../../support/MediaLibrary";
+import useSaveOperations from "../../support/useSaveOperations";
 import { 
   EditOutlined, 
   MenuOutlined,
@@ -13,8 +15,11 @@ import {
   DownOutlined,
   SearchOutlined,
   UserOutlined,
-  HomeOutlined
+  HomeOutlined,
+  PictureOutlined,
+  FontSizeOutlined
 } from '@ant-design/icons';
+import pako from 'pako';
 import { 
   Modal, 
   Input, 
@@ -26,10 +31,122 @@ import {
   Radio,
   ColorPicker,
   Divider,
-  message
+  message,
+  Typography
 } from 'antd';
 
 const { TabPane } = Tabs;
+const { Text } = Typography;
+
+// Font family options for NavBar styling
+const FONT_FAMILIES = [
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
+  { label: 'Times New Roman', value: 'Times New Roman, serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Verdana', value: 'Verdana, sans-serif' },
+  { label: 'Tahoma', value: 'Tahoma, sans-serif' },
+  { label: 'Trebuchet MS', value: 'Trebuchet MS, sans-serif' },
+  { label: 'Arial Black', value: 'Arial Black, sans-serif' },
+  { label: 'Impact', value: 'Impact, sans-serif' },
+  { label: 'Palatino', value: 'Palatino, serif' },
+  { label: 'Garamond', value: 'Garamond, serif' },
+  { label: 'Courier New', value: 'Courier New, monospace' },
+  { label: 'Lucida Console', value: 'Lucida Console, monospace' },
+  { label: 'Comic Sans MS', value: 'Comic Sans MS, cursive' },
+  { label: 'Brush Script', value: 'Brush Script MT, cursive' }
+];
+
+// Helper function to get pages from project data and build navigation
+const getPagesFromProject = (navMode = 'top-level') => {
+  try {
+    // Helper function to decompress data (same as in useSaveOperations)
+    const decompressData = (compressedString) => {
+      try {
+        const binaryString = atob(compressedString);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const decompressed = pako.inflate(bytes, { to: 'string' });
+        return decompressed;
+      } catch (error) {
+        console.error('NavBar: Decompression error:', error);
+        throw new Error('Failed to decompress data - invalid format');
+      }
+    };
+
+    // Try to get current project data
+    const activeProjectName = localStorage.getItem('glow_active_project') || 'my-website';
+    const projectDataKey = `glowproject_${activeProjectName}_autosave`;
+    const projectDataString = localStorage.getItem(projectDataKey);
+    
+    if (!projectDataString) {
+      console.warn('NavBar: No project data found, using fallback navigation');
+      return [
+        { id: 1, name: "Home", path: "/", children: [] }
+      ];
+    }
+    
+    // Try to decompress and parse the data
+    let projectData;
+    try {
+      // First try to decompress (new format)
+      const decompressed = decompressData(projectDataString);
+      projectData = JSON.parse(decompressed);
+    } catch (decompressError) {
+      try {
+        // Fallback: try to parse directly as JSON (old format)
+        projectData = JSON.parse(projectDataString);
+      } catch (jsonError) {
+        console.error('NavBar: Failed to parse project data:', {
+          decompressError: decompressError.message,
+          jsonError: jsonError.message,
+          dataPreview: projectDataString.substring(0, 50) + '...'
+        });
+        return [
+          { id: 1, name: "Home", path: "/", children: [] }
+        ];
+      }
+    }
+    
+    const pages = projectData.pages || [];
+    
+    // Find home page
+    const homePage = pages.find(p => p.isHome || p.key === 'home') || pages[0];
+    
+    if (navMode === 'top-level') {
+      // Only show pages that are direct children of home or top-level pages
+      return pages
+        .filter(page => !page.parentKey || page.parentKey === homePage?.key)
+        .map(page => ({
+          id: page.key || page.id,
+          name: page.title,
+          path: page.path || `/${page.key}`,
+          children: []
+        }));
+    } else {
+      // Nested mode: show full hierarchy
+      const buildHierarchy = (parentKey = null) => {
+        return pages
+          .filter(page => page.parentKey === parentKey)
+          .map(page => ({
+            id: page.key || page.id,
+            name: page.title,
+            path: page.path || `/${page.key}`,
+            children: buildHierarchy(page.key)
+          }));
+      };
+      
+      return buildHierarchy(homePage?.key);
+    }
+  } catch (error) {
+    console.error('NavBar: Error loading pages from project:', error);
+    return [
+      { id: 1, name: "Home", path: "/", children: [] }
+    ];
+  }
+};
 
 // Helper function to format page names
 const formatPageName = (pageName) => {
@@ -79,6 +196,8 @@ export const NavItem = ({ item, isActive, navItemStyles, dropdownStyles, onNavig
           borderRadius: typeof navItemStyles.borderRadius === 'number' ? `${navItemStyles.borderRadius}px` : navItemStyles.borderRadius,
           fontSize: typeof navItemStyles.fontSize === 'number' ? `${navItemStyles.fontSize}px` : navItemStyles.fontSize,
           fontWeight: isActive ? navItemStyles.activeFontWeight : navItemStyles.fontWeight,
+          fontFamily: navItemStyles.fontFamily,
+          textShadow: navItemStyles.textShadow,
           textDecoration: 'none',
           display: 'flex',
           alignItems: 'center',
@@ -223,6 +342,7 @@ const MobileMenu = ({ isOpen, navigation, navItemStyles, onNavigate, onClose }) 
                   borderBottom: '1px solid #f0f0f0',
                   fontSize: typeof navItemStyles.fontSize === 'number' ? `${navItemStyles.fontSize}px` : navItemStyles.fontSize,
                   fontWeight: navItemStyles.fontWeight,
+                  fontFamily: navItemStyles.fontFamily,
                   textDecoration: 'none',
                   display: 'block',
                   cursor: 'pointer',
@@ -277,6 +397,7 @@ const MobileMenu = ({ isOpen, navigation, navItemStyles, onNavigate, onClose }) 
 // NavBar Settings Modal
 const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('layout');
+  const [mediaLibraryVisible, setMediaLibraryVisible] = useState(false);
 
   const updateNavBarSetting = (key, value) => {
     onUpdate({ ...navBar, [key]: value });
@@ -290,6 +411,11 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
         [property]: value
       }
     });
+  };
+
+  const handleMediaSelect = (media) => {
+    updateStyleObject('logo', 'content', media.url);
+    setMediaLibraryVisible(false);
   };
 
   return (
@@ -396,24 +522,71 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
               </Radio.Group>
 
               {navBar.logo.type === 'text' && (
-                <div style={{ marginBottom: 16 }}>
-                  <label>Logo Text</label>
-                  <Input
-                    value={navBar.logo.content}
-                    onChange={(e) => updateStyleObject('logo', 'content', e.target.value)}
-                    placeholder="Your Brand Name"
-                  />
-                </div>
+                <>
+                  <div style={{ marginBottom: 16 }}>
+                    <label>Logo Text</label>
+                    <Input
+                      value={navBar.logo.content}
+                      onChange={(e) => updateStyleObject('logo', 'content', e.target.value)}
+                      placeholder="Your Brand Name"
+                    />
+                  </div>
+                  
+                  <div style={{ marginBottom: 16 }}>
+                    <label>Logo Font Family</label>
+                    <Select
+                      value={navBar.logo.fontFamily}
+                      onChange={(value) => updateStyleObject('logo', 'fontFamily', value)}
+                      style={{ width: '100%' }}
+                      options={FONT_FAMILIES}
+                      placeholder="Select font family"
+                    />
+                  </div>
+                  
+                  <div style={{ marginBottom: 16 }}>
+                    <label>Logo Text Color</label>
+                    <ColorPicker
+                      value={navBar.logo.color}
+                      onChange={(color) => updateStyleObject('logo', 'color', color.toHexString())}
+                      showText
+                    />
+                  </div>
+                </>
               )}
 
               {navBar.logo.type === 'image' && (
                 <div style={{ marginBottom: 16 }}>
-                  <label>Logo Image URL</label>
-                  <Input
-                    value={navBar.logo.content}
-                    onChange={(e) => updateStyleObject('logo', 'content', e.target.value)}
-                    placeholder="https://example.com/logo.png"
-                  />
+                  <label>Logo Image</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
+                    <Input
+                      value={navBar.logo.content}
+                      onChange={(e) => updateStyleObject('logo', 'content', e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                    />
+                    <AntButton 
+                      icon={<PictureOutlined />}
+                      onClick={() => setMediaLibraryVisible(true)}
+                      type="primary"
+                    >
+                      Browse
+                    </AntButton>
+                  </div>
+                  {navBar.logo.content && (
+                    <div style={{ marginTop: '12px', textAlign: 'center' }}>
+                      <img 
+                        src={navBar.logo.content} 
+                        alt="Logo Preview" 
+                        style={{ 
+                          maxWidth: '150px', 
+                          maxHeight: '60px', 
+                          objectFit: 'contain',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '4px',
+                          padding: '8px'
+                        }} 
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -426,7 +599,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                 style={{ width: '100%', marginBottom: 16 }}
                 options={[
                   { value: 'left', label: 'Left' },
-                  { value: 'center', label: 'Center' },
+                  { value: 'center', label: 'Center (Logo Top, Menu Below)' },
                   { value: 'right', label: 'Right' }
                 ]}
               />
@@ -435,10 +608,29 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                 <label>Logo Size</label>
                 <Slider
                   min={16}
-                  max={48}
+                  max={72}
                   value={navBar.logo.size}
                   onChange={(value) => updateStyleObject('logo', 'size', value)}
                   tooltip={{ formatter: (val) => `${val}px` }}
+                />
+              </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label>Logo Weight (Text Only)</label>
+                <Select
+                  value={navBar.logo.fontWeight}
+                  onChange={(value) => updateStyleObject('logo', 'fontWeight', value)}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: '300', label: 'Light' },
+                    { value: '400', label: 'Normal' },
+                    { value: '500', label: 'Medium' },
+                    { value: '600', label: 'Semi Bold' },
+                    { value: '700', label: 'Bold' },
+                    { value: '800', label: 'Extra Bold' },
+                    { value: '900', label: 'Black' }
+                  ]}
+                  placeholder="Select font weight"
                 />
               </div>
             </div>
@@ -451,13 +643,40 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
             <div>
               <h4>Navigation Items</h4>
               <div style={{ marginBottom: 16 }}>
+                <label>Font Family</label>
+                <Select
+                  value={navBar.navItemStyles.fontFamily}
+                  onChange={(value) => updateStyleObject('navItemStyles', 'fontFamily', value)}
+                  style={{ width: '100%' }}
+                  options={FONT_FAMILIES}
+                  placeholder="Select font family"
+                />
+              </div>
+              
+              <div style={{ marginBottom: 16 }}>
                 <label>Font Size</label>
                 <Slider
                   min={12}
-                  max={24}
+                  max={28}
                   value={navBar.navItemStyles.fontSize}
                   onChange={(value) => updateStyleObject('navItemStyles', 'fontSize', value)}
                   tooltip={{ formatter: (val) => `${val}px` }}
+                />
+              </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label>Font Weight</label>
+                <Select
+                  value={navBar.navItemStyles.fontWeight}
+                  onChange={(value) => updateStyleObject('navItemStyles', 'fontWeight', value)}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: '300', label: 'Light' },
+                    { value: '400', label: 'Normal' },
+                    { value: '500', label: 'Medium' },
+                    { value: '600', label: 'Semi Bold' },
+                    { value: '700', label: 'Bold' }
+                  ]}
                 />
               </div>
 
@@ -487,9 +706,48 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                   showText
                 />
               </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label>Text Shadow</label>
+                <Input
+                  value={navBar.navItemStyles.textShadow}
+                  onChange={(e) => updateStyleObject('navItemStyles', 'textShadow', e.target.value)}
+                  placeholder="1px 1px 2px rgba(0,0,0,0.3)"
+                />
+              </div>
             </div>
 
             <div>
+              <h4>NavBar Background & Layout</h4>
+              <div style={{ marginBottom: 16 }}>
+                <label>NavBar Background Color</label>
+                <ColorPicker
+                  value={navBar.backgroundColor}
+                  onChange={(color) => updateNavBarSetting('backgroundColor', color.toRgbString())}
+                  showText
+                />
+              </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label>NavBar Border</label>
+                <Input
+                  value={navBar.border}
+                  onChange={(e) => updateNavBarSetting('border', e.target.value)}
+                  placeholder="1px solid #e0e0e0"
+                />
+              </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label>NavBar Border Radius</label>
+                <Slider
+                  min={0}
+                  max={20}
+                  value={navBar.borderRadius}
+                  onChange={(value) => updateNavBarSetting('borderRadius', value)}
+                  tooltip={{ formatter: (val) => `${val}px` }}
+                />
+              </div>
+
               <h4>Spacing & Layout</h4>
               <div style={{ marginBottom: 16 }}>
                 <label>Item Padding</label>
@@ -510,10 +768,10 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label>Border Radius</label>
+                <label>Item Border Radius</label>
                 <Slider
                   min={0}
-                  max={12}
+                  max={20}
                   value={navBar.navItemStyles.borderRadius}
                   onChange={(value) => updateStyleObject('navItemStyles', 'borderRadius', value)}
                   tooltip={{ formatter: (val) => `${val}px` }}
@@ -650,165 +908,142 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
         <TabPane tab="Navigation Items" key="navigation">
           <div>
             <h4>Navigation Structure</h4>
-            <p style={{ marginBottom: 16, color: '#666' }}>
-              Manage your navigation menu items. Add, edit, or remove navigation links and organize them with dropdown menus.
-            </p>
+            <div style={{ 
+              background: '#f8f9fa', 
+              padding: '16px', 
+              borderRadius: '8px', 
+              marginBottom: '16px',
+              border: '1px solid #e9ecef'
+            }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>
+                📋 <strong>Auto-Generated from PageManager</strong>
+              </Text>
+              <Text type="secondary" style={{ fontSize: '13px' }}>
+                Navigation items are automatically pulled from your project's pages. 
+                Use the PageManager to add, edit, or organize pages, and they'll appear here automatically.
+              </Text>
+            </div>
             
             <div style={{ marginBottom: 16 }}>
-              <AntButton 
-                type="primary" 
-                onClick={() => {
-                  const newItem = {
-                    id: Date.now(),
-                    name: "New Item",
-                    path: "/new-page",
-                    children: []
-                  };
-                  const updatedItems = [...(navBar.navigationItems || []), newItem];
-                  updateNavBarSetting('navigationItems', updatedItems);
-                }}
+              <h4>Navigation Mode</h4>
+              <Radio.Group
+                value={navBar.navMode}
+                onChange={(e) => updateNavBarSetting('navMode', e.target.value)}
+                style={{ marginBottom: 16 }}
               >
-                Add Navigation Item
-              </AntButton>
+                <Radio value="top-level">
+                  <div>
+                    <div><strong>Top Level Only</strong></div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Shows only pages directly under Home
+                    </Text>
+                  </div>
+                </Radio>
+                <Radio value="nested">
+                  <div>
+                    <div><strong>Nested with Dropdowns</strong></div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Shows full hierarchy with dropdown menus
+                    </Text>
+                  </div>
+                </Radio>
+              </Radio.Group>
             </div>
 
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {(navBar.navigationItems || []).map((item, index) => (
-                <div key={item.id} style={{ 
-                  border: '1px solid #e0e0e0', 
-                  borderRadius: '6px', 
-                  padding: '12px', 
-                  marginBottom: '12px',
-                  backgroundColor: '#fafafa'
-                }}>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
-                    <Input
-                      value={item.name}
-                      onChange={(e) => {
-                        const updatedItems = [...navBar.navigationItems];
-                        updatedItems[index] = { ...item, name: e.target.value };
-                        updateNavBarSetting('navigationItems', updatedItems);
-                      }}
-                      placeholder="Menu Item Name"
-                      style={{ flex: 1 }}
-                    />
-                    <Input
-                      value={item.path}
-                      onChange={(e) => {
-                        const updatedItems = [...navBar.navigationItems];
-                        updatedItems[index] = { ...item, path: e.target.value };
-                        updateNavBarSetting('navigationItems', updatedItems);
-                      }}
-                      placeholder="/path"
-                      style={{ flex: 1 }}
-                    />
-                    <AntButton 
-                      danger 
-                      size="small"
-                      onClick={() => {
-                        const updatedItems = navBar.navigationItems.filter((_, i) => i !== index);
-                        updateNavBarSetting('navigationItems', updatedItems);
-                      }}
-                    >
-                      Remove
-                    </AntButton>
-                  </div>
-
-                  {/* Child Items */}
-                  {item.children && item.children.length > 0 && (
-                    <div style={{ marginLeft: '16px', marginTop: '8px' }}>
-                      <h5>Dropdown Items:</h5>
-                      {item.children.map((child, childIndex) => (
-                        <div key={child.id} style={{ 
-                          display: 'flex', 
-                          gap: '8px', 
-                          alignItems: 'center', 
-                          marginBottom: '4px',
-                          padding: '4px',
-                          backgroundColor: '#fff',
-                          borderRadius: '4px'
-                        }}>
-                          <Input
-                            value={child.name}
-                            onChange={(e) => {
-                              const updatedItems = [...navBar.navigationItems];
-                              updatedItems[index].children[childIndex] = { ...child, name: e.target.value };
-                              updateNavBarSetting('navigationItems', updatedItems);
-                            }}
-                            placeholder="Child Item Name"
-                            size="small"
-                            style={{ flex: 1 }}
-                          />
-                          <Input
-                            value={child.path}
-                            onChange={(e) => {
-                              const updatedItems = [...navBar.navigationItems];
-                              updatedItems[index].children[childIndex] = { ...child, path: e.target.value };
-                              updateNavBarSetting('navigationItems', updatedItems);
-                            }}
-                            placeholder="/child-path"
-                            size="small"
-                            style={{ flex: 1 }}
-                          />
-                          <AntButton 
-                            danger 
-                            size="small"
-                            onClick={() => {
-                              const updatedItems = [...navBar.navigationItems];
-                              updatedItems[index].children = updatedItems[index].children.filter((_, i) => i !== childIndex);
-                              updateNavBarSetting('navigationItems', updatedItems);
-                            }}
-                          >
-                            ×
-                          </AntButton>
-                        </div>
-                      ))}
+            <div style={{ marginBottom: 16 }}>
+              <h4>Current Navigation Preview</h4>
+              <div style={{ 
+                background: '#ffffff', 
+                border: '1px solid #e0e0e0', 
+                borderRadius: '8px', 
+                padding: '16px',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                {getPagesFromProject(navBar.navMode).map((item, index) => (
+                  <div key={item.id} style={{ 
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    marginBottom: '4px',
+                    backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'transparent',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <Text strong>{item.name}</Text>
+                        <Text type="secondary" style={{ marginLeft: '8px', fontSize: '12px' }}>
+                          {item.path}
+                        </Text>
+                      </div>
+                      {item.children && item.children.length > 0 && (
+                        <Text type="secondary" style={{ fontSize: '11px' }}>
+                          {item.children.length} children
+                        </Text>
+                      )}
                     </div>
-                  )}
-
-                  <div style={{ marginTop: '8px' }}>
-                    <AntButton 
-                      size="small"
-                      onClick={() => {
-                        const newChild = {
-                          id: Date.now(),
-                          name: "New Dropdown Item",
-                          path: "/new-child"
-                        };
-                        const updatedItems = [...navBar.navigationItems];
-                        if (!updatedItems[index].children) {
-                          updatedItems[index].children = [];
-                        }
-                        updatedItems[index].children.push(newChild);
-                        updateNavBarSetting('navigationItems', updatedItems);
-                      }}
-                    >
-                      Add Dropdown Item
-                    </AntButton>
+                    
+                    {item.children && item.children.length > 0 && (
+                      <div style={{ marginLeft: '16px', marginTop: '8px' }}>
+                        {item.children.map((child) => (
+                          <div key={child.id} style={{ 
+                            padding: '4px 8px',
+                            backgroundColor: '#f1f3f4',
+                            borderRadius: '4px',
+                            marginBottom: '2px',
+                            fontSize: '12px'
+                          }}>
+                            <Text>{child.name}</Text>
+                            <Text type="secondary" style={{ marginLeft: '8px' }}>
+                              {child.path}
+                            </Text>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                ))}
+                
+                {getPagesFromProject(navBar.navMode).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '32px', color: '#999' }}>
+                    <HomeOutlined style={{ fontSize: '24px', marginBottom: '8px' }} />
+                    <div>No pages found</div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Create pages in PageManager to see them here
+                    </Text>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ 
+              background: '#fff7e6', 
+              border: '1px solid #ffd591',
+              borderRadius: '8px', 
+              padding: '12px',
+              marginTop: '16px'
+            }}>
+              <Text style={{ fontSize: '13px', color: '#ad6800' }}>
+                💡 <strong>Tip:</strong> To modify navigation items, use the PageManager component in the top toolbar. 
+                Changes to pages will automatically reflect in your navigation menu.
+              </Text>
             </div>
           </div>
         </TabPane>
       </Tabs>
+      
+      {/* MediaLibrary Modal */}
+      <MediaLibrary
+        visible={mediaLibraryVisible}
+        onClose={() => setMediaLibraryVisible(false)}
+        onSelect={handleMediaSelect}
+        mediaType="images"
+      />
     </Modal>
   );
 };
 
 // Main NavBar Component
 export const NavBar = ({
-  // Navigation Data - managed through settings instead of PagesContext
-  navigationItems = [
-    { id: 1, name: "Home", path: "/", children: [] },
-    { id: 2, name: "About", path: "/about", children: [] },
-    { id: 3, name: "Services", path: "/services", children: [
-      { id: 4, name: "Web Design", path: "/services/web-design" },
-      { id: 5, name: "SEO", path: "/services/seo" }
-    ]},
-    { id: 6, name: "Contact", path: "/contact", children: [] }
-  ],
-  
   // Layout & Position
   width = "100%",
   height = "auto",
@@ -824,6 +1059,8 @@ export const NavBar = ({
   // Background & Border
   backgroundColor = "#ffffff",
   borderBottom = "1px solid #e0e0e0",
+  border = "",
+  borderRadius = 0,
   boxShadow = "0 2px 8px rgba(0,0,0,0.06)",
   
   // Navigation Settings
@@ -836,7 +1073,10 @@ export const NavBar = ({
   logo = {
     type: "text", // 'text' | 'image' | 'none'
     content: "Brand",
-    size: 24
+    size: 24,
+    fontFamily: "Arial, sans-serif",
+    fontWeight: "700",
+    color: "#333333"
   },
   
   // Mobile Settings
@@ -856,6 +1096,7 @@ export const NavBar = ({
   
   // Style Objects
   navItemStyles = {
+    fontFamily: "Arial, sans-serif",
     fontSize: 16,
     fontWeight: "500",
     color: "#333333",
@@ -865,7 +1106,8 @@ export const NavBar = ({
     activeFontWeight: "600",
     padding: "8px 16px",
     margin: "0 4px",
-    borderRadius: 6
+    borderRadius: 6,
+    textShadow: ""
   },
   
   dropdownStyles = {
@@ -883,9 +1125,6 @@ export const NavBar = ({
     itemFontSize: 14,
     itemFontWeight: "normal"
   },
-  
-  // Page filtering
-  excludePages = [], // Pages to exclude from navigation
   
   // HTML Attributes
   className = "",
@@ -916,8 +1155,20 @@ export const NavBar = ({
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const { hideEditorUI } = useEditorDisplay();
 
-  // Use navigationItems prop instead of PagesContext
-  const navigation = navigationItems;
+  // Get navigation items from PageManager instead of props
+  const navigation = useMemo(() => {
+    const pages = getPagesFromProject(navMode);
+    console.log('NavBar: Generated navigation from PageManager:', pages);
+    return pages;
+  }, [navMode]);
+  
+  // Detect if we're in preview mode
+  const isPreviewMode = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname.startsWith('/Preview');
+    }
+    return false;
+  }, []);
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -978,12 +1229,74 @@ export const NavBar = ({
     }
   }, [selected, isHovered]);
 
-  // Handle navigation
+  // Handle navigation with proper routing support
   const handleNavigate = (path) => {
     setCurrentPath(path);
     setMobileMenuOpen(false);
-    // Note: If you need page navigation, you can add router logic here
-    console.log('Navigating to:', path);
+    
+    if (isPreviewMode) {
+      // In preview mode, navigate within preview
+      const previewPath = path === '/' ? '/Preview' : `/Preview${path}`;
+      window.location.href = previewPath;
+    } else if (hideEditorUI) {
+      // In production mode, navigate to actual routes
+      window.location.href = path;
+    } else {
+      // In editor mode, potentially switch pages in PageManager
+      // This could be enhanced to integrate with PageManager page switching
+      console.log('Editor mode navigation to:', path);
+      
+      // Try to find and switch to the page in PageManager if available
+      if (window.pageManagerSwitch) {
+        try {
+          // Helper function to decompress data (same as above)
+          const decompressData = (compressedString) => {
+            try {
+              const binaryString = atob(compressedString);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const decompressed = pako.inflate(bytes, { to: 'string' });
+              return decompressed;
+            } catch (error) {
+              throw new Error('Failed to decompress data - invalid format');
+            }
+          };
+
+          // Look for a page with matching path
+          const projectName = localStorage.getItem('glow_active_project') || 'my-website';
+          const projectDataKey = `glowproject_${projectName}_autosave`;
+          const projectDataString = localStorage.getItem(projectDataKey);
+          
+          if (projectDataString) {
+            let projectData;
+            try {
+              // First try to decompress (new format)
+              const decompressed = decompressData(projectDataString);
+              projectData = JSON.parse(decompressed);
+            } catch (decompressError) {
+              try {
+                // Fallback: try to parse directly as JSON (old format)
+                projectData = JSON.parse(projectDataString);
+              } catch (jsonError) {
+                console.warn('Failed to parse project data for page switching:', jsonError);
+                return;
+              }
+            }
+            
+            const targetPage = projectData.pages?.find(p => p.path === path);
+            
+            if (targetPage) {
+              window.pageManagerSwitch(targetPage.key);
+              return;
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to switch page in editor:', error);
+        }
+      }
+    }
   };
 
   // Helper function to process values
@@ -1007,6 +1320,8 @@ export const NavBar = ({
     margin: processValue(margin, 'margin'),
     backgroundColor,
     borderBottom,
+    border,
+    borderRadius: processValue(borderRadius, 'borderRadius'),
     boxShadow,
   };
 
@@ -1023,7 +1338,9 @@ export const NavBar = ({
     ctaButton,
     navItemStyles,
     dropdownStyles,
-    excludePages
+    backgroundColor,
+    border,
+    borderRadius
   });
 
   const updateNavBar = (updates) => {
@@ -1049,10 +1366,10 @@ export const NavBar = ({
         style={{
           ...computedStyles,
           display: 'flex',
-          flexDirection: orientation === 'vertical' ? 'column' : 'row',
-          justifyContent: alignment,
+          flexDirection: logoPosition === 'center' ? 'column' : (orientation === 'vertical' ? 'column' : 'row'),
+          justifyContent: logoPosition === 'center' ? 'center' : alignment,
           alignItems: 'center',
-          gap: orientation === 'vertical' ? '16px' : '24px'
+          gap: logoPosition === 'center' ? '16px' : (orientation === 'vertical' ? '16px' : '24px')
         }}
         onMouseEnter={hideEditorUI ? undefined : () => {
           setIsHovered(true);
@@ -1061,128 +1378,270 @@ export const NavBar = ({
         onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
         onContextMenu={hideEditorUI ? undefined : handleContextMenu}
       >
-        {/* Logo Section */}
-        {logo.type !== 'none' && (
-          <div style={{ 
-            order: logoPosition === 'left' ? 1 : logoPosition === 'right' ? 3 : 2,
-            display: 'flex',
-            alignItems: 'center'
-          }}>
-            {logo.type === 'text' ? (
-              <span
-                style={{
-                  fontSize: `${logo.size}px`,
-                  fontWeight: 'bold',
-                  color: '#333',
-                  textDecoration: 'none'
-                }}
-              >
-                {logo.content}
-              </span>
-            ) : (
-              <img
-                src={logo.content}
-                alt="Logo"
-                style={{
-                  width: `${logo.size * 1.5}px`,
-                  height: `${logo.size}px`,
-                  objectFit: 'contain'
-                }}
-              />
+        {/* Center Logo Layout */}
+        {logoPosition === 'center' ? (
+          <>
+            {/* Logo at top center */}
+            {logo.type !== 'none' && (
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {logo.type === 'text' ? (
+                  <span
+                    style={{
+                      fontSize: `${logo.size}px`,
+                      fontWeight: logo.fontWeight || 'bold',
+                      fontFamily: logo.fontFamily || 'Arial, sans-serif',
+                      color: logo.color || '#333',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    {logo.content}
+                  </span>
+                ) : (
+                  <img
+                    src={logo.content}
+                    alt="Logo"
+                    style={{
+                      width: `${logo.size * 1.5}px`,
+                      height: `${logo.size}px`,
+                      objectFit: 'contain'
+                    }}
+                  />
+                )}
+              </div>
             )}
-          </div>
+
+            {/* Navigation below logo, centered */}
+            <div style={{ 
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '16px',
+              width: '100%'
+            }}>
+              {/* Desktop Navigation */}
+              {!isMobile && (
+                <div style={{ 
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: '16px'
+                }}>
+                  {navigation.map((item) => (
+                    <NavItem
+                      key={item.id}
+                      item={item}
+                      isActive={currentPath === item.path}
+                      navItemStyles={navItemStyles}
+                      dropdownStyles={dropdownStyles}
+                      onNavigate={handleNavigate}
+                      hideEditorUI={hideEditorUI}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Right Side Features for center layout */}
+              {(showSearch || ctaButton.show || showUserMenu || (isMobile && showMobileMenu)) && (
+                <div style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
+                  {/* Search Bar */}
+                  {showSearch && !isMobile && (
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      style={{
+                        width: '200px',
+                        borderRadius: '20px',
+                        padding: '6px 12px',
+                        border: '1px solid #d9d9d9',
+                        outline: 'none'
+                      }}
+                    />
+                  )}
+
+                  {/* CTA Button */}
+                  {ctaButton.show && !isMobile && (
+                    <button
+                      style={{
+                        backgroundColor: '#1890ff',
+                        color: 'white',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        fontWeight: '500',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textDecoration: 'none'
+                      }}
+                      onClick={() => handleNavigate(ctaButton.action)}
+                    >
+                      {ctaButton.text}
+                    </button>
+                  )}
+
+                  {/* User Menu */}
+                  {showUserMenu && !isMobile && (
+                    <button
+                      style={{
+                        backgroundColor: 'transparent',
+                        color: '#666',
+                        padding: '8px',
+                        borderRadius: '50%',
+                        border: '1px solid #d9d9d9',
+                        cursor: 'pointer',
+                        fontSize: '16px'
+                      }}
+                    >
+                      👤
+                    </button>
+                  )}
+
+                  {/* Mobile Menu Toggle */}
+                  {isMobile && showMobileMenu && (
+                    <MenuOutlined
+                      style={{ fontSize: '20px', cursor: 'pointer' }}
+                      onClick={() => setMobileMenuOpen(true)}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Standard Left/Right Layout */
+          <>
+            {/* Logo Section */}
+            {logo.type !== 'none' && (
+              <div style={{ 
+                order: logoPosition === 'left' ? 1 : logoPosition === 'right' ? 3 : 2,
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                {logo.type === 'text' ? (
+                  <span
+                    style={{
+                      fontSize: `${logo.size}px`,
+                      fontWeight: logo.fontWeight || 'bold',
+                      fontFamily: logo.fontFamily || 'Arial, sans-serif',
+                      color: logo.color || '#333',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    {logo.content}
+                  </span>
+                ) : (
+                  <img
+                    src={logo.content}
+                    alt="Logo"
+                    style={{
+                      width: `${logo.size * 1.5}px`,
+                      height: `${logo.size}px`,
+                      objectFit: 'contain'
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Desktop Navigation */}
+            {!isMobile && (
+              <div style={{ 
+                order: 2,
+                display: 'flex',
+                flexDirection: orientation === 'vertical' ? 'column' : 'row',
+                alignItems: 'center',
+                gap: orientation === 'vertical' ? '8px' : '16px',
+                flex: logoPosition === 'center' ? 'none' : 1
+              }}>
+                {navigation.map((item) => (
+                  <NavItem
+                    key={item.id}
+                    item={item}
+                    isActive={currentPath === item.path}
+                    navItemStyles={navItemStyles}
+                    dropdownStyles={dropdownStyles}
+                    onNavigate={handleNavigate}
+                    hideEditorUI={hideEditorUI}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Right Side Features */}
+            <div style={{ 
+              order: logoPosition === 'right' ? 1 : 3,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              {/* Search Bar */}
+              {showSearch && !isMobile && (
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  style={{
+                    width: '200px',
+                    borderRadius: '20px',
+                    padding: '6px 12px',
+                    border: '1px solid #d9d9d9',
+                    outline: 'none'
+                  }}
+                />
+              )}
+
+              {/* CTA Button */}
+              {ctaButton.show && !isMobile && (
+                <button
+                  style={{
+                    backgroundColor: '#1890ff',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'none'
+                  }}
+                  onClick={() => handleNavigate(ctaButton.action)}
+                >
+                  {ctaButton.text}
+                </button>
+              )}
+
+              {/* User Menu */}
+              {showUserMenu && !isMobile && (
+                <button
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: '#666',
+                    padding: '8px',
+                    borderRadius: '50%',
+                    border: '1px solid #d9d9d9',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  👤
+                </button>
+              )}
+
+              {/* Mobile Menu Toggle */}
+              {isMobile && showMobileMenu && (
+                <MenuOutlined
+                  style={{ fontSize: '20px', cursor: 'pointer' }}
+                  onClick={() => setMobileMenuOpen(true)}
+                />
+              )}
+            </div>
+          </>
         )}
-
-        {/* Desktop Navigation */}
-        {!isMobile && (
-          <div style={{ 
-            order: 2,
-            display: 'flex',
-            flexDirection: orientation === 'vertical' ? 'column' : 'row',
-            alignItems: 'center',
-            gap: orientation === 'vertical' ? '8px' : '16px',
-            flex: logoPosition === 'center' ? 'none' : 1
-          }}>
-            {navigation.map((item) => (
-              <NavItem
-                key={item.id}
-                item={item}
-                isActive={currentPath === item.path}
-                navItemStyles={navItemStyles}
-                dropdownStyles={dropdownStyles}
-                onNavigate={handleNavigate}
-                hideEditorUI={hideEditorUI}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Right Side Features */}
-        <div style={{ 
-          order: logoPosition === 'right' ? 1 : 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          {/* Search Bar */}
-          {showSearch && !isMobile && (
-            <input
-              type="text"
-              placeholder="Search..."
-              style={{
-                width: '200px',
-                borderRadius: '20px',
-                padding: '6px 12px',
-                border: '1px solid #d9d9d9',
-                outline: 'none'
-              }}
-            />
-          )}
-
-          {/* CTA Button */}
-          {ctaButton.show && !isMobile && (
-            <button
-              style={{
-                backgroundColor: '#1890ff',
-                color: 'white',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                fontWeight: '500',
-                border: 'none',
-                cursor: 'pointer',
-                textDecoration: 'none'
-              }}
-              onClick={() => handleNavigate(ctaButton.action)}
-            >
-              {ctaButton.text}
-            </button>
-          )}
-
-          {/* User Menu */}
-          {showUserMenu && !isMobile && (
-            <button
-              style={{
-                backgroundColor: 'transparent',
-                color: '#666',
-                padding: '8px',
-                borderRadius: '50%',
-                border: '1px solid #d9d9d9',
-                cursor: 'pointer',
-                fontSize: '16px'
-              }}
-            >
-              👤
-            </button>
-          )}
-
-          {/* Mobile Menu Toggle */}
-          {isMobile && showMobileMenu && (
-            <MenuOutlined
-              style={{ fontSize: '20px', cursor: 'pointer' }}
-              onClick={() => setMobileMenuOpen(true)}
-            />
-          )}
-        </div>
 
         {children}
       </div>
@@ -1268,17 +1727,6 @@ const PortalControls = ({ boxPosition, handleEditClick }) => {
 NavBar.craft = {
   displayName: "NavBar",
   props: {
-    // Navigation Data - managed through settings instead of PagesContext
-    navigationItems: [
-      { id: 1, name: "Home", path: "/", children: [] },
-      { id: 2, name: "About", path: "/about", children: [] },
-      { id: 3, name: "Services", path: "/services", children: [
-        { id: 4, name: "Web Design", path: "/services/web-design" },
-        { id: 5, name: "SEO", path: "/services/seo" }
-      ]},
-      { id: 6, name: "Contact", path: "/contact", children: [] }
-    ],
-    
     width: "100%",
     height: "auto",
     minHeight: 60,
@@ -1289,6 +1737,8 @@ NavBar.craft = {
     margin: 0,
     backgroundColor: "#ffffff",
     borderBottom: "1px solid #e0e0e0",
+    border: "",
+    borderRadius: 0,
     boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
     navMode: "top-level",
     orientation: "horizontal",
@@ -1297,7 +1747,10 @@ NavBar.craft = {
     logo: {
       type: "text",
       content: "Brand",
-      size: 24
+      size: 24,
+      fontFamily: "Arial, sans-serif",
+      fontWeight: "700",
+      color: "#333333"
     },
     mobileBreakpoint: 768,
     showMobileMenu: true,
@@ -1309,6 +1762,7 @@ NavBar.craft = {
       action: "/signup"
     },
     navItemStyles: {
+      fontFamily: "Arial, sans-serif",
       fontSize: 16,
       fontWeight: "500",
       color: "#333333",
@@ -1318,7 +1772,8 @@ NavBar.craft = {
       activeFontWeight: "600",
       padding: "8px 16px",
       margin: "0 4px",
-      borderRadius: 6
+      borderRadius: 6,
+      textShadow: ""
     },
     dropdownStyles: {
       backgroundColor: "#ffffff",
@@ -1335,13 +1790,12 @@ NavBar.craft = {
       itemFontSize: 14,
       itemFontWeight: "normal"
     },
-    excludePages: [],
     className: "",
     id: ""
   },
   rules: {
     canDrag: () => true,
-    canDrop: () => true, // Don't allow dropping into NavBar - prevent serialization issues
+    canDrop: () => true,
     canMoveIn: () => false, // Don't allow moving components into NavBar  
     canMoveOut: () => true,
   },
@@ -1354,8 +1808,8 @@ NavBar.craft = {
         // Spacing
         "padding", "margin",
         
-        // Background
-        "backgroundColor", "borderBottom", "boxShadow",
+        // Background & Border
+        "backgroundColor", "borderBottom", "border", "borderRadius", "boxShadow",
         
         // Navigation Settings
         "navMode", "orientation", "alignment", "logoPosition",
@@ -1377,18 +1831,3 @@ NavBar.craft = {
 
 
 
-using the shop box remake the navbar,
-i like the customization that the current implmentation has
-
-but expand on it, like in logo use the media libary for selecting image logo, and position center isnt working it should put the logo in the middle top and the menu items below it centered
-
-add more styling option in nav styles like font
-background color, etc make it more robost,
-
-drop down and Features are fine i love it
-
-nav items should be used to select which pages appear on the nav bar because nav items should be pulled from the pages manager pages and match up with the pages so if i have top level it will onnly show pages under home, and if nested then show the children of the pages under home
-
-clicking on the items should navigate you to the correct route weather in preview or production
-
-before you start explain to me what youre supposed to do
