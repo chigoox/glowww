@@ -11,7 +11,7 @@ import useEditorDisplay from "../support/useEditorDisplay";
 
 export const Video = ({
   // Video Source
-  videoSrc = "",
+  videoSrc = "https://www.youtube.com/watch?v=oASwMQDJPAw",
   videoType = "url", // "url" | "file"
   
   // Video Properties

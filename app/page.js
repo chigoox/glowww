@@ -12,7 +12,6 @@ import { Text } from './Components/user/Text';
 import { GridBox } from './Components/user/GridBox';
 import { Image } from './Components/user/Image';
 import { Button } from './Components/user/Button';
-import { TextArea } from './Components/user/TextArea';
 import { Link } from './Components/user/Link';
 import { Paragraph } from './Components/user/Paragraph';
 import { Video } from './Components/user/Video';
@@ -22,6 +21,7 @@ import EditorLayers from './Components/EditorLayers';
 import { Form, FormInputDropArea } from './Components/user/Advanced/Form';
 import {Carousel} from './Components/user/Carousel';
 import { NavBar, NavItem } from './Components/user/Nav/NavBar';
+import { Flex } from 'antd';
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
@@ -117,14 +117,14 @@ useEffect(() => {
         )}
 
         {/* Main Editor Area */}
-        <div className="flex-1 flex ">
+        <div className="flex-1 flex">
         {/* Canvas Area */}
           <div className="flex-1 p-4 overflow-auto bg-gray-100">
             <div className="w-full max-w-none">
               <Frame className="w-full min-h-[600px]">
                 <Element 
-                  is={Box} 
-                  padding={20} 
+                  is={FlexBox} 
+                  padding={10} 
                   background="#ffffff" 
                   canvas
                   className="min-h-[600px] w-full"
@@ -156,7 +156,7 @@ useEffect(() => {
 export default function App() {
   return (
     <Editor resolver={{
-      Box, FlexBox, GridBox, Text, Image, Button, TextArea, Link, FormInputDropArea,
+      Box, FlexBox, GridBox, Text, Image, Button, Link, FormInputDropArea,
       Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel, NavBar, NavItem
     }}> 
       <EditorLayout />

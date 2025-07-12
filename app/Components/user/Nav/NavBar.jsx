@@ -38,7 +38,56 @@ import {
 const { TabPane } = Tabs;
 const { Text } = Typography;
 
-// Font family options for NavBar styling
+// Default logo object to prevent destructuring errors
+const DEFAULT_LOGO = {
+  type: "text",
+  content: "Brand",
+  size: 24,
+  fontFamily: "Arial, sans-serif",
+  fontWeight: "700",
+  color: "#333333",
+  borderRadius: 0
+};
+
+// Default navItemStyles to prevent destructuring errors
+const DEFAULT_NAV_ITEM_STYLES = {
+  fontFamily: "Arial, sans-serif",
+  fontSize: 16,
+  fontWeight: "500",
+  color: "#333333",
+  activeColor: "#1890ff",
+  activeBgColor: "rgba(24, 144, 255, 0.1)",
+  hoverBgColor: "rgba(0,0,0,0.05)",
+  activeFontWeight: "600",
+  padding: "8px 16px",
+  margin: "0 4px",
+  borderRadius: 6,
+  textShadow: ""
+};
+
+// Default dropdownStyles to prevent destructuring errors
+const DEFAULT_DROPDOWN_STYLES = {
+  backgroundColor: "#ffffff",
+  border: "1px solid #e0e0e0",
+  borderRadius: 8,
+  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+  padding: "8px",
+  minWidth: "200px",
+  itemColor: "#333333",
+  itemHoverColor: "#1890ff",
+  itemHoverBgColor: "rgba(24, 144, 255, 0.1)",
+  itemPadding: "8px 12px",
+  itemBorderRadius: 4,
+  itemFontSize: 14,
+  itemFontWeight: "normal"
+};
+
+// Default ctaButton to prevent destructuring errors
+const DEFAULT_CTA_BUTTON = {
+  show: false,
+  text: "Get Started",
+  action: "/signup"
+};
 const FONT_FAMILIES = [
   { label: 'Arial', value: 'Arial, sans-serif' },
   { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
@@ -126,8 +175,8 @@ const getPagesFromProject = (navMode = 'top-level') => {
           children: []
         }));
     } else {
-      // Nested mode: show full hierarchy
-      const buildHierarchy = (parentKey = null) => {
+      // Nested mode: Home standalone, children of Home become top-level with their own children as dropdowns
+      const buildHierarchy = (parentKey) => {
         return pages
           .filter(page => page.parentKey === parentKey)
           .map(page => ({
@@ -138,7 +187,46 @@ const getPagesFromProject = (navMode = 'top-level') => {
           }));
       };
       
-      return buildHierarchy(homePage?.key);
+      const result = [];
+      
+      // First, add home page as standalone (no children in dropdown)
+      if (homePage) {
+        result.push({
+          id: homePage.key || homePage.id,
+          name: homePage.title,
+          path: homePage.path || `/${homePage.key}`,
+          children: [] // Home has no dropdown children
+        });
+      }
+      
+      // Then promote all direct children of Home to top-level with their children as dropdowns
+      const homeChildrenAsTopLevel = pages
+        .filter(page => page.parentKey === homePage?.key) // Direct children of Home
+        .map(page => ({
+          id: page.key || page.id,
+          name: page.title,
+          path: page.path || `/${page.key}`,
+          children: buildHierarchy(page.key) // Their children become dropdown items
+        }));
+      
+      result.push(...homeChildrenAsTopLevel);
+      
+      // Finally, add any other true top-level pages (those with no parent and not home)
+      const otherTopLevelPages = pages
+        .filter(page => 
+          !(page.isHome || page.key === 'home') && // Not the home page itself
+          !page.parentKey // No parent = truly top level
+        )
+        .map(page => ({
+          id: page.key || page.id,
+          name: page.title,
+          path: page.path || `/${page.key}`,
+          children: buildHierarchy(page.key) // Their actual children as dropdowns
+        }));
+      
+      result.push(...otherTopLevelPages);
+      
+      return result;
     }
   } catch (error) {
     console.error('NavBar: Error loading pages from project:', error);
@@ -157,7 +245,7 @@ const formatPageName = (pageName) => {
 };
 
 // NavItem Component (Non-CraftJS element to avoid serialization issues)
-export const NavItem = ({ item, isActive, navItemStyles, dropdownStyles, onNavigate, hideEditorUI }) => {
+export const NavItem = ({ item, isActive, navItemStyles, dropdownStyles, onNavigate, hideEditorUI, isPreviewMode = false }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const hasChildren = item.children && item.children.length > 0;
@@ -222,7 +310,7 @@ export const NavItem = ({ item, isActive, navItemStyles, dropdownStyles, onNavig
       </a>
 
       {/* Dropdown Menu */}
-      {hasChildren && (showDropdown || isHovered) && !hideEditorUI && (
+      {hasChildren && (showDropdown || isHovered) && (!hideEditorUI || isPreviewMode) && (
         <div
           style={{
             position: 'absolute',
@@ -434,16 +522,6 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
         <TabPane tab="Layout" key="layout">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
             <div>
-              <h4>Navigation Mode</h4>
-              <Radio.Group
-                value={navBar.navMode}
-                onChange={(e) => updateNavBarSetting('navMode', e.target.value)}
-                style={{ marginBottom: 16 }}
-              >
-                <Radio value="top-level">Top Level Only</Radio>
-                <Radio value="nested">Nested with Dropdowns</Radio>
-              </Radio.Group>
-
               <h4>Orientation</h4>
               <Radio.Group
                 value={navBar.orientation}
@@ -581,12 +659,23 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                           maxHeight: '60px', 
                           objectFit: 'contain',
                           border: '1px solid #e0e0e0',
-                          borderRadius: '4px',
+                          borderRadius: typeof navBar.logo.borderRadius === 'number' ? `${navBar.logo.borderRadius}px` : (navBar.logo.borderRadius || '4px'),
                           padding: '8px'
                         }} 
                       />
                     </div>
                   )}
+                  
+                  <div style={{ marginTop: '16px' }}>
+                    <label>Logo Border Radius</label>
+                    <Slider
+                      min={0}
+                      max={50}
+                      value={navBar.logo.borderRadius || 0}
+                      onChange={(value) => updateStyleObject('logo', 'borderRadius', value)}
+                      tooltip={{ formatter: (val) => `${val}px` }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -920,7 +1009,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
               </Text>
               <Text type="secondary" style={{ fontSize: '13px' }}>
                 Navigation items are automatically pulled from your project's pages. 
-                Use the PageManager to add, edit, or organize pages, and they'll appear here automatically.
+                Use the controls below to customize which pages appear and how they're organized.
               </Text>
             </div>
             
@@ -935,7 +1024,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                   <div>
                     <div><strong>Top Level Only</strong></div>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
-                      Shows only pages directly under Home
+                      Shows only main pages without dropdowns
                     </Text>
                   </div>
                 </Radio>
@@ -947,8 +1036,36 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                     </Text>
                   </div>
                 </Radio>
+                <Radio value="custom">
+                  <div>
+                    <div><strong>Custom Selection</strong></div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Manually choose which pages to display
+                    </Text>
+                  </div>
+                </Radio>
               </Radio.Group>
             </div>
+
+            {navBar.navMode === 'custom' && (
+              <div style={{ marginBottom: 16 }}>
+                <h4>Select Pages to Display</h4>
+                <div style={{ 
+                  background: '#ffffff', 
+                  border: '1px solid #e0e0e0', 
+                  borderRadius: '8px', 
+                  padding: '16px',
+                  maxHeight: '400px',
+                  overflowY: 'auto'
+                }}>
+                  {/* This would need to be implemented with page selection checkboxes */}
+                  <Text type="secondary">
+                    Custom page selection feature - coming soon! 
+                    For now, use PageManager to organize your pages and they'll automatically appear based on the navigation mode selected above.
+                  </Text>
+                </div>
+              </div>
+            )}
 
             <div style={{ marginBottom: 16 }}>
               <h4>Current Navigation Preview</h4>
@@ -1024,7 +1141,20 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
             }}>
               <Text style={{ fontSize: '13px', color: '#ad6800' }}>
                 💡 <strong>Tip:</strong> To modify navigation items, use the PageManager component in the top toolbar. 
-                Changes to pages will automatically reflect in your navigation menu.
+                Changes to pages will automatically reflect in your navigation menu based on the mode selected above.
+              </Text>
+            </div>
+
+            <div style={{ 
+              background: '#f6ffed', 
+              border: '1px solid #b7eb8f',
+              borderRadius: '8px', 
+              padding: '12px',
+              marginTop: '12px'
+            }}>
+              <Text style={{ fontSize: '13px', color: '#389e0d' }}>
+                🔄 <strong>Auto-Refresh:</strong> Navigation items will automatically update when you add, edit, or delete pages in PageManager. 
+                No manual refresh needed!
               </Text>
             </div>
           </div>
@@ -1070,14 +1200,7 @@ export const NavBar = ({
   logoPosition = "left", // 'left' | 'center' | 'right'
   
   // Logo Settings
-  logo = {
-    type: "text", // 'text' | 'image' | 'none'
-    content: "Brand",
-    size: 24,
-    fontFamily: "Arial, sans-serif",
-    fontWeight: "700",
-    color: "#333333"
-  },
+  logo = DEFAULT_LOGO,
   
   // Mobile Settings
   mobileBreakpoint = 768,
@@ -1088,43 +1211,12 @@ export const NavBar = ({
   showUserMenu = false,
   
   // CTA Button
-  ctaButton = {
-    show: false,
-    text: "Get Started",
-    action: "/signup"
-  },
+  ctaButton = DEFAULT_CTA_BUTTON,
   
   // Style Objects
-  navItemStyles = {
-    fontFamily: "Arial, sans-serif",
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#333333",
-    activeColor: "#1890ff",
-    activeBgColor: "rgba(24, 144, 255, 0.1)",
-    hoverBgColor: "rgba(0,0,0,0.05)",
-    activeFontWeight: "600",
-    padding: "8px 16px",
-    margin: "0 4px",
-    borderRadius: 6,
-    textShadow: ""
-  },
+  navItemStyles = DEFAULT_NAV_ITEM_STYLES,
   
-  dropdownStyles = {
-    backgroundColor: "#ffffff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    padding: "8px",
-    minWidth: "200px",
-    itemColor: "#333333",
-    itemHoverColor: "#1890ff",
-    itemHoverBgColor: "rgba(24, 144, 255, 0.1)",
-    itemPadding: "8px 12px",
-    itemBorderRadius: 4,
-    itemFontSize: 14,
-    itemFontWeight: "normal"
-  },
+  dropdownStyles = DEFAULT_DROPDOWN_STYLES,
   
   // HTML Attributes
   className = "",
@@ -1150,17 +1242,66 @@ export const NavBar = ({
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState('/');
+  const [navigationVersion, setNavigationVersion] = useState(0); // Force navigation refresh
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const { hideEditorUI } = useEditorDisplay();
+
+  // Ensure proper defaults for object props to prevent destructuring errors
+  const safeNavItemStyles = { ...DEFAULT_NAV_ITEM_STYLES, ...navItemStyles };
+  const safeDropdownStyles = { ...DEFAULT_DROPDOWN_STYLES, ...dropdownStyles };
+  const safeLogo = { ...DEFAULT_LOGO, ...logo };
+  const safeCtaButton = { ...DEFAULT_CTA_BUTTON, ...ctaButton };
+
+  // Listen for page changes to refresh navigation
+  useEffect(() => {
+    const handlePageChange = () => {
+      console.log('NavBar: Page change detected, refreshing navigation...');
+      setNavigationVersion(prev => prev + 1);
+    };
+
+    // Listen for custom events from PageManager
+    window.addEventListener('pageManagerUpdate', handlePageChange);
+    
+    // Also listen for localStorage changes (in case pages are updated)
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.includes('glowproject_') && e.key.includes('_autosave')) {
+        console.log('NavBar: LocalStorage change detected, refreshing navigation...');
+        setNavigationVersion(prev => prev + 1);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Add very fast interval-based check as backup (check every 300ms for instant updates)
+    const intervalCheck = setInterval(() => {
+      // Force a refresh by incrementing version - this ensures navigation updates quickly
+      setNavigationVersion(prev => prev + 1);
+    }, 300);
+    
+    // Also refresh when window gets focus (when user comes back to tab)
+    const handleFocus = () => {
+      console.log('NavBar: Window focus detected, refreshing navigation...');
+      setNavigationVersion(prev => prev + 1);
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('pageManagerUpdate', handlePageChange);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(intervalCheck);
+    };
+  }, []);
 
   // Get navigation items from PageManager instead of props
   const navigation = useMemo(() => {
     const pages = getPagesFromProject(navMode);
     console.log('NavBar: Generated navigation from PageManager:', pages);
     return pages;
-  }, [navMode]);
+  }, [navMode, isClient, navigationVersion]); // Add navigationVersion dependency
   
   // Detect if we're in preview mode
   const isPreviewMode = useMemo(() => {
@@ -1330,14 +1471,14 @@ export const NavBar = ({
     orientation,
     alignment,
     logoPosition,
-    logo,
+    logo: safeLogo,
     mobileBreakpoint,
     showMobileMenu,
     showSearch,
     showUserMenu,
-    ctaButton,
-    navItemStyles,
-    dropdownStyles,
+    ctaButton: safeCtaButton,
+    navItemStyles: safeNavItemStyles,
+    dropdownStyles: safeDropdownStyles,
     backgroundColor,
     border,
     borderRadius
@@ -1382,32 +1523,33 @@ export const NavBar = ({
         {logoPosition === 'center' ? (
           <>
             {/* Logo at top center */}
-            {logo.type !== 'none' && (
+            {safeLogo.type !== 'none' && (
               <div style={{ 
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                {logo.type === 'text' ? (
+                {safeLogo.type === 'text' ? (
                   <span
                     style={{
-                      fontSize: `${logo.size}px`,
-                      fontWeight: logo.fontWeight || 'bold',
-                      fontFamily: logo.fontFamily || 'Arial, sans-serif',
-                      color: logo.color || '#333',
+                      fontSize: `${safeLogo.size}px`,
+                      fontWeight: safeLogo.fontWeight || 'bold',
+                      fontFamily: safeLogo.fontFamily || 'Arial, sans-serif',
+                      color: safeLogo.color || '#333',
                       textDecoration: 'none'
                     }}
                   >
-                    {logo.content}
+                    {safeLogo.content}
                   </span>
                 ) : (
                   <img
-                    src={logo.content}
+                    src={safeLogo.content}
                     alt="Logo"
                     style={{
-                      width: `${logo.size * 1.5}px`,
-                      height: `${logo.size}px`,
-                      objectFit: 'contain'
+                      width: `${safeLogo.size * 1.5}px`,
+                      height: `${safeLogo.size}px`,
+                      objectFit: 'contain',
+                      borderRadius: typeof safeLogo.borderRadius === 'number' ? `${safeLogo.borderRadius}px` : (safeLogo.borderRadius || '0px')
                     }}
                   />
                 )}
@@ -1436,17 +1578,18 @@ export const NavBar = ({
                       key={item.id}
                       item={item}
                       isActive={currentPath === item.path}
-                      navItemStyles={navItemStyles}
-                      dropdownStyles={dropdownStyles}
+                      navItemStyles={safeNavItemStyles}
+                      dropdownStyles={safeDropdownStyles}
                       onNavigate={handleNavigate}
                       hideEditorUI={hideEditorUI}
+                      isPreviewMode={isPreviewMode}
                     />
                   ))}
                 </div>
               )}
 
               {/* Right Side Features for center layout */}
-              {(showSearch || ctaButton.show || showUserMenu || (isMobile && showMobileMenu)) && (
+              {(showSearch || safeCtaButton.show || showUserMenu || (isMobile && showMobileMenu)) && (
                 <div style={{ 
                   display: 'flex',
                   alignItems: 'center',
@@ -1468,7 +1611,7 @@ export const NavBar = ({
                   )}
 
                   {/* CTA Button */}
-                  {ctaButton.show && !isMobile && (
+                  {safeCtaButton.show && !isMobile && (
                     <button
                       style={{
                         backgroundColor: '#1890ff',
@@ -1480,9 +1623,9 @@ export const NavBar = ({
                         cursor: 'pointer',
                         textDecoration: 'none'
                       }}
-                      onClick={() => handleNavigate(ctaButton.action)}
+                      onClick={() => handleNavigate(safeCtaButton.action)}
                     >
-                      {ctaButton.text}
+                      {safeCtaButton.text}
                     </button>
                   )}
 
@@ -1518,32 +1661,33 @@ export const NavBar = ({
           /* Standard Left/Right Layout */
           <>
             {/* Logo Section */}
-            {logo.type !== 'none' && (
+            {safeLogo.type !== 'none' && (
               <div style={{ 
                 order: logoPosition === 'left' ? 1 : logoPosition === 'right' ? 3 : 2,
                 display: 'flex',
                 alignItems: 'center'
               }}>
-                {logo.type === 'text' ? (
+                {safeLogo.type === 'text' ? (
                   <span
                     style={{
-                      fontSize: `${logo.size}px`,
-                      fontWeight: logo.fontWeight || 'bold',
-                      fontFamily: logo.fontFamily || 'Arial, sans-serif',
-                      color: logo.color || '#333',
+                      fontSize: `${safeLogo.size}px`,
+                      fontWeight: safeLogo.fontWeight || 'bold',
+                      fontFamily: safeLogo.fontFamily || 'Arial, sans-serif',
+                      color: safeLogo.color || '#333',
                       textDecoration: 'none'
                     }}
                   >
-                    {logo.content}
+                    {safeLogo.content}
                   </span>
                 ) : (
                   <img
-                    src={logo.content}
+                    src={safeLogo.content}
                     alt="Logo"
                     style={{
-                      width: `${logo.size * 1.5}px`,
-                      height: `${logo.size}px`,
-                      objectFit: 'contain'
+                      width: `${safeLogo.size * 1.5}px`,
+                      height: `${safeLogo.size}px`,
+                      objectFit: 'contain',
+                      borderRadius: typeof safeLogo.borderRadius === 'number' ? `${safeLogo.borderRadius}px` : (safeLogo.borderRadius || '0px')
                     }}
                   />
                 )}
@@ -1560,16 +1704,16 @@ export const NavBar = ({
                 gap: orientation === 'vertical' ? '8px' : '16px',
                 flex: logoPosition === 'center' ? 'none' : 1
               }}>
-                {navigation.map((item) => (
-                  <NavItem
-                    key={item.id}
-                    item={item}
-                    isActive={currentPath === item.path}
-                    navItemStyles={navItemStyles}
-                    dropdownStyles={dropdownStyles}
-                    onNavigate={handleNavigate}
-                    hideEditorUI={hideEditorUI}
-                  />
+                {navigation.map((item) => (                <NavItem
+                  key={item.id}
+                  item={item}
+                  isActive={currentPath === item.path}
+                  navItemStyles={safeNavItemStyles}
+                  dropdownStyles={safeDropdownStyles}
+                  onNavigate={handleNavigate}
+                  hideEditorUI={hideEditorUI}
+                  isPreviewMode={isPreviewMode}
+                />
                 ))}
               </div>
             )}
@@ -1597,7 +1741,7 @@ export const NavBar = ({
               )}
 
               {/* CTA Button */}
-              {ctaButton.show && !isMobile && (
+              {safeCtaButton.show && !isMobile && (
                 <button
                   style={{
                     backgroundColor: '#1890ff',
@@ -1609,9 +1753,9 @@ export const NavBar = ({
                     cursor: 'pointer',
                     textDecoration: 'none'
                   }}
-                  onClick={() => handleNavigate(ctaButton.action)}
+                  onClick={() => handleNavigate(safeCtaButton.action)}
                 >
-                  {ctaButton.text}
+                  {safeCtaButton.text}
                 </button>
               )}
 
@@ -1650,7 +1794,7 @@ export const NavBar = ({
       <MobileMenu
         isOpen={mobileMenuOpen}
         navigation={navigation}
-        navItemStyles={navItemStyles}
+        navItemStyles={safeNavItemStyles}
         onNavigate={handleNavigate}
         onClose={() => setMobileMenuOpen(false)}
       />
@@ -1750,7 +1894,8 @@ NavBar.craft = {
       size: 24,
       fontFamily: "Arial, sans-serif",
       fontWeight: "700",
-      color: "#333333"
+      color: "#333333",
+      borderRadius: 0
     },
     mobileBreakpoint: 768,
     showMobileMenu: true,

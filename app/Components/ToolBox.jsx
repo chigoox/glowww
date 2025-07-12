@@ -32,7 +32,6 @@ import {
 import { Text } from "./user/Text";
 import { Button } from "./user/Button";
 import { Link } from "./user/Link";
-import { TextArea } from "./user/TextArea";
 import { Paragraph } from "./user/Paragraph";
 import { Video } from "./user/Video";
 import { ShopFlexBox } from "./user/Advanced/ShopFlexBox";
@@ -51,7 +50,6 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const gridBoxRef = useRef(null);
   const textRef = useRef(null);
   const paragraphRef = useRef(null);
-  const textAreaRef = useRef(null);
   const imageRef = useRef(null);
   const videoRef = useRef(null);
   const buttonRef = useRef(null);
@@ -113,13 +111,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           description: 'Rich text paragraph',
           element: <Element is={Paragraph} />
         },
-        {
-          ref: textAreaRef,
-          name: 'Text Area',
-          icon: <AlignCenterOutlined />,
-          description: 'Multi-line text input',
-          element: <Element is={TextArea} placeholder="Type here..." />
-        }
+       
       ]
     },
     {

@@ -93,8 +93,8 @@ const PageManager = () => {
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   
   // Auto-save states (updated range: 5 seconds to 5 minutes)
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true); // Enable by default
-  const [autoSaveInterval, setAutoSaveInterval] = useState(15); // Default to 15 seconds (5-300 range)
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false); // Enable by default
+  const [autoSaveInterval, setAutoSaveInterval] = useState(200); // Default to 15 seconds (5-300 range)
   const autoSaveTimerRef = useRef(null);
   
   // Load Page states

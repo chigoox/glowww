@@ -30,7 +30,6 @@ import { Paragraph } from '../user/Paragraph';
 import { Video } from '../user/Video';
 import { Carousel } from '../user/Carousel';
 import { FormInput } from '../user/Input';
-import { TextArea } from '../user/TextArea';
 import { Link } from '../user/Link';
 import { Form } from '../user/Advanced/Form';
 import { ShopFlexBox } from '../user/Advanced/ShopFlexBox';
@@ -59,7 +58,6 @@ const ContextMenu = ({
     { name: 'Video', component: Video, icon: '🎥' },
     { name: 'Carousel', component: Carousel, icon: '🎠' },
     { name: 'FormInput', component: FormInput, icon: '📝' },
-    { name: 'TextArea', component: TextArea, icon: '📄' },
     { name: 'Link', component: Link, icon: '🔗' },
     { name: 'Form', component: Form, icon: '📋' },
     { name: 'ShopFlexBox', component: ShopFlexBox, icon: '🛒' }
@@ -210,7 +208,6 @@ const ContextMenu = ({
     'Video': Video,
     'Carousel': Carousel,
     'FormInput': FormInput,
-    'TextArea': TextArea,
     'Link': Link,
     'Form': Form,
     'ShopFlexBox': ShopFlexBox

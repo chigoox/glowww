@@ -11,7 +11,6 @@ import { Text } from '../../Components/user/Text';
 import { GridBox } from '../../Components/user/GridBox';
 import { Image } from '../../Components/user/Image';
 import { Button } from '../../Components/user/Button';
-import { TextArea } from '../../Components/user/TextArea';
 import { Link } from '../../Components/user/Link';
 import { Paragraph } from '../../Components/user/Paragraph';
 import { Video } from '../../Components/user/Video';
@@ -19,6 +18,7 @@ import { ShopFlexBox, ShopImage, ShopText } from '../../Components/user/Advanced
 import { FormInput } from '../../Components/user/Input';
 import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
 import { Carousel } from '../../Components/user/Carousel';
+import { NavBar } from '../../Components/user/Nav/NavBar';
 
 // Import save operations hook to load auto-saved projects
 import useSaveOperations from '../../Components/support/useSaveOperations';
@@ -389,7 +389,6 @@ export default function PreviewPage() {
             GridBox,
             Image,
             Button,
-            TextArea,
             Link,
             Paragraph,
             Video,
@@ -400,6 +399,7 @@ export default function PreviewPage() {
             Form,
             FormInputDropArea,
             Carousel,
+            NavBar,
             Element
           }}
           enabled={false} // Disable editing in preview mode
