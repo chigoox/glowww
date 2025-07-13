@@ -39,6 +39,12 @@ const useSaveOperations = () => {
 
   // Auto-save project to localStorage
   const autoSaveProject = useCallback((projectData) => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || !window.localStorage) {
+      console.warn('localStorage not available for auto-save');
+      return false;
+    }
+    
     if (!projectData) {
       console.warn('No project data available for auto-save');
       return false;
@@ -55,6 +61,7 @@ const useSaveOperations = () => {
       pages: projectData.pages,
       currentPage: projectData.currentPage,
       autoSaveSettings: projectData.autoSaveSettings,
+      globalNavbarSettings: projectData.globalNavbarSettings,
       timestamp: new Date().toISOString(),
       autoSave: true
     };
@@ -80,6 +87,19 @@ const useSaveOperations = () => {
   // Load project from localStorage or compressed data
   const loadProject = useCallback((projectNameOrData) => {
     try {
+      // Check if we're in a browser environment for localStorage operations
+      if (typeof window === 'undefined' || !window.localStorage) {
+        // If no localStorage, try to decompress data directly
+        if (projectNameOrData && typeof projectNameOrData === 'string') {
+          const decompressed = decompressData(projectNameOrData);
+          const projectData = JSON.parse(decompressed);
+          setProjectName(projectData.name);
+          return projectData;
+        }
+        console.warn('localStorage not available and no data provided');
+        return null;
+      }
+      
       let decompressed;
       let projectData;
       
@@ -122,6 +142,11 @@ const useSaveOperations = () => {
   
   // Get all saved projects from localStorage
   const getSavedProjects = useCallback(() => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return [];
+    }
+    
     const savedKeys = Object.keys(localStorage).filter(key => 
       key.startsWith('glowproject_') && !key.endsWith('_autosave')
     );
@@ -147,6 +172,11 @@ const useSaveOperations = () => {
   
   // Get all auto-saved projects from localStorage
   const getAutoSavedProjects = useCallback(() => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return [];
+    }
+    
     const autoSavedKeys = Object.keys(localStorage).filter(key => 
       key.endsWith('_autosave')
     );
@@ -174,6 +204,12 @@ const useSaveOperations = () => {
   // Delete a project from localStorage
   const deleteProject = useCallback((projectKey) => {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || !window.localStorage) {
+        console.warn('localStorage not available');
+        return false;
+      }
+      
       if (!projectKey) {
         console.warn('No project key provided for deletion');
         return false;
@@ -198,6 +234,12 @@ const useSaveOperations = () => {
   
   // Get current project data from localStorage (auto-save only)
   const getProjectData = useCallback((projectNameToGet = null) => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || !window.localStorage) {
+      console.warn('localStorage not available');
+      return null;
+    }
+    
     const nameToUse = projectNameToGet || projectName;
     
     try {

@@ -97,6 +97,14 @@ const PageManager = () => {
   const [autoSaveInterval, setAutoSaveInterval] = useState(200); // Default to 15 seconds (5-300 range)
   const autoSaveTimerRef = useRef(null);
   
+  // Global navbar settings
+  const [globalNavbarEnabled, setGlobalNavbarEnabled] = useState(false);
+  const [globalNavbarSettings, setGlobalNavbarSettings] = useState({
+    navbarType: 'auto-sync', // 'default', 'auto-sync', 'custom'
+    navbarData: null // Serialized navbar component data
+  });
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true); // Auto-sync navbar changes
+  
   // Load Page states
   const [loadPageInputData, setLoadPageInputData] = useState('');
   
@@ -189,6 +197,85 @@ const PageManager = () => {
     return null;
   };
 
+  // Function to inject global navbar into page data
+  const injectGlobalNavbar = (serializedData) => {
+    if (!globalNavbarEnabled || !serializedData) {
+      return serializedData;
+    }
+
+    try {
+      const pageData = JSON.parse(serializedData);
+      
+      // First, remove any existing NavBar components to avoid duplicates
+      const nodesToRemove = [];
+      Object.keys(pageData).forEach(nodeId => {
+        if (pageData[nodeId]?.type?.resolvedName === 'NavBar') {
+          nodesToRemove.push(nodeId);
+        }
+      });
+      
+      // Remove navbar nodes and their references
+      nodesToRemove.forEach(nodeId => {
+        if (pageData.ROOT && pageData.ROOT.nodes) {
+          pageData.ROOT.nodes = pageData.ROOT.nodes.filter(id => id !== nodeId);
+        }
+        delete pageData[nodeId];
+      });
+      
+      // Generate a unique node ID for the new navbar
+      const navbarNodeId = `navbar_global_${Date.now()}`;
+      
+      // Create navbar node based on type
+      let navbarNode;
+      if ((globalNavbarSettings.navbarType === 'auto-sync' || globalNavbarSettings.navbarType === 'custom') && globalNavbarSettings.navbarData) {
+        // Use saved navbar data (either from auto-sync or manual save)
+        navbarNode = JSON.parse(globalNavbarSettings.navbarData);
+        navbarNode.parent = "ROOT";
+      } else {
+        // Create default navbar
+        navbarNode = {
+          "type": { "resolvedName": "NavBar" },
+          "isCanvas": false,
+          "props": {
+            // Default navbar settings
+            "logoSettings": {
+              "enabled": true,
+              "text": "Your Logo",
+              "position": "left",
+              "fontSize": "24",
+              "fontWeight": "bold",
+              "color": "#1f2937"
+            },
+            "navMode": "horizontal",
+            "navAlignment": "center",
+            "backgroundColor": "#ffffff",
+            "padding": ["10", "20", "10", "20"],
+            "borderBottom": "1px solid #e5e7eb"
+          },
+          "displayName": "NavBar",
+          "custom": {},
+          "parent": "ROOT",
+          "hidden": false,
+          "nodes": [],
+          "linkedNodes": {}
+        };
+      }
+      
+      // Add navbar node to page data
+      pageData[navbarNodeId] = navbarNode;
+      
+      // Insert navbar as first node in ROOT
+      if (pageData.ROOT && pageData.ROOT.nodes) {
+        pageData.ROOT.nodes.unshift(navbarNodeId);
+      }
+      
+      return JSON.stringify(pageData);
+    } catch (error) {
+      console.error('Failed to inject global navbar:', error);
+      return serializedData; // Return original data if injection fails
+    }
+  };
+
   // Save current page data
   const saveCurrentPageData = () => {
     try {
@@ -235,6 +322,9 @@ const PageManager = () => {
       dataToLoad = page.serializedData;
       isEmpty = false;
     }
+
+    // Apply global navbar injection if enabled
+    dataToLoad = injectGlobalNavbar(dataToLoad);
 
     console.log('Loading page data:', { pageKey, isEmpty, hasPage: !!page, dataLength: dataToLoad.length });
 
@@ -426,6 +516,12 @@ const PageManager = () => {
                 enabled: autoSaveEnabled,
                 interval: autoSaveInterval
               },
+              globalNavbarSettings: {
+                enabled: globalNavbarEnabled,
+                navbarType: globalNavbarSettings.navbarType,
+                navbarData: globalNavbarSettings.navbarData,
+                autoSyncEnabled: autoSyncEnabled
+              },
               timestamp: new Date().toISOString()
             };
             
@@ -491,6 +587,24 @@ const PageManager = () => {
         setAutoSaveInterval(30);
       }
       
+      // Load global navbar settings from project data
+      if (projectData.globalNavbarSettings) {
+        setGlobalNavbarEnabled(projectData.globalNavbarSettings.enabled || false);
+        setGlobalNavbarSettings({
+          navbarType: projectData.globalNavbarSettings.navbarType || 'auto-sync',
+          navbarData: projectData.globalNavbarSettings.navbarData || null
+        });
+        setAutoSyncEnabled(projectData.globalNavbarSettings.autoSyncEnabled !== false); // Default to true
+      } else {
+        // Default global navbar settings if not in project
+        setGlobalNavbarEnabled(false);
+        setGlobalNavbarSettings({
+          navbarType: 'auto-sync',
+          navbarData: null
+        });
+        setAutoSyncEnabled(true);
+      }
+      
       // Load the current page or default to home
       const pageToLoad = projectData.currentPage || 'home';
       const pageExists = updatedPages.find(p => p.key === pageToLoad);
@@ -542,7 +656,7 @@ const PageManager = () => {
     }));
   }, [pages, projectName, currentPageKey]);
 
-  // Track changes for unsaved indicator
+  // Track changes for unsaved indicator and auto-sync navbar
   useEffect(() => {
     const checkForChanges = () => {
       try {
@@ -558,6 +672,9 @@ const PageManager = () => {
           });
           setUnsavedChanges(hasChanges);
         }
+
+        // Auto-sync navbar changes if enabled
+        autoSyncNavbarDesign();
       } catch (error) {
         // Ignore serialization errors during transitions
         console.warn('Serialization error during change tracking:', error);
@@ -566,7 +683,7 @@ const PageManager = () => {
     
     const interval = setInterval(checkForChanges, 1000);
     return () => clearInterval(interval);
-  }, [unsavedChanges, currentPageKey]);
+  }, [unsavedChanges, currentPageKey, globalNavbarEnabled, autoSyncEnabled, globalNavbarSettings.navbarType]);
 
   // Recursive function to build tree node with proper nesting
   const buildTreeNode = (page) => ({
@@ -781,6 +898,98 @@ const PageManager = () => {
     };
   }, [currentPageKey, pages]);
 
+  // Auto-initialize navbar data when auto-sync is first enabled
+  useEffect(() => {
+    if (globalNavbarEnabled && globalNavbarSettings.navbarType === 'auto-sync' && !globalNavbarSettings.navbarData) {
+      // Try to find a navbar on the current page to use as initial template
+      autoSyncNavbarDesign();
+    }
+  }, [globalNavbarEnabled, globalNavbarSettings.navbarType]);
+
+  // Function to save current navbar design for global use
+  const saveCurrentNavbarDesign = () => {
+    try {
+      const currentData = query.serialize();
+      if (!currentData) {
+        message.error('No page data available to extract navbar');
+        return;
+      }
+
+      const pageData = JSON.parse(currentData);
+      
+      // Find the first NavBar component in the current page
+      const navbarNodeId = Object.keys(pageData).find(nodeId => 
+        pageData[nodeId]?.type?.resolvedName === 'NavBar'
+      );
+
+      if (!navbarNodeId) {
+        message.error('No NavBar component found on current page. Please add a NavBar component first.');
+        return;
+      }
+
+      const navbarNode = pageData[navbarNodeId];
+      
+      // Save the navbar design (without parent reference)
+      const navbarDesign = {
+        ...navbarNode,
+        parent: "ROOT" // Will be set when injected
+      };
+
+      setGlobalNavbarSettings(prev => ({
+        ...prev,
+        navbarData: JSON.stringify(navbarDesign)
+      }));
+
+      message.success('Current NavBar design saved! It will now appear on all pages.');
+    } catch (error) {
+      console.error('Failed to save navbar design:', error);
+      message.error('Failed to save navbar design: ' + error.message);
+    }
+  };
+
+  // Function to auto-sync navbar changes
+  const autoSyncNavbarDesign = () => {
+    if (!globalNavbarEnabled || !autoSyncEnabled || globalNavbarSettings.navbarType !== 'auto-sync') {
+      return;
+    }
+
+    try {
+      const currentData = query.serialize();
+      if (!currentData) return;
+
+      const pageData = JSON.parse(currentData);
+      
+      // Find the first NavBar component in the current page
+      const navbarNodeId = Object.keys(pageData).find(nodeId => 
+        pageData[nodeId]?.type?.resolvedName === 'NavBar'
+      );
+
+      if (!navbarNodeId) return; // No navbar to sync
+
+      const navbarNode = pageData[navbarNodeId];
+      
+      // Create the navbar design (without parent reference)
+      const navbarDesign = {
+        ...navbarNode,
+        parent: "ROOT"
+      };
+
+      const newNavbarData = JSON.stringify(navbarDesign);
+      
+      // Only update if the navbar has actually changed
+      if (newNavbarData !== globalNavbarSettings.navbarData) {
+        setGlobalNavbarSettings(prev => ({
+          ...prev,
+          navbarData: newNavbarData
+        }));
+        
+        console.log('Auto-synced navbar design changes');
+      }
+    } catch (error) {
+      console.warn('Auto-sync navbar failed:', error);
+    }
+  };
+
   return (
     <>
       {/* Pages Button */}
@@ -795,7 +1004,7 @@ const PageManager = () => {
                 <Text type="secondary">({pages.length})</Text>
               </div>
               <div className="flex items-center space-x-2">
-                <Tooltip title="Auto-save settings">
+                <Tooltip title="Project settings">
                   <Button 
                     type="text" 
                     size="small" 
@@ -976,50 +1185,131 @@ const PageManager = () => {
 
       {/* Settings Modal */}
       <Modal
-        title="Auto-Save Settings"
+        title="Project Settings"
         open={settingsModalVisible}
         onOk={() => setSettingsModalVisible(false)}
         onCancel={() => setSettingsModalVisible(false)}
         style={{ zIndex: 1050 }}
+        width={600}
         footer={[
           <Button key="close" onClick={() => setSettingsModalVisible(false)}>
             Close
           </Button>
         ]}
       >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Text>Enable Auto-Save</Text>
-            <Switch
-              checked={autoSaveEnabled}
-              onChange={setAutoSaveEnabled}
-            />
+        <div className="space-y-6">
+          {/* Auto-Save Settings */}
+          <div>
+            <Title level={5}>Auto-Save Settings</Title>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Text>Enable Auto-Save</Text>
+                <Switch
+                  checked={autoSaveEnabled}
+                  onChange={setAutoSaveEnabled}
+                />
+              </div>
+              
+              {autoSaveEnabled && (
+                <div>
+                  <Text>Auto-Save Interval (5 seconds - 5 minutes)</Text>
+                  <InputNumber
+                    value={autoSaveInterval}
+                    onChange={setAutoSaveInterval}
+                    min={5}
+                    max={300}
+                    className="w-full mt-1"
+                  />
+                  <div className="text-xs text-gray-500 mt-1">
+                    Range: 5 seconds to 300 seconds (5 minutes)
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           
-          {autoSaveEnabled && (
-            <div>
-              <Text>Auto-Save Interval (5 seconds - 5 minutes)</Text>
-              <InputNumber
-                value={autoSaveInterval}
-                onChange={setAutoSaveInterval}
-                min={5}
-                max={300}
-                className="w-full mt-1"
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                Range: 5 seconds to 300 seconds (5 minutes)
-              </div>
-            </div>
-          )}
+          <Divider />
           
+          {/* Global Navbar Settings */}
           <div>
-            <Text>Project Name</Text>
-            <Input
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="my-website"
-              className="mt-1"
-            />
+            <Title level={5}>Global Navbar</Title>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Text>Add navbar to all pages</Text>
+                  <div className="text-xs text-gray-500">
+                    Automatically adds a navbar as the first component on every page
+                  </div>
+                </div>
+                <Switch
+                  checked={globalNavbarEnabled}
+                  onChange={setGlobalNavbarEnabled}
+                />
+              </div>
+              
+              {globalNavbarEnabled && (
+                <div>
+                  <Text>Navbar Type</Text>
+                  <Select
+                    value={globalNavbarSettings.navbarType}
+                    onChange={(value) => setGlobalNavbarSettings(prev => ({
+                      ...prev,
+                      navbarType: value
+                    }))}
+                    className="w-full mt-1"
+                    options={[
+                      { label: 'Default Navbar', value: 'default' },
+                      { label: 'Auto-Sync Navbar (Recommended)', value: 'auto-sync' },
+                      { label: 'Custom Navbar (Manual Save)', value: 'custom' }
+                    ]}
+                  />
+                  <div className="text-xs text-gray-500 mt-1">
+                    {globalNavbarSettings.navbarType === 'default' 
+                      ? 'Uses a simple default navbar design'
+                      : globalNavbarSettings.navbarType === 'auto-sync'
+                      ? 'Automatically syncs any navbar changes across all pages'
+                      : 'Save the current NavBar component design to use across all pages'
+                    }
+                  </div>
+                  
+                  {globalNavbarSettings.navbarType === 'auto-sync' && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                      <Text strong>🔄 Auto-Sync Active</Text>
+                      <div className="text-xs text-blue-600 mt-1">
+                        Any changes you make to NavBar components will automatically apply to all pages in real-time.
+                      </div>
+                    </div>
+                  )}
+                  
+                  {globalNavbarSettings.navbarType === 'custom' && (
+                    <Button 
+                      size="small" 
+                      type="primary"
+                      onClick={saveCurrentNavbarDesign}
+                      className="mt-2"
+                    >
+                      Save Current NavBar Design
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <Divider />
+          
+          {/* Project Settings */}
+          <div>
+            <Title level={5}>Project Settings</Title>
+            <div>
+              <Text>Project Name</Text>
+              <Input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="my-website"
+                className="mt-1"
+              />
+            </div>
           </div>
         </div>
       </Modal>

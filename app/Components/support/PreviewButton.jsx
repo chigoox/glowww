@@ -23,35 +23,42 @@ const PreviewButton = () => {
    */
   const getCurrentPageInfo = () => {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined') {
+        return null;
+      }
+      
       // Primary: Get current page data from window if available (set by PageManager)
       if (window.currentPageInfo) {
         return window.currentPageInfo;
       }
       
       // Secondary: Try to get from active project using the hook
-      const activeProjectName = localStorage.getItem('glow_active_project');
-      if (activeProjectName) {
-        try {
-          const projectData = getProjectData(activeProjectName);
+      if (window.localStorage) {
+        const activeProjectName = localStorage.getItem('glow_active_project');
+        if (activeProjectName) {
+          try {
+            const projectData = getProjectData(activeProjectName);
           
-          if (projectData) {
-            // Find current page from project data
-            const currentPageKey = projectData.currentPage || 'home';
-            const currentPage = projectData.pages?.find(p => p.key === currentPageKey);
-            
-            if (currentPage) {
-              return {
-                key: currentPage.key,
-                title: currentPage.title,
-                path: currentPage.path,
-                folderPath: currentPage.folderPath,
-                parentKey: currentPage.parentKey,
-                isHome: currentPage.isHome
-              };
+            if (projectData) {
+              // Find current page from project data
+              const currentPageKey = projectData.currentPage || 'home';
+              const currentPage = projectData.pages?.find(p => p.key === currentPageKey);
+              
+              if (currentPage) {
+                return {
+                  key: currentPage.key,
+                  title: currentPage.title,
+                  path: currentPage.path,
+                  folderPath: currentPage.folderPath,
+                  parentKey: currentPage.parentKey,
+                  isHome: currentPage.isHome
+                };
+              }
             }
+          } catch (error) {
+            console.warn('PreviewButton: Error loading project data:', error);
           }
-        } catch (error) {
-          console.warn('PreviewButton: Error loading project data:', error);
         }
       }
       
@@ -119,7 +126,7 @@ const PreviewButton = () => {
         <div>
           <div className="font-medium">Preview Current Page</div>
           <div className="text-xs opacity-75 mt-1">
-            {currentPage.title} • Opens in new tab
+            {currentPage?.title || 'Current page'} • Opens in new tab
           </div>
         </div>
       }

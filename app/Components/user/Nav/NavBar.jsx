@@ -516,6 +516,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
       ]}
       width={800}
       style={{ top: 20 }}
+      zIndex={99999}
     >
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         {/* Layout Settings */}

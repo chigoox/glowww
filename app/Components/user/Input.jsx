@@ -734,7 +734,7 @@ export const FormInput = ({
                 {/* Label */}
                 {showLabel && (
                     <Element
-                        id={`label-${elementId || id}`}
+                        id={`label-${elementId || nodeId}`}
                         is={Text}
                         text={labelText + (required ? ' *' : '')}
                         fontSize={labelFontSize}
