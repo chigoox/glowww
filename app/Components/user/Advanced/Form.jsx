@@ -682,6 +682,7 @@ useEffect(() => {
         open={isEditModalOpen}
         onCancel={() => setIsEditModalOpen(false)}
         width={1200}
+        zIndex={99000}
         footer={[
           <Button key="cancel" onClick={() => setIsEditModalOpen(false)}>
             Cancel

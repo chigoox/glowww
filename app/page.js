@@ -98,7 +98,7 @@ useEffect(() => {
       </div>
 
       {/* Main Layout Container */}
-      <div className="flex  h-screen pt-20">
+      <div className="flex  h-screen pt-32">
         
         {/* Left Sidebar - Toolbox */}
         {enabled && (
@@ -111,7 +111,7 @@ useEffect(() => {
                 setOpenMenuNodeId={setOpenMenuNodeId}
               />
             </div>
-            <div className='border-2 h-[30rem]'>
+            <div className='border-t  border-dotted h-[30rem]'>
 <EditorLayers />
             </div>
           </div>

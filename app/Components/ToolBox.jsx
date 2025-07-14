@@ -253,7 +253,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
   const renderDrawerContent = (section) => {
     return (
-      <div className="h-full flex flex-col">
+      <div className="h-full  flex flex-col">
         {/* Compact Header */}
         <div className="border-b pb-2 mb-3 flex-shrink-0">
           <div className="flex items-center justify-between mb-1">
@@ -274,7 +274,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         </div>
         
         {/* Components - Single Column */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1  overflow-y-auto">
           <div className="space-y-2">
             {section.components.map((component, index) => (
               <div
@@ -306,7 +306,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         <div className="flex flex-col gap-12">
           
           
-          <div className="space-y-2 flex  flex-col gap-4 ">
+          <div className="space-y-2 flex   flex-col gap-4 ">
             {sections.map((section) => (
               <ButtonAD
                 key={section.id}
@@ -400,7 +400,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           wrapper: {
             position: 'fixed',
             left: '50px',
-            top: '64px',
+            top: '130px',
             height: 'calc(50vh)',
             width: '100px', // Fixed to 100px
             transform: 'none',

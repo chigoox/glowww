@@ -306,13 +306,14 @@ export const TopBar = () => {
   };
 
   return (
-    <div className="bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 shadow-lg mx-2 mt-2 rounded-xl relative z-10">
-      <div className="flex items-center justify-between px-6 py-3">
+    <div className="w-full bg-gray-50 border-b border-slate-200 shadow-lg px-2 py-1">
+      <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between px-4 py-2">
         
         {/* Left Section - Editor Controls */}
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-4">
           {/* Enable/Disable Toggle */}
-          <div className="flex items-center space-x-3 bg-white rounded-lg px-4 py-2 shadow-sm border border-slate-200">
+          <div className="flex items-center space-x-3 bg-white rounded-lg px-3 py-1.5 shadow-sm border border-slate-200">
             <Switch 
               checked={enabled} 
               onChange={(value) => {
@@ -329,7 +330,7 @@ export const TopBar = () => {
           </div>
 
           {/* History Controls */}
-          <div className="flex items-center space-x-2 bg-white rounded-lg px-4 py-2 shadow-sm border border-slate-200">
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-3 py-1.5 shadow-sm border border-slate-200">
             {/* Undo Button */}
             <Tooltip title={canUndo ? "Undo last action (Ctrl+Z)" : "Nothing to undo"}>
               <Button
@@ -337,7 +338,7 @@ export const TopBar = () => {
                 size="middle"
                 disabled={!canUndo}
                 onClick={handleUndo}
-                className={`h-8 w-8 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
+                className={`h-7 w-7 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
                   canUndo 
                     ? 'hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm text-slate-600' 
                     : 'text-slate-300'
@@ -353,7 +354,7 @@ export const TopBar = () => {
                 size="middle"
                 disabled={!canRedo}
                 onClick={handleRedo}
-                className={`h-8 w-8 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
+                className={`h-7 w-7 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
                   canRedo 
                     ? 'hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-sm text-slate-600' 
                     : 'text-slate-300'
@@ -377,7 +378,7 @@ export const TopBar = () => {
                   icon={<HistoryOutlined className="text-base" />}
                   size="middle"
                   type="text"
-                  className="h-8 flex items-center space-x-2 px-3 rounded-lg border-0 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm transition-all duration-200 text-slate-600"
+                  className="h-7 flex items-center space-x-2 px-3 rounded-lg border-0 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm transition-all duration-200 text-slate-600"
                 >
                   <span className="text-sm font-medium hidden sm:inline">History</span>
                 </Button>
@@ -389,23 +390,25 @@ export const TopBar = () => {
         {/* Center Section - Branding/Logo Space (optional) */}
         <div className="hidden md:flex items-center">
           <div className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Editor
+            Glowww Editor
+          <div className="text-xs text-center">Made by ED5</div>
           </div>
         </div>
 
         {/* Right Section - Management Controls */}
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2 bg-white rounded-lg px-2 py-2 shadow-sm border border-slate-200">
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-2 py-1.5 shadow-sm border border-slate-200">
             <PageManager />
             <PreviewButton />
           </div>
           
-          <div className="flex items-center space-x-2 bg-white rounded-lg px-2 py-2 shadow-sm border border-slate-200">
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-2 py-1.5 shadow-sm border border-slate-200">
             <LoadProject />
             <ExportManager />
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };
