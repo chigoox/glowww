@@ -32,7 +32,7 @@ export const Image = ({
   zIndex = 1,
   
   // Spacing
-  margin = "10px 0",
+  margin = 0,
   padding = 0,
   
   // Border
@@ -649,7 +649,7 @@ Image.craft = {
     top: 0,
     left: 0,
     zIndex: 1,
-    margin: "10px 0",
+    margin: 0,
     padding: 0,
     borderWidth: 0,
     borderStyle: "solid",
