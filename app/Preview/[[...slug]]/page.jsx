@@ -66,7 +66,7 @@ export default function PreviewPage() {
       setError(null);
       
       // Get the active project name from localStorage
-      const activeProjectName = localStorage.getItem('glow_active_project') || 'my-website';
+      const activeProjectName = localStorage.getItem('glow_active_project') || 'my-project-' + Math.floor(Math.random() * 9000 + 1000);
       console.log('Preview: Loading auto-saved project:', activeProjectName);
       
       // Load project data

@@ -1,15 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { message } from 'antd';
 import pako from 'pako';
+import { useRandomName } from './useRandomName';
 
 /**
  * A shared hook for save and load operations across components
  * This centralizes all save/load logic to eliminate event-based communication
  */
 const useSaveOperations = () => {
-  // Project state
-  const [projectName, setProjectName] = useState('my-website');
+  const { generateName } = useRandomName();
+  
+  // Project state - initialize with random name
+  const [projectName, setProjectName] = useState('');
   const [lastSaveTime, setLastSaveTime] = useState(null);
+  
+  // Generate initial project name
+  useEffect(() => {
+    const initializeProjectName = async () => {
+      if (!projectName) {
+        try {
+          const randomName = await generateName();
+          setProjectName(randomName);
+        } catch (error) {
+          console.error('Failed to generate project name:', error);
+          setProjectName('my-project-' + Math.floor(Math.random() * 9000 + 1000));
+        }
+      }
+    };
+    
+    initializeProjectName();
+  }, [generateName, projectName]);
   
   // Compression utilities
   const compressData = useCallback((jsonString) => {

@@ -22,6 +22,7 @@ import { Form, FormInputDropArea } from './Components/user/Advanced/Form';
 import {Carousel} from './Components/user/Carousel';
 import { NavBar, NavItem } from './Components/user/Nav/NavBar';
 import { Flex } from 'antd';
+import { Root } from './Components/Root';
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
@@ -123,13 +124,14 @@ useEffect(() => {
             <div className="w-full max-w-none">
               <Frame className="w-full min-h-[600px]">
                 <Element 
-                  is={FlexBox} 
-                  padding={10} 
+                  is={Root} 
+                  padding={0} 
                   background="#ffffff" 
                   canvas
                   className="min-h-[600px] w-full"
                   style={{ 
                     maxWidth: '100%',
+                    minWidth: '100%',
                     overflow: 'hidden'
                   }}
                 >
@@ -156,7 +158,7 @@ useEffect(() => {
 export default function App() {
   return (
     <Editor resolver={{
-      Box, FlexBox, GridBox, Text, Image, Button, Link, FormInputDropArea,
+      Box, FlexBox, GridBox, Text, Image, Button, Link, FormInputDropArea,Root,
       Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel, NavBar, NavItem
     }}> 
       <EditorLayout />

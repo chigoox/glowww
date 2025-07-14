@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useRandomName } from './support/useRandomName';
 
 /**
  * Context for sharing pages/routes data across components
@@ -10,7 +11,7 @@ const PagesContext = createContext({
   pages: [],
   currentPageKey: 'home',
   isPreviewMode: true,
-  projectName: 'my-website'
+  projectName: ''
 });
 
 /**
@@ -18,6 +19,8 @@ const PagesContext = createContext({
  * Listens for page updates from PageManager
  */
 export const PagesProvider = ({ children }) => {
+  const { generateName } = useRandomName();
+  
   const [pages, setPages] = useState([
     {
       key: 'home',
@@ -29,7 +32,24 @@ export const PagesProvider = ({ children }) => {
     }
   ]);
   const [currentPageKey, setCurrentPageKey] = useState('home');
-  const [projectName, setProjectName] = useState('my-website');
+  const [projectName, setProjectName] = useState('');
+  
+  // Generate initial project name
+  useEffect(() => {
+    const initializeProjectName = async () => {
+      if (!projectName) {
+        try {
+          const randomName = await generateName();
+          setProjectName(randomName);
+        } catch (error) {
+          console.error('Failed to generate project name:', error);
+          setProjectName('my-project-' + Math.floor(Math.random() * 9000 + 1000));
+        }
+      }
+    };
+    
+    initializeProjectName();
+  }, [generateName, projectName]);
   
   // Determine if we're in preview mode
   // In production, this would be false

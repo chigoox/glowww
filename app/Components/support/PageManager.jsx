@@ -314,7 +314,7 @@ const PageManager = () => {
   const loadPageData = (pageKey, pagesOverride = null) => {
     const pagesArray = pagesOverride || pages;
     const page = pagesArray.find(p => p.key === pageKey);
-    const defaultData = '{"ROOT":{"type":{"resolvedName":"Box"},"nodes":[],"props":{"canvas":true},"custom":{},"parent":null,"displayName":"Box","isCanvas":true}}';
+    const defaultData = '{"ROOT":{"type":{"resolvedName":"Root"},"nodes":[],"props":{"canvas":true},"custom":{},"parent":null,"displayName":"Root","isCanvas":true}}';
     let dataToLoad = defaultData;
     let isEmpty = true;
 
@@ -1306,7 +1306,7 @@ const PageManager = () => {
               <Input
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                placeholder="my-website"
+                placeholder="awesome-galaxy-mountain-1234"
                 className="mt-1"
               />
             </div>
