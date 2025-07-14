@@ -98,7 +98,7 @@ useEffect(() => {
       </div>
 
       {/* Main Layout Container */}
-      <div className="flex  h-screen pt-16">
+      <div className="flex  h-screen pt-20">
         
         {/* Left Sidebar - Toolbox */}
         {enabled && (

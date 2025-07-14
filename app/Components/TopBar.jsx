@@ -235,29 +235,33 @@ export const TopBar = () => {
     return {
       key: entry.id.toString(),
       label: (
-        <div className={`flex items-center justify-between py-2 px-3 min-w-[280px] rounded-md transition-colors ${
-          isCurrent ? 'bg-blue-50 border-l-4 border-blue-500' : 'hover:bg-gray-50'
+        <div className={`flex items-center justify-between py-3 px-4 min-w-[320px] rounded-lg transition-all duration-200 ${
+          isCurrent 
+            ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 shadow-sm' 
+            : 'hover:bg-slate-50 hover:shadow-sm'
         }`}>
           <div className="flex items-center space-x-3">
-            <div className={`w-2 h-2 rounded-full ${
-              isCurrent ? 'bg-blue-500' : 'bg-gray-300'
+            <div className={`w-2.5 h-2.5 rounded-full transition-colors ${
+              isCurrent ? 'bg-blue-500 shadow-sm' : 'bg-slate-300'
             }`} />
             <div className="flex flex-col">
-              <span className={`text-sm ${
-                isCurrent ? 'font-semibold text-blue-700' : 'text-gray-700'
+              <span className={`text-sm transition-colors ${
+                isCurrent ? 'font-semibold text-blue-700' : 'font-medium text-slate-700'
               }`}>
                 {entry.description}
               </span>
               {isCurrent && (
-                <span className="text-xs text-blue-500 font-medium">Current</span>
+                <span className="text-xs text-blue-600 font-medium bg-blue-100 px-2 py-0.5 rounded-full mt-1 w-fit">
+                  Current
+                </span>
               )}
             </div>
           </div>
           <div className="text-right">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-slate-500 font-medium">
               {entry.timestamp}
             </span>
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-slate-400 mt-0.5">
               #{index}
             </div>
           </div>
@@ -273,13 +277,15 @@ export const TopBar = () => {
       {
         key: 'header',
         label: (
-          <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
+          <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-700">Edit History</span>
-              <span className="text-xs text-gray-500">{historyEntries.length} entries</span>
+              <span className="text-sm font-semibold text-slate-700">Edit History</span>
+              <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full font-medium">
+                {historyEntries.length} entries
+              </span>
             </div>
-            <div className="text-xs text-gray-500 mt-1">
-              Click any entry to jump to that point
+            <div className="text-xs text-slate-500 mt-1">
+              Click any entry to jump to that point in time
             </div>
           </div>
         ),
@@ -289,10 +295,10 @@ export const TopBar = () => {
     ] : [{
       key: 'empty',
       label: (
-        <div className="text-center py-8 text-gray-500">
-          <HistoryOutlined className="text-2xl mb-2 opacity-50" />
-          <div className="text-sm">No history available</div>
-          <div className="text-xs mt-1">Start editing to build history</div>
+        <div className="text-center py-12 text-slate-500">
+          <HistoryOutlined className="text-3xl mb-3 opacity-40" />
+          <div className="text-sm font-medium mb-1">No history available</div>
+          <div className="text-xs text-slate-400">Start editing to build your history</div>
         </div>
       ),
       disabled: true
@@ -300,11 +306,13 @@ export const TopBar = () => {
   };
 
   return (
-    <div className="bg-[#cbe8e7] mb-2 px-2 py-2 rounded">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+    <div className="bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 shadow-lg mx-2 mt-2 rounded-xl relative z-10">
+      <div className="flex items-center justify-between px-6 py-3">
+        
+        {/* Left Section - Editor Controls */}
+        <div className="flex items-center space-x-6">
           {/* Enable/Disable Toggle */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3 bg-white rounded-lg px-4 py-2 shadow-sm border border-slate-200">
             <Switch 
               checked={enabled} 
               onChange={(value) => {
@@ -312,22 +320,27 @@ export const TopBar = () => {
                 actions.setOptions(options => {
                   options.enabled = value;
                 });
-              }} 
+              }}
+              className="data-[state=checked]:bg-emerald-500"
             />
-            <span className="text-sm">Enable</span>
+            <span className="text-sm font-medium text-slate-700">
+              {enabled ? 'Editor On' : 'Editor Off'}
+            </span>
           </div>
 
           {/* History Controls */}
-          <div className="flex items-center space-x-1 border-l border-gray-300 pl-4 ">
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-4 py-2 shadow-sm border border-slate-200">
             {/* Undo Button */}
             <Tooltip title={canUndo ? "Undo last action (Ctrl+Z)" : "Nothing to undo"}>
               <Button
-                icon={<UndoOutlined />}
-                size="small"
+                icon={<UndoOutlined className="text-base" />}
+                size="middle"
                 disabled={!canUndo}
                 onClick={handleUndo}
-                className={`flex items-center justify-center transition-colors ${
-                  canUndo ? 'hover:bg-blue-50 hover:text-blue-600' : ''
+                className={`h-8 w-8 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
+                  canUndo 
+                    ? 'hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm text-slate-600' 
+                    : 'text-slate-300'
                 }`}
                 type="text"
               />
@@ -336,47 +349,61 @@ export const TopBar = () => {
             {/* Redo Button */}
             <Tooltip title={canRedo ? "Redo last action (Ctrl+Y)" : "Nothing to redo"}>
               <Button
-                icon={<RedoOutlined />}
-                size="small"
+                icon={<RedoOutlined className="text-base" />}
+                size="middle"
                 disabled={!canRedo}
                 onClick={handleRedo}
-                className={`flex items-center justify-center transition-colors ${
-                  canRedo ? 'hover:bg-green-50 hover:text-green-600' : ''
+                className={`h-8 w-8 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
+                  canRedo 
+                    ? 'hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-sm text-slate-600' 
+                    : 'text-slate-300'
                 }`}
                 type="text"
               />
             </Tooltip>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
             {/* History Dropdown */}
             <Dropdown
               menu={historyDropdownMenu}
               placement="bottomLeft"
               trigger={['click']}
-              overlayClassName="shadow-lg border border-gray-200 rounded-lg"
-              
+              overlayClassName="shadow-xl border border-slate-200 rounded-xl overflow-hidden"
             >
               <Tooltip title="View and navigate edit history">
                 <Button
-                  icon={<HistoryOutlined />}
-                  size="small"
+                  icon={<HistoryOutlined className="text-base" />}
+                  size="middle"
                   type="text"
-                  className="flex items-center space-x-1 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                  className="h-8 flex items-center space-x-2 px-3 rounded-lg border-0 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm transition-all duration-200 text-slate-600"
                 >
-                  <span className="text-xs hidden sm:inline ml-1">History</span>
+                  <span className="text-sm font-medium hidden sm:inline">History</span>
                 </Button>
               </Tooltip>
             </Dropdown>
           </div>
         </div>
 
-        {/* Load/Export and Page Management Controls */}
-        <div className="flex items-center space-x-2">
-          <PageManager />
-          <PreviewButton />
-          <LoadProject />
-          <ExportManager />
+        {/* Center Section - Branding/Logo Space (optional) */}
+        <div className="hidden md:flex items-center">
+          <div className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Editor
+          </div>
+        </div>
+
+        {/* Right Section - Management Controls */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-2 py-2 shadow-sm border border-slate-200">
+            <PageManager />
+            <PreviewButton />
+          </div>
           
-          
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-2 py-2 shadow-sm border border-slate-200">
+            <LoadProject />
+            <ExportManager />
+          </div>
         </div>
       </div>
     </div>

@@ -115,7 +115,7 @@ const DEFAULT_LAYOUT = {
   margin: { top: 0, right: 0, bottom: 0, left: 0 },
   gap: 16,
   containerPadding: 20,
-  containerMaxWidth: 1200,
+  containerMaxWidth: 3000,
   centerContent: false,
   justifyContent: 'space-between',
   alignItems: 'center'
@@ -1192,15 +1192,15 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                               <Col span={12}>
                                 <Statistic
                                   title="Container Max Width"
-                                  value={navBar.layout?.containerMaxWidth || 1200}
+                                  value={navBar.layout?.containerMaxWidth || 3000}
                                   suffix="px"
                                   valueStyle={{ fontSize: '16px' }}
                                 />
                                 <Slider
                                   min={600}
-                                  max={2000}
+                                  max={9000}
                                   step={50}
-                                  value={navBar.layout?.containerMaxWidth || 1200}
+                                  value={navBar.layout?.containerMaxWidth || 3000}
                                   onChange={(value) => updateStyleObject('layout', 'containerMaxWidth', value)}
                                   tooltip={{ formatter: (val) => `${val}px` }}
                                 />
