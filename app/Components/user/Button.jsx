@@ -744,7 +744,6 @@ export const Button = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeData, setResizeData] = useState(null);
-  const textSpanRef = useRef(null);
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
@@ -910,100 +909,83 @@ export const Button = ({
     setIsResizing(true);
     const buttonRect = buttonRef.current.getBoundingClientRect();
     
-    // Capture resize data immediately, don't use state
-    const currentResizeData = {
+    setResizeData({
       direction,
       startX: e.clientX,
       startY: e.clientY,
       startWidth: buttonRect.width,
       startHeight: buttonRect.height,
       startLeft: buttonRect.left,
-      startTop: buttonRect.top,
-      initialLeft: parseInt(left) || 0,
-      initialTop: parseInt(top) || 0
-    };
-
-    console.log('🎯 Resize started:', direction, currentResizeData);
+      startTop: buttonRect.top
+    });
 
     const handleMouseMove = (moveEvent) => {
-      if (!buttonRef.current) return;
+      if (!resizeData || !buttonRef.current) return;
 
-      const deltaX = moveEvent.clientX - currentResizeData.startX;
-      const deltaY = moveEvent.clientY - currentResizeData.startY;
-
-      console.log('🎯 Mouse delta:', { deltaX, deltaY, direction });
+      const deltaX = moveEvent.clientX - resizeData.startX;
+      const deltaY = moveEvent.clientY - resizeData.startY;
 
       setProp(props => {
         const minSize = 20; // Minimum size constraint
         
         switch (direction) {
           case 'se': // Southeast - resize width and height
-            props.width = Math.max(minSize, currentResizeData.startWidth + deltaX);
-            props.height = Math.max(minSize, currentResizeData.startHeight + deltaY);
-            console.log('🎯 SE resize:', props.width, props.height);
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
             break;
           case 'sw': // Southwest - resize width and height, adjust left
-            const newWidthSW = Math.max(minSize, currentResizeData.startWidth - deltaX);
-            props.width = newWidthSW;
-            props.height = Math.max(minSize, currentResizeData.startHeight + deltaY);
+            const newWidth = Math.max(minSize, resizeData.startWidth - deltaX);
+            props.width = newWidth;
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
             if (props.position === 'absolute') {
-              props.left = currentResizeData.initialLeft - (newWidthSW - currentResizeData.startWidth);
+              props.left = resizeData.startLeft - (newWidth - resizeData.startWidth);
             }
-            console.log('🎯 SW resize:', props.width, props.height, props.left);
             break;
           case 'ne': // Northeast - resize width and height, adjust top
-            props.width = Math.max(minSize, currentResizeData.startWidth + deltaX);
-            const newHeightNE = Math.max(minSize, currentResizeData.startHeight - deltaY);
-            props.height = newHeightNE;
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
+            const newHeight = Math.max(minSize, resizeData.startHeight - deltaY);
+            props.height = newHeight;
             if (props.position === 'absolute') {
-              props.top = currentResizeData.initialTop - (newHeightNE - currentResizeData.startHeight);
+              props.top = resizeData.startTop - (newHeight - resizeData.startHeight);
             }
-            console.log('🎯 NE resize:', props.width, props.height, props.top);
             break;
           case 'nw': // Northwest - resize width and height, adjust left and top
-            const newWidthNW = Math.max(minSize, currentResizeData.startWidth - deltaX);
-            const newHeightNW = Math.max(minSize, currentResizeData.startHeight - deltaY);
+            const newWidthNW = Math.max(minSize, resizeData.startWidth - deltaX);
+            const newHeightNW = Math.max(minSize, resizeData.startHeight - deltaY);
             props.width = newWidthNW;
             props.height = newHeightNW;
             if (props.position === 'absolute') {
-              props.left = currentResizeData.initialLeft - (newWidthNW - currentResizeData.startWidth);
-              props.top = currentResizeData.initialTop - (newHeightNW - currentResizeData.startHeight);
+              props.left = resizeData.startLeft - (newWidthNW - resizeData.startWidth);
+              props.top = resizeData.startTop - (newHeightNW - resizeData.startHeight);
             }
-            console.log('🎯 NW resize:', props.width, props.height, props.left, props.top);
             break;
           case 'n': // North - resize height, adjust top
-            const newHeightN = Math.max(minSize, currentResizeData.startHeight - deltaY);
+            const newHeightN = Math.max(minSize, resizeData.startHeight - deltaY);
             props.height = newHeightN;
             if (props.position === 'absolute') {
-              props.top = currentResizeData.initialTop - (newHeightN - currentResizeData.startHeight);
+              props.top = resizeData.startTop - (newHeightN - resizeData.startHeight);
             }
-            console.log('🎯 N resize:', props.height, props.top);
             break;
           case 's': // South - resize height
-            props.height = Math.max(minSize, currentResizeData.startHeight + deltaY);
-            console.log('🎯 S resize:', props.height);
+            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
             break;
           case 'w': // West - resize width, adjust left
-            const newWidthW = Math.max(minSize, currentResizeData.startWidth - deltaX);
+            const newWidthW = Math.max(minSize, resizeData.startWidth - deltaX);
             props.width = newWidthW;
             if (props.position === 'absolute') {
-              props.left = currentResizeData.initialLeft - (newWidthW - currentResizeData.startWidth);
+              props.left = resizeData.startLeft - (newWidthW - resizeData.startWidth);
             }
-            console.log('🎯 W resize:', props.width, props.left);
             break;
           case 'e': // East - resize width
-            props.width = Math.max(minSize, currentResizeData.startWidth + deltaX);
-            console.log('🎯 E resize:', props.width);
+            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
             break;
         }
       });
 
-      // Update button position for visual feedback
-      setTimeout(() => updateButtonPosition(), 0);
+      updateButtonPosition();
     };
 
     const handleMouseUp = () => {
-      console.log('🎯 Resize ended');
       setIsResizing(false);
       setResizeData(null);
       document.removeEventListener('mousemove', handleMouseMove);
@@ -1019,79 +1001,17 @@ export const Button = ({
     setModalVisible(false);
   };
 
-  // Handle text editing with cursor position preservation
+  // Handle text editing
   const handleDoubleClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsEditing(true);
     setLocalText(text);
-    
-    // Focus the text span after state update
-    setTimeout(() => {
-      if (textSpanRef.current) {
-        textSpanRef.current.focus();
-        // Place cursor at the end
-        const range = document.createRange();
-        const selection = window.getSelection();
-        range.selectNodeContents(textSpanRef.current);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
-    }, 0);
-  };
-
-  const saveCursorPosition = () => {
-    if (!textSpanRef.current) return null;
-    
-    const selection = window.getSelection();
-    if (selection.rangeCount === 0) return null;
-    
-    const range = selection.getRangeAt(0);
-    const preCaretRange = range.cloneRange();
-    preCaretRange.selectNodeContents(textSpanRef.current);
-    preCaretRange.setEnd(range.endContainer, range.endOffset);
-    
-    return preCaretRange.toString().length;
-  };
-
-  const restoreCursorPosition = (cursorPosition) => {
-    if (!textSpanRef.current || cursorPosition === null) return;
-    
-    const textNode = textSpanRef.current.firstChild || textSpanRef.current;
-    const textLength = textNode.textContent?.length || 0;
-    
-    // Ensure cursor position is within bounds
-    const safePosition = Math.min(cursorPosition, textLength);
-    
-    const range = document.createRange();
-    const selection = window.getSelection();
-    
-    try {
-      if (textNode.nodeType === Node.TEXT_NODE) {
-        range.setStart(textNode, safePosition);
-        range.setEnd(textNode, safePosition);
-      } else {
-        range.setStart(textNode, 0);
-        range.setEnd(textNode, 0);
-      }
-      
-      selection.removeAllRanges();
-      selection.addRange(range);
-    } catch (error) {
-      console.warn('Could not restore cursor position:', error);
-    }
   };
 
   const handleTextChange = (e) => {
-    const cursorPosition = saveCursorPosition();
-    const newText = e.target.textContent || e.target.innerText || '';
+    const newText = e.target.textContent || e.target.innerText;
     setLocalText(newText);
-    
-    // Restore cursor position after React re-render
-    setTimeout(() => {
-      restoreCursorPosition(cursorPosition);
-    }, 0);
   };
 
   const handleBlur = () => {
@@ -1108,12 +1028,12 @@ export const Button = ({
       setProp(props => {
         props.text = localText;
       });
-      textSpanRef.current?.blur();
+      buttonRef.current?.blur();
     }
     if (e.key === 'Escape') {
       setIsEditing(false);
       setLocalText(text);
-      textSpanRef.current?.blur();
+      buttonRef.current?.blur();
     }
   };
 
@@ -1468,8 +1388,8 @@ export const Button = ({
         onContextMenu={hideEditorUI ? undefined : handleContextMenu}
         data-craft-id={nodeId}
       >
-        {/* Script indicator - hide in preview mode */}
-        {hasScript && !hideEditorUI && (
+        {/* Script indicator */}
+        {hasScript && (
           <div
             style={{
               position: "absolute",
@@ -1496,7 +1416,6 @@ export const Button = ({
         {/* Button content */}
         {text && !children?.length && (
           <span
-            ref={textSpanRef}
             contentEditable={isEditing}
             onBlur={handleBlur}
             onInput={handleTextChange}

@@ -10,10 +10,10 @@ export const Root = ({
   // Layout & Position
   width = "auto",
   height = "auto",
-  minWidth,
-  maxWidth,
+  minWidth = '99%',
+  maxWidth = '90%',
   minHeight,
-  maxHeight,
+  maxHeight ,
   display = "block",
   position = "relative",
   top,
@@ -33,7 +33,7 @@ export const Root = ({
   resize = "none",
   
   // Spacing
-  margin = "5px 0",
+  margin = 0,
   marginTop,
   marginRight,
   marginBottom,
@@ -146,7 +146,7 @@ columnGap,
 justifyItems = "stretch",
 justifySelf,
 placeSelf,
-placeItems,
+placeItems= "center",
 placeContent,
   
   // Effects
@@ -614,6 +614,7 @@ Root.craft = {
     // Layout & Position
     width: "auto",
     height: "auto",
+    maxWidth: '100vh',
     display: "block",
     position: "relative",
     zIndex: 1,
@@ -705,7 +706,7 @@ Root.craft = {
    custom: {
   styleMenu: {
     supportedProps: [
-
+       "overflow",
     
       'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'paddingX', 'paddingY',
       
