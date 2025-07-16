@@ -400,7 +400,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           wrapper: {
             position: 'fixed',
             left: '50px',
-            top: '130px',
+            top: '5rem',
             height: 'calc(50vh)',
             width: '100px', // Fixed to 100px
             transform: 'none',
