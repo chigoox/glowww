@@ -18,7 +18,8 @@ import { ShopFlexBox, ShopImage, ShopText } from '../../Components/user/Advanced
 import { FormInput } from '../../Components/user/Input';
 import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
 import { Carousel } from '../../Components/user/Carousel';
-import { NavBar } from '../../Components/user/Nav/NavBar';
+import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
+import { Root } from '../../Components/Root';
 
 // Import save operations hook to load auto-saved projects
 import useSaveOperations from '../../Components/support/useSaveOperations';
@@ -400,6 +401,8 @@ export default function PreviewPage() {
             FormInputDropArea,
             Carousel,
             NavBar,
+            NavItem,
+            Root,
             Element
           }}
           enabled={false} // Disable editing in preview mode
