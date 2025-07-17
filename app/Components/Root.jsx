@@ -146,7 +146,7 @@ columnGap,
 justifyItems = "stretch",
 justifySelf,
 placeSelf,
-placeItems= "center",
+placeItems= "",
 placeContent,
   
   // Effects
@@ -706,6 +706,12 @@ Root.craft = {
    custom: {
   styleMenu: {
     supportedProps: [
+
+      // Layout & Position
+      'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+      'display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
+      'visibility', 'float', 'clear', 'boxSizing',
+      
        "overflow",
     
       'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'paddingX', 'paddingY',

@@ -132,12 +132,61 @@ const mockStripeProducts = {
             variants: [
                 { id: 'var_brabus_8_standard', size: 'Standard', price: 55000000 }
             ]
-        }
+        },
+         {
+            id: 'prod_Dreams_1',
+            name: 'Tropical Dreams Crochet Mini Skirt Set',
+            price: 650000,
+            originalPrice: 700000,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-20-25_S6_14_25GWY1328_YellowCombo_RK_PC_09-50-16_87875_MH-Totie_BH.jpg?v=1751324952&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-20-25_S6_14_25GWY1328_YellowCombo_RK_PC_09-51-31_87878_MH-Totie_BH_MH.jpg?v=1749669207&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/05-20-25_S6_14_25GWY1328_YellowCombo_RK_PC_09-50-00_87867_MH-Totie_BH_MH.jpg?v=1751324952&width=600&height=900&crop=center'
+            ],
+            category: 'clothes',
+            collection: '6x6',
+            variants: [
+                { id: 'var_brabus_1_standard', size: 'Standard', price: 65000000 }
+            ]
+        },
+        {
+            id: 'prod_Drems_1',
+            name: 'Island Bloom Crochet Maxi Skirt Set - Yellow/combo',
+            price: 65000,
+            originalPrice: 70000,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/06-04-25_S3_66_KOLM5020601_Yellowcombo_TK_IM_14-09-42_1036_ES.jpg?v=1749231846&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/06-04-25_S3_66_KOLM5020601_Yellowcombo_TK_IM_14-10-33_1049_ES.jpg?v=1749231846&width=600&height=900&crop=center',
+            ],
+            category: 'clothes',
+            collection: 'clothes',
+            variants: [
+                { id: 'var_brabus_6_standard', size: 'Standard', price: 65000000 }
+            ]
+        },
+        {
+            id: 'prod_Drs_1',
+            name: 'Adira Hooded Sweater Top',
+            price: 45000,
+            originalPrice: 49000,
+            images: [
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-04-25_S2_37_KLQT4111301_Olive_ZSR_KS_JS_12-52-48_51787_PXF_SG.jpg?v=1741305337&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-04-25_S2_37_KLQT4111301_Olive_ZSR_KS_JS_12-52-48_51790_PXF.jpg?v=1741305337&width=600&height=900&crop=center',
+                'https://cdn.shopify.com/s/files/1/0293/9277/files/03-04-25_S2_37_KLQT4111301_Olive_ZSR_KS_JS_12-52-48_51805_PXF.jpg?v=1741305337&width=600&height=900&crop=center',
+            ],
+            category: 'clothes',
+            collection: 'clothes',
+            variants: [
+                { id: 'var_bras_3_standard', size: 'Standard', price: 65000000 }
+            ]
+        },
     ],
     categories: [
         { id: 'supercars', name: 'Supercars', count: 6 },
         { id: 'studio', name: 'Studio', count: 1 },
-        { id: 'website', name: 'Website', count: 1 }
+        { id: 'website', name: 'Website', count: 1 },
+        { id: 'clothes', name: 'Clothes', count: 1 }
+
     ],
     collections: [
         { id: '6x6', name: '6x6', count: 2 },
@@ -146,7 +195,8 @@ const mockStripeProducts = {
         { id: 'supercar', name: 'Supercar', count: 1 },
         { id: 'rocket-gts', name: 'Rocket GTS', count: 1 },
         { id: 'dsc', name: 'DSC', count: 1 },
-        { id: 'fotos', name: 'Fotos', count: 1 }
+        { id: 'fotos', name: 'Fotos', count: 1 },
+        { id: 'clothes', name: 'clothes', count: 3 },
     ]
 };
 
