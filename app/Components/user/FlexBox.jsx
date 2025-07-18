@@ -40,7 +40,7 @@ export const FlexBox = ({
   marginLeft,
   marginX,
   marginY,
-  padding = '4px',
+  padding = '2px',
   paddingTop,
   paddingRight,
   paddingBottom,
@@ -870,7 +870,7 @@ FlexBox.craft = {
     
     // Spacing
     margin: "none",
-    padding: '4px',
+    padding: '2px',
     
     // Border
     border: "none",

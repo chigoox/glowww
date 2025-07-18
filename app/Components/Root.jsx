@@ -8,7 +8,7 @@ import useEditorDisplay from "./support/useEditorDisplay";
 
 export const Root = ({
   // Layout & Position
-  width = "auto",
+  width = "full",
   height = "auto",
   minWidth = '99%',
   maxWidth = '90%',

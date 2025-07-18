@@ -42,7 +42,7 @@ export const Box = ({
   marginLeft,
   marginX,
   marginY,
-  padding = 4,
+  padding = 2,
   paddingTop,
   paddingRight,
   paddingBottom,
@@ -868,7 +868,7 @@ Box.craft = {
     
     // Spacing
     margin: "none",
-    padding: '4px',
+    padding: '2px',
     
     // Border
     border: "none",

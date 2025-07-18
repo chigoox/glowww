@@ -41,7 +41,7 @@ export const GridBox = ({
   marginLeft,
   marginX,
   marginY,
-  padding = 4,
+  padding = 2,
   paddingTop,
   paddingRight,
   paddingBottom,
@@ -835,8 +835,8 @@ GridBox.craft = {
     
     // Spacing
     margin: "none",
-    padding: '4px',
-    
+    padding: '2px',
+     
     // Border
     border: "none",
     borderWidth: 0,

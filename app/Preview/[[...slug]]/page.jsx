@@ -381,36 +381,49 @@ export default function PreviewPage() {
       </div>
 
       {/* Page Content */}
-      <div className="w-full">
-        <Editor
-          resolver={{
-            Box,
-            FlexBox,
-            Text,
-            GridBox,
-            Image,
-            Button,
-            Link,
-            Paragraph,
-            Video,
-            ShopFlexBox,
-            ShopImage,
-            ShopText,
-            FormInput,
-            Form,
-            FormInputDropArea,
-            Carousel,
-            NavBar,
-            NavItem,
-            Root,
-            Element
-          }}
-          enabled={false} // Disable editing in preview mode
-        >
-          <Frame data={currentPage.serializedData}>
-            <Element is="div" canvas />
-          </Frame>
-        </Editor>
+      <div className="w-full overflow-auto">
+        <div className="w-full max-w-none">
+          <Editor
+            resolver={{
+              Box,
+              FlexBox,
+              Text,
+              GridBox,
+              Image,
+              Button,
+              Link,
+              Paragraph,
+              Video,
+              ShopFlexBox,
+              ShopImage,
+              ShopText,
+              FormInput,
+              Form,
+              FormInputDropArea,
+              Carousel,
+              NavBar,
+              NavItem,
+              Root,
+              Element
+            }}
+            enabled={false} // Disable editing in preview mode
+          >
+            <Frame data={currentPage.serializedData} className="w-full">
+              <Element 
+                is={Root} 
+                padding={0} 
+                background="#ffffff" 
+                canvas
+                className="w-full border-2"
+                style={{ 
+                  maxWidth: '100%',
+                  minWidth: '100%',
+                  overflow: 'hidden'
+                }}
+              />
+            </Frame>
+          </Editor>
+        </div>
       </div>
     </div>
   );
