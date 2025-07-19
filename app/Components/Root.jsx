@@ -410,8 +410,9 @@ placeContent,
 
   // Helper function to process values (add px to numbers where appropriate)
   const processValue = (value, property) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight'].includes(property)) {
+    if (value === undefined || value === null) return undefined;
+    if (value === "") return undefined;
+    if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight', 'flexGrow', 'flexShrink', 'order'].includes(property)) {
       return `${value}px`;
     }
     return value;
@@ -438,10 +439,18 @@ placeContent,
     clear,
     boxSizing,
     
-    // Overflow
-    overflow,
-    overflowX,
-    overflowY,
+    // Overflow - handle precedence correctly (overflow should override overflowX/Y)
+    ...(overflow && overflow !== "visible" 
+      ? {
+          // When overflow is explicitly set, it overrides X and Y
+          overflow: overflow
+        }
+      : {
+          // When overflow is not set or is "visible", use individual X and Y values
+          overflowX: overflowX || "visible",
+          overflowY: overflowY || "visible"
+        }
+    ),
     resize,
     
     // Spacing - handle individual sides or combined values
@@ -547,9 +556,10 @@ placeContent,
   };
 
 
-  // Remove undefined values
+  // Remove undefined values, but preserve important properties that should always be applied
+  const importantProperties = ['overflow', 'overflowX', 'overflowY', 'display', 'position', 'visibility'];
   Object.keys(computedStyles).forEach(key => {
-    if (computedStyles[key] === undefined) {
+    if (computedStyles[key] === undefined && !importantProperties.includes(key)) {
       delete computedStyles[key];
     }
   });

@@ -23,13 +23,7 @@ const useEditorDisplay = () => {
   // 1. We're in preview mode
   // 2. Editing is disabled in the Craft editor
   const hideEditorUI = isPreviewMode || !isEditingEnabled;
-  
-  // Add some debug logging to help diagnose issues
-  console.log('Editor Display State:', {
-    isPreviewMode,
-    isEditingEnabled,
-    hideEditorUI
-  });
+
 
   return {
     hideEditorUI,

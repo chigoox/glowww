@@ -1548,7 +1548,7 @@ Button.craft = {
         "buttonType", "size", "disabled", "href", "target", "title", "className", "id", "ariaLabel",
         "display", "visibility", "hidden",
         "actionType", "targetNodeId", "scrollOffset", "animationType", 
-        "scriptComponentId", "confirmDialog", "confirmMessage"
+        "scriptComponentId", "confirmDialog", "confirmMessage",'className'
       ],
       actionTypes: ACTION_TYPES
     }

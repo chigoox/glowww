@@ -333,7 +333,7 @@ export const Image = ({
         <img
           src={src}
           alt={alt}
-          style={{ width: '100%', height: '100%', objectFit, objectPosition }}
+          style={{ width: '100%', height: '100%', objectFit, objectPosition, }}
         />
       </div>
     );
@@ -676,6 +676,8 @@ Image.craft = {
         "alt",
         "objectFit",
         "objectPosition",
+
+        'borderRadius','border',
         
         // Size & Position
         "width",

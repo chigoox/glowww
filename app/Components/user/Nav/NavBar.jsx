@@ -814,7 +814,9 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                     onChange={(value) => updateNavBarSetting('position', value)}
                                     options={[
                                       { value: 'static', label: 'Static' },
-                                      { value: 'sticky', label: 'Sticky' }
+                                      { value: 'relative', label: 'Relative' },
+                                      { value: 'sticky', label: 'Sticky' },
+                                      { value: 'fixed', label: 'Fixed' }
                                     ]}
                                   />
                                 </Form.Item>
@@ -2480,7 +2482,6 @@ export const NavBar = ({
   // Listen for page changes to refresh navigation
   useEffect(() => {
     const handlePageChange = () => {
-      console.log('NavBar: Page change detected, refreshing navigation...');
       setNavigationVersion(prev => prev + 1);
     };
 
@@ -2490,22 +2491,14 @@ export const NavBar = ({
     // Also listen for localStorage changes (in case pages are updated)
     const handleStorageChange = (e) => {
       if (e.key && e.key.includes('glowproject_') && e.key.includes('_autosave')) {
-        console.log('NavBar: LocalStorage change detected, refreshing navigation...');
         setNavigationVersion(prev => prev + 1);
       }
     };
     
     window.addEventListener('storage', handleStorageChange);
     
-    // Add very fast interval-based check as backup (check every 300ms for instant updates)
-    const intervalCheck = setInterval(() => {
-      // Force a refresh by incrementing version - this ensures navigation updates quickly
-      setNavigationVersion(prev => prev + 1);
-    }, 300);
-    
     // Also refresh when window gets focus (when user comes back to tab)
     const handleFocus = () => {
-      console.log('NavBar: Window focus detected, refreshing navigation...');
       setNavigationVersion(prev => prev + 1);
     };
     
@@ -2515,14 +2508,12 @@ export const NavBar = ({
       window.removeEventListener('pageManagerUpdate', handlePageChange);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('focus', handleFocus);
-      clearInterval(intervalCheck);
     };
   }, []);
 
   // Get navigation items from PageManager instead of props
   const navigation = useMemo(() => {
     const pages = getPagesFromProject(navMode);
-    console.log('NavBar: Generated navigation from PageManager:', pages);
     return pages;
   }, [navMode, isClient, navigationVersion]); // Add navigationVersion dependency
   
@@ -2823,7 +2814,9 @@ export const NavBar = ({
             marginLeft: 'auto',
             marginRight: 'auto'
           }),
-          position: 'relative',
+          position: position || 'sticky',
+          ...(position === 'sticky' && { top: 0 }),
+          ...(position === 'fixed' && { top: 0, left: 0, right: 0, zIndex: 1000 }),
           transition: 'outline 0.2s ease, box-shadow 0.2s ease'
         }}
         onMouseEnter={hideEditorUI ? undefined : () => {

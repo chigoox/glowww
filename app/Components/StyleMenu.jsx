@@ -2056,31 +2056,35 @@ if (shouldShow('colors')) {
       </Space>
     );
     
-    if (shouldShowProperty('borderWidth', 'border')) {
-      borderItems.push(
-        <Form.Item key="borderWidth" label="Border Width" style={sharedStyles.formItem}>
-          <Slider {...handleSliderChange("borderWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-        </Form.Item>
-      );
+
+    if (localStyle.borderMode == 'all'){
+      if (shouldShowProperty('borderWidth', 'border')) {
+            borderItems.push(
+              <Form.Item key="borderWidth" label="Border Width" style={sharedStyles.formItem}>
+                <Slider {...handleSliderChange("borderWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+              </Form.Item>
+            );
+          }
+          
+          if (shouldShowProperty('borderStyle', 'border')) {
+            borderItems.push(
+              <Form.Item key="borderStyle" label="Border Style" style={sharedStyles.formItem}>
+                <Select {...handleSelectChange("borderStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+              </Form.Item>
+            );
+          }
+          
+          if (shouldShowProperty('borderColor', 'border')) {
+            borderItems.push(
+              <Form.Item key="borderColor" label="Border Color" style={sharedStyles.formItem}>
+                <ColorPicker {...handleColorChange("borderColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
+              </Form.Item>
+            );
+          }
+        }
     }
     
-    if (shouldShowProperty('borderStyle', 'border')) {
-      borderItems.push(
-        <Form.Item key="borderStyle" label="Border Style" style={sharedStyles.formItem}>
-          <Select {...handleSelectChange("borderStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-        </Form.Item>
-      );
-    }
-    
-    if (shouldShowProperty('borderColor', 'border')) {
-      borderItems.push(
-        <Form.Item key="borderColor" label="Border Color" style={sharedStyles.formItem}>
-          <ColorPicker {...handleColorChange("borderColor")} size="small" showText getPopupContainer={(trigger) => trigger.parentNode} />
-        </Form.Item>
-      );
-    }
-  }
-  
+  console.log(localStyle.borderMode)
   // Individual sides
   const hasIndividualSides = shouldShowProperty('borderTopWidth', 'border') || shouldShowProperty('borderRightWidth', 'border') || 
                             shouldShowProperty('borderBottomWidth', 'border') || shouldShowProperty('borderLeftWidth', 'border') ||
@@ -2095,18 +2099,18 @@ if (shouldShow('colors')) {
                                shouldShowProperty('borderBottomWidth', 'border') || shouldShowProperty('borderLeftWidth', 'border');
     
     if (hasIndividualWidths) {
-      borderItems.push(
-        <Divider key="individual-sides-divider" orientation="left" plain>Individual Sides</Divider>
-      );
-      
-      if (shouldShowProperty('borderTopWidth', 'border')) {
-        borderItems.push(
-          <Form.Item key="borderTopWidth" label="Top Border Width" style={sharedStyles.formItem}>
-            <Slider {...handleSliderChange("borderTopWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
-          </Form.Item>
-        );
+
+      if (localStyle.borderMode == 'top'){
+          if (shouldShowProperty('borderTopWidth', 'border')) {
+            borderItems.push(
+              <Form.Item key="borderTopWidth" label="Top Border Width" style={sharedStyles.formItem}>
+                <Slider {...handleSliderChange("borderTopWidth")} min={0} max={20} tooltip={{ formatter: (val) => `${val}px` }} />
+              </Form.Item>
+            );
+          }
       }
       
+      if (localStyle.borderMode == 'right'){
       if (shouldShowProperty('borderRightWidth', 'border')) {
         borderItems.push(
           <Form.Item key="borderRightWidth" label="Right Border Width" style={sharedStyles.formItem}>
@@ -2114,7 +2118,9 @@ if (shouldShow('colors')) {
           </Form.Item>
         );
       }
+    }
       
+    if (localStyle.borderMode == 'bottom'){
       if (shouldShowProperty('borderBottomWidth', 'border')) {
         borderItems.push(
           <Form.Item key="borderBottomWidth" label="Bottom Border Width" style={sharedStyles.formItem}>
@@ -2122,6 +2128,8 @@ if (shouldShow('colors')) {
           </Form.Item>
         );
       }
+    }
+    if (localStyle.borderMode == 'left'){
       
       if (shouldShowProperty('borderLeftWidth', 'border')) {
         borderItems.push(
@@ -2131,46 +2139,53 @@ if (shouldShow('colors')) {
         );
       }
     }
+    }
     
     // Individual styles
     const hasIndividualStyles = shouldShowProperty('borderTopStyle', 'border') || shouldShowProperty('borderRightStyle', 'border') ||
                                shouldShowProperty('borderBottomStyle', 'border') || shouldShowProperty('borderLeftStyle', 'border');
     
     if (hasIndividualStyles) {
-      borderItems.push(
-        <Divider key="individual-styles-divider" orientation="left" plain>Individual Border Styles</Divider>
-      );
-      
-      if (shouldShowProperty('borderTopStyle', 'border')) {
-        borderItems.push(
-          <Form.Item key="borderTopStyle" label="Top Border Style" style={sharedStyles.formItem}>
-            <Select {...handleSelectChange("borderTopStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-          </Form.Item>
-        );
+    
+
+        if (localStyle.borderMode == 'top') {
+          if (shouldShowProperty('borderTopStyle', 'border')) {
+            borderItems.push(
+              <Form.Item key="borderTopStyle" label="Top Border Style" style={sharedStyles.formItem}>
+                <Select {...handleSelectChange("borderTopStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+              </Form.Item>
+          );
+        }
       }
-      
-      if (shouldShowProperty('borderRightStyle', 'border')) {
-        borderItems.push(
-          <Form.Item key="borderRightStyle" label="Right Border Style" style={sharedStyles.formItem}>
-            <Select {...handleSelectChange("borderRightStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-          </Form.Item>
-        );
+
+      if (localStyle.borderMode == 'right') {
+        if (shouldShowProperty('borderRightStyle', 'border')) {
+          borderItems.push(
+            <Form.Item key="borderRightStyle" label="Right Border Style" style={sharedStyles.formItem}>
+              <Select {...handleSelectChange("borderRightStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+            </Form.Item>
+          );
+        }
       }
-      
-      if (shouldShowProperty('borderBottomStyle', 'border')) {
-        borderItems.push(
-          <Form.Item key="borderBottomStyle" label="Bottom Border Style" style={sharedStyles.formItem}>
-            <Select {...handleSelectChange("borderBottomStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-          </Form.Item>
-        );
+        
+        if (localStyle.borderMode == 'bottom') {
+        if (shouldShowProperty('borderBottomStyle', 'border')) {
+          borderItems.push(
+            <Form.Item key="borderBottomStyle" label="Bottom Border Style" style={sharedStyles.formItem}>
+              <Select {...handleSelectChange("borderBottomStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+            </Form.Item>
+          );
+        }
       }
-      
-      if (shouldShowProperty('borderLeftStyle', 'border')) {
-        borderItems.push(
-          <Form.Item key="borderLeftStyle" label="Left Border Style" style={sharedStyles.formItem}>
-            <Select {...handleSelectChange("borderLeftStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
-          </Form.Item>
-        );
+        
+        if (localStyle.borderMode == 'left') {
+        if (shouldShowProperty('borderLeftStyle', 'border')) {
+          borderItems.push(
+            <Form.Item key="borderLeftStyle" label="Left Border Style" style={sharedStyles.formItem}>
+              <Select {...handleSelectChange("borderLeftStyle")} options={borderStyles} size="small" styles={sharedStyles} getPopupContainer={(trigger) => trigger.parentNode} />
+            </Form.Item>
+          );
+        }
       }
     }
     
@@ -2179,10 +2194,9 @@ if (shouldShow('colors')) {
                                shouldShowProperty('borderBottomColor', 'border') || shouldShowProperty('borderLeftColor', 'border');
     
     if (hasIndividualColors) {
-      borderItems.push(
-        <Divider key="individual-colors-divider" orientation="left" plain>Individual Border Colors</Divider>
-      );
+   
       
+      if (localStyle.borderMode == 'top') {
       if (shouldShowProperty('borderTopColor', 'border')) {
         borderItems.push(
           <Form.Item key="borderTopColor" label="Top Border Color" style={sharedStyles.formItem}>
@@ -2190,7 +2204,8 @@ if (shouldShow('colors')) {
           </Form.Item>
         );
       }
-      
+    }
+      if (localStyle.borderMode == 'right') {
       if (shouldShowProperty('borderRightColor', 'border')) {
         borderItems.push(
           <Form.Item key="borderRightColor" label="Right Border Color" style={sharedStyles.formItem}>
@@ -2198,7 +2213,8 @@ if (shouldShow('colors')) {
           </Form.Item>
         );
       }
-      
+    }
+    if (localStyle.borderMode == 'bottom') {
       if (shouldShowProperty('borderBottomColor', 'border')) {
         borderItems.push(
           <Form.Item key="borderBottomColor" label="Bottom Border Color" style={sharedStyles.formItem}>
@@ -2206,7 +2222,9 @@ if (shouldShow('colors')) {
           </Form.Item>
         );
       }
+      }
       
+      if (localStyle.borderMode == 'left') {
       if (shouldShowProperty('borderLeftColor', 'border')) {
         borderItems.push(
           <Form.Item key="borderLeftColor" label="Left Border Color" style={sharedStyles.formItem}>
@@ -2215,6 +2233,7 @@ if (shouldShow('colors')) {
         );
       }
     }
+  }
   }
   
 // Border Radius Section (separate from border)

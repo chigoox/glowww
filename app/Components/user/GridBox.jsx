@@ -958,7 +958,7 @@ GridBox.craft = {
         // HTML Attributes
         'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',
         'contentEditable', 'draggable', 'spellCheck', 'translate', 'dir', 'lang',
-        'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy'
+        'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy', "className"
       ]
     }
   }

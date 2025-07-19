@@ -51,9 +51,34 @@ export const PagesProvider = ({ children }) => {
     initializeProjectName();
   }, [generateName, projectName]);
   
-  // Determine if we're in preview mode
-  // In production, this would be false
+  // Determine if we're in preview mode by checking the URL
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  
+  // Check if we're in preview mode based on the current URL
+  useEffect(() => {
+    const checkPreviewMode = () => {
+      if (typeof window !== 'undefined') {
+        const currentPath = window.location.pathname;
+        const isPreview = currentPath.startsWith('/Preview');
+        setIsPreviewMode(isPreview);
+      }
+    };
+    
+    // Check on initial load
+    checkPreviewMode();
+    
+    // Listen for route changes
+    const handleRouteChange = () => {
+      checkPreviewMode();
+    };
+    
+    // Listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, []);
 
   // Listen for page updates from PageManager
   useEffect(() => {
