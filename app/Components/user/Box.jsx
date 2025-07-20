@@ -6,6 +6,7 @@ import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../support/ContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useCraftSnap } from "../support/useCraftSnap";
 
 export const Box = ({
   
@@ -197,6 +198,9 @@ placeContent,
   }));
   const { actions: editorActions } = useEditor();
   
+  // Use snap functionality
+  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
@@ -263,10 +267,10 @@ placeContent,
   useEffect(() => {
     const connectElements = () => {
       if (cardRef.current) {
-        connect(cardRef.current); // Connect for selection
+        snapConnect(cardRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        drag(dragRef.current); // Connect the drag handle for Craft.js dragging
+        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
       }
     };
 
@@ -278,7 +282,7 @@ placeContent,
       const timer = setTimeout(connectElements, 10);
       return () => clearTimeout(timer);
     }
-  }, [connect, drag, isSelected]);
+  }, [snapConnect, snapDrag, isSelected]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {

@@ -994,8 +994,9 @@ const PageManager = () => {
     <>
       {/* Pages Button */}
       <Dropdown
+      zIndex={999999}
         popupRender={() => (
-          <div className="bg-white rounded-lg shadow-lg border p-4 min-w-[300px]">
+          <div className="bg-white rounded-lg z-[99999999] shadow-lg border p-4 min-w-[300px]">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
@@ -1048,8 +1049,9 @@ const PageManager = () => {
             </div>
 
             {/* Page Tree */}
-            <div className="max-h-60 overflow-y-auto">
+            <div className="max-h-60  overflow-y-auto">
               <Tree
+              
                 treeData={treeData}
                 expandedKeys={expandedKeys}
                 onExpand={setExpandedKeys}
@@ -1112,7 +1114,7 @@ const PageManager = () => {
 
       {/* New Page Modal */}
       <Modal
-      zIndex={1050}
+      zIndex={9999}
         title="Add New Page"
         open={newPageModalVisible}
         onOk={addNewPage}
@@ -1122,7 +1124,7 @@ const PageManager = () => {
           setSelectedPageKey(null);
         }}
         okText="Create Page"
-        style={{ zIndex: 1050 }}
+        style={{ zIndex: 9999 }}
       >
         <div className="space-y-4">
           <div>
@@ -1189,7 +1191,7 @@ const PageManager = () => {
         open={settingsModalVisible}
         onOk={() => setSettingsModalVisible(false)}
         onCancel={() => setSettingsModalVisible(false)}
-        style={{ zIndex: 1050 }}
+        style={{ zIndex: 99999 }}
         width={600}
         footer={[
           <Button key="close" onClick={() => setSettingsModalVisible(false)}>

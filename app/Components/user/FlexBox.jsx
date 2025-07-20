@@ -12,7 +12,7 @@ export const FlexBox = ({
   height = "auto",
   minWidth,
   maxWidth,
-  minHeight,
+  minHeight  = '3rem',
   maxHeight,
   display = "block",
   position = "relative",

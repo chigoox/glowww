@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "./support/ContextMenu";
 import useEditorDisplay from "./support/useEditorDisplay";
+import SnapGridOverlay from "./support/SnapGridOverlay";
+import { useSnapGridCanvas } from "./support/useCraftSnap";
 
 export const Root = ({
   // Layout & Position
@@ -43,7 +45,7 @@ export const Root = ({
   padding = 0,
   paddingTop,
   paddingRight,
-  paddingBottom,
+  paddingBottom='2rem',
   paddingLeft,
   paddingX,
   paddingY,
@@ -205,6 +207,9 @@ placeContent,
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
+
+  // Initialize snap and grid system for canvas
+  const { setCanvasRef } = useSnapGridCanvas();
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
@@ -567,7 +572,10 @@ placeContent,
   return (
     <div
       className={`${false ? 'ring-2 ring-blue-500' : ''} ${false ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
-      ref={RootRef}
+      ref={(el) => {
+        RootRef.current = el;
+        setCanvasRef(el); // Initialize snap grid system
+      }}
       style={{
         ...computedStyles,
         position: 'relative',
@@ -595,6 +603,14 @@ placeContent,
       onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
+      {/* Snap Grid Overlay - Only visible in edit mode */}
+      {!hideEditorUI && (
+        <SnapGridOverlay
+          canvasRef={RootRef}
+          canvasWidth={RootRef.current?.offsetWidth || 1200}
+          canvasHeight={RootRef.current?.offsetHeight || 800}
+        />
+      )}
      
       {children}
       

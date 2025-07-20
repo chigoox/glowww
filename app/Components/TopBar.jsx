@@ -8,6 +8,7 @@ import LoadProject from "./support/LoadProject";
 import ExportManager from "./support/ExportManager";
 import PageManager from "./support/PageManager";
 import PreviewButton from "./support/PreviewButton";
+import SnapGridControls from "./support/SnapGridControls";
 
 export const TopBar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
@@ -384,6 +385,11 @@ export const TopBar = () => {
                 </Button>
               </Tooltip>
             </Dropdown>
+          </div>
+
+          {/* Snap & Grid Controls */}
+          <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
+            <SnapGridControls />
           </div>
         </div>
 
