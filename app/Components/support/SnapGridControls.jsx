@@ -57,19 +57,20 @@ const SnapGridControls = ({ className = '' }) => {
   };
 
   // Toggle functions
-  const toggleGrid = (e) => {
-    e.stopPropagation(); // Prevent dropdown from opening
-    snapGridSystem.setGridEnabled(!settings.gridEnabled);
+  const toggleGrid = (checked) => {
+    console.log('Toggle grid called with:', checked);
+    snapGridSystem.setGridEnabled(checked);
   };
 
   const toggleGridVisibility = (e) => {
     e.stopPropagation(); // Prevent dropdown from opening
+    console.log('Toggle grid visibility called');
     snapGridSystem.toggleGridVisibility();
   };
 
-  const toggleSnap = (e) => {
-    e.stopPropagation(); // Prevent dropdown from opening
-    snapGridSystem.toggleSnap();
+  const toggleSnap = (checked) => {
+    console.log('Toggle snap called with:', checked);
+    snapGridSystem.setSnapEnabled(checked);
   };
 
   // Grid size presets

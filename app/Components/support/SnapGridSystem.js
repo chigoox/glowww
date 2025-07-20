@@ -524,6 +524,15 @@ class SnapGridSystem {
     this.emitUpdate('grid-enabled-changed', { enabled });
   }
 
+  // Enable/disable snap
+  setSnapEnabled(enabled) {
+    this.snapEnabled = enabled;
+    if (!enabled) {
+      this.clearSnapIndicators();
+    }
+    this.emitUpdate('snap-toggled', { enabled });
+  }
+
   // Get current snap lines (for rendering)
   getActiveSnapLines() {
     return this.activeSnapLines;
