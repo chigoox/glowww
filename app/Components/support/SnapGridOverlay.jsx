@@ -22,7 +22,6 @@ const SnapGridOverlay = ({
 }) => {
   const overlayRef = useRef(null);
   const canvasCtxRef = useRef(null);
-  const animationFrameRef = useRef(null);
   
   const [settings, setSettings] = useState(snapGridSystem.getSettings());
   const [snapLines, setSnapLines] = useState([]);
@@ -133,49 +132,33 @@ const SnapGridOverlay = ({
     if (snapLines.length === 0) return;
 
     ctx.save();
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 2; // Made thicker for better visibility
     ctx.setLineDash([4, 4]);
 
-    snapLines.forEach(line => {
-      ctx.strokeStyle = line.color || '#ff0000';
+    snapLines.forEach((line, index) => {
+      // Use brighter, more visible colors
+      const lineColor = line.color || '#0066ff'; // Use original blue color
+      ctx.strokeStyle = lineColor;
+      ctx.globalAlpha = 0.9; // More opaque
+      ctx.lineWidth = 3; // Slightly thicker for better visibility
+      ctx.setLineDash([6, 4]); // Dashed line
+      
       ctx.beginPath();
       
       if (line.type === 'vertical') {
-        const x = (line.x * zoom) + offsetX;
-        ctx.moveTo(x, line.y1 * zoom + offsetY);
-        ctx.lineTo(x, line.y2 * zoom + offsetY);
+        const x = line.x; // Don't apply zoom/offset - use absolute coordinates
+        ctx.moveTo(x, line.y1);
+        ctx.lineTo(x, line.y2);
       } else {
-        const y = (line.y * zoom) + offsetY;
-        ctx.moveTo(line.x1 * zoom + offsetX, y);
-        ctx.lineTo(line.x2 * zoom + offsetX, y);
+        const y = line.y; // Don't apply zoom/offset - use absolute coordinates
+        ctx.moveTo(line.x1, y);
+        ctx.lineTo(line.x2, y);
       }
       
       ctx.stroke();
       
-      // Render label if present
-      if (line.label && zoom > 0.3) {
-        ctx.save();
-        ctx.fillStyle = line.color || '#ff0000';
-        ctx.font = `${Math.max(10, 12 * zoom)}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        const labelX = line.type === 'vertical' 
-          ? (line.x * zoom) + offsetX 
-          : ((line.x1 + line.x2) / 2) * zoom + offsetX;
-        const labelY = line.type === 'vertical' 
-          ? ((line.y1 + line.y2) / 2) * zoom + offsetY 
-          : (line.y * zoom) + offsetY;
-          
-        // Label background
-        const textWidth = ctx.measureText(line.label).width;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(labelX - textWidth/2 - 4, labelY - 8, textWidth + 8, 16);
-        
-        ctx.fillStyle = line.color || '#ff0000';
-        ctx.fillText(line.label, labelX, labelY);
-        ctx.restore();
-      }
+      // Remove labels for cleaner Figma-like appearance
+      ctx.globalAlpha = 1.0; // Reset alpha
     });
 
     ctx.setLineDash([]);
@@ -188,18 +171,18 @@ const SnapGridOverlay = ({
 
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = '#0099ff';
-    ctx.fillStyle = '#0099ff';
+    ctx.strokeStyle = '#ff6600'; // Default to orange
+    ctx.fillStyle = '#ff6600';
 
     distanceIndicators.forEach(indicator => {
-      const color = indicator.color || '#0099ff';
+      const color = indicator.color || '#ff6600'; // Orange for distance indicators
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
 
       if (indicator.type === 'horizontal') {
-        const y = indicator.y * zoom + offsetY;
-        const x1 = indicator.x1 * zoom + offsetX;
-        const x2 = indicator.x2 * zoom + offsetX;
+        const y = indicator.y; // Use absolute coordinates
+        const x1 = indicator.x1;
+        const x2 = indicator.x2;
         
         // Main line
         ctx.beginPath();
@@ -235,9 +218,9 @@ const SnapGridOverlay = ({
         }
         
       } else { // vertical
-        const x = indicator.x * zoom + offsetX;
-        const y1 = indicator.y1 * zoom + offsetY;
-        const y2 = indicator.y2 * zoom + offsetY;
+        const x = indicator.x; // Use absolute coordinates
+        const y1 = indicator.y1;
+        const y2 = indicator.y2;
         
         // Main line
         ctx.beginPath();
@@ -277,37 +260,35 @@ const SnapGridOverlay = ({
     ctx.restore();
   }, [distanceIndicators, zoom, offsetX, offsetY]);
 
-  // Main render function
-  const render = useCallback(() => {
-    const ctx = canvasCtxRef.current;
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-    // Render grid
-    renderGrid(ctx);
-    
-    // Render snap indicators
-    renderSnapLines(ctx);
-    renderDistanceIndicators(ctx);
-  }, [renderGrid, renderSnapLines, renderDistanceIndicators, canvasWidth, canvasHeight]);
-
   // Animation loop for smooth updates
   useEffect(() => {
+    let animationId;
+    
     const animate = () => {
-      render();
-      animationFrameRef.current = requestAnimationFrame(animate);
+      const ctx = canvasCtxRef.current;
+      if (!ctx) return;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      // Render grid
+      renderGrid(ctx);
+      
+      // Render snap indicators
+      renderSnapLines(ctx);
+      renderDistanceIndicators(ctx);
+
+      animationId = requestAnimationFrame(animate);
     };
     
-    animationFrameRef.current = requestAnimationFrame(animate);
+    animationId = requestAnimationFrame(animate);
     
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (animationId) {
+        cancelAnimationFrame(animationId);
       }
     };
-  }, [render]);
+  }, [renderGrid, renderSnapLines, renderDistanceIndicators, canvasWidth, canvasHeight]);
 
   return (
     <canvas

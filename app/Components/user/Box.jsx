@@ -7,6 +7,8 @@ import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../support/ContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
 import { useCraftSnap } from "../support/useCraftSnap";
+import SnapPositionHandle from "../support/SnapPositionHandle";
+import { snapGridSystem } from "../support/SnapGridSystem";
 
 export const Box = ({
   
@@ -43,7 +45,7 @@ export const Box = ({
   marginLeft,
   marginX,
   marginY,
-  padding = 2,
+  padding = 0,
   paddingTop,
   paddingRight,
   paddingBottom,
@@ -196,7 +198,7 @@ placeContent,
     id: node.id,
     selected: node.events.selected,
   }));
-  const { actions: editorActions } = useEditor();
+  const { actions: editorActions, query } = useEditor();
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
@@ -315,6 +317,33 @@ placeContent,
     const startHeight = rect.height;
     
     setIsResizing(true);
+
+    // Register all elements for snapping during resize
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths (we exclude borders from visual alignment)
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the padding box (inside border, including padding)
+          snapGridSystem.registerElement(id, {
+            x: elementRect.left - editorRect.left + borderLeft,
+            y: elementRect.top - editorRect.top + borderTop,
+            width: elementRect.width - borderLeft - borderRight,
+            height: elementRect.height - borderTop - borderBottom,
+          });
+        }
+      }
+    });
     
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
@@ -358,6 +387,68 @@ placeContent,
       // Apply minimum constraints
       newWidth = Math.max(newWidth, 50);
       newHeight = Math.max(newHeight, 20);
+
+      // Get current position for snap calculations
+      const currentRect = cardRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        const currentX = currentRect.left - editorRect.left;
+        const currentY = currentRect.top - editorRect.top;
+
+        // Calculate potential snap positions for the new size
+        // For resize, we want to snap the edges/corners that are being moved
+        let snapTargetX = currentX;
+        let snapTargetY = currentY;
+
+        // Determine which edges are being resized to know what to snap
+        if (direction.includes('e')) {
+          snapTargetX = currentX + newWidth; // Right edge
+        }
+        if (direction.includes('w')) {
+          snapTargetX = currentX; // Left edge (position might change)
+        }
+        if (direction.includes('s')) {
+          snapTargetY = currentY + newHeight; // Bottom edge
+        }
+        if (direction.includes('n')) {
+          snapTargetY = currentY; // Top edge (position might change)
+        }
+
+        // Get snap position for the resize target point
+        const snapResult = snapGridSystem.getSnapPosition(
+          nodeId,
+          snapTargetX,
+          snapTargetY,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          // Apply snap adjustments based on resize direction
+          if (direction.includes('e')) {
+            // Snapping right edge - adjust width
+            newWidth = snapResult.x - currentX;
+          } else if (direction.includes('w')) {
+            // Snapping left edge - might need to adjust both position and width
+            const widthChange = currentX - snapResult.x;
+            newWidth = startWidth + widthChange;
+          }
+          
+          if (direction.includes('s')) {
+            // Snapping bottom edge - adjust height
+            newHeight = snapResult.y - currentY;
+          } else if (direction.includes('n')) {
+            // Snapping top edge - might need to adjust both position and height
+            const heightChange = currentY - snapResult.y;
+            newHeight = startHeight + heightChange;
+          }
+
+          // Ensure we still meet minimum constraints after snapping
+          newWidth = Math.max(newWidth, 50);
+          newHeight = Math.max(newHeight, 20);
+        }
+      }
       
       // Update dimensions using Craft.js throttled setProp for smooth history
       editorActions.history.throttle(200).setProp(nodeId, (props) => {
@@ -368,6 +459,13 @@ placeContent,
     
     const handleMouseUp = () => {
       setIsResizing(false);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -376,38 +474,38 @@ placeContent,
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle custom drag for position changes
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const currentTop = parseInt(top) || 0;
-    const currentLeft = parseInt(left) || 0;
-    
-    setIsDragging(true);
-    
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      
-      // Update position using Craft.js throttled setProp for smooth history
-      editorActions.history.throttle(200).setProp(nodeId, (props) => {
-        props.left = currentLeft + deltaX;
-        props.top = currentTop + deltaY;
-      });
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
+  // Handle custom drag for position changes - REPLACED by SnapPositionHandle
+  // const handleDragStart = (e) => {
+  //   e.stopPropagation();
+  //   e.preventDefault();
+  //   
+  //   const startX = e.clientX;
+  //   const startY = e.clientY;
+  //   const currentTop = parseInt(top) || 0;
+  //   const currentLeft = parseInt(left) || 0;
+  //   
+  //   setIsDragging(true);
+  //   
+  //   const handleMouseMove = (moveEvent) => {
+  //     const deltaX = moveEvent.clientX - startX;
+  //     const deltaY = moveEvent.clientY - startY;
+  //     
+  //     // Update position using Craft.js throttled setProp for smooth history
+  //     editorActions.history.throttle(200).setProp(nodeId, (props) => {
+  //       props.left = currentLeft + deltaX;
+  //       props.top = currentTop + deltaY;
+  //     });
+  //   };
+  //   
+  //   const handleMouseUp = () => {
+  //     setIsDragging(false);
+  //     document.removeEventListener('mousemove', handleMouseMove);
+  //     document.removeEventListener('mouseup', handleMouseUp);
+  //   };
+  //   
+  //   document.addEventListener('mousemove', handleMouseMove);
+  //   document.addEventListener('mouseup', handleMouseUp);
+  // };
 
   // Helper function to process values (add px to numbers where appropriate)
   const processValue = (value, property) => {
@@ -602,8 +700,10 @@ placeContent,
         <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
-          handleDragStart={handleDragStart}
           handleResizeStart={handleResizeStart}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
       {children}
@@ -625,8 +725,10 @@ placeContent,
 const PortalControls = ({ 
   boxPosition, 
   dragRef, 
-  handleDragStart, 
-  handleResizeStart 
+  handleResizeStart,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -680,8 +782,9 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Right half - POS (Custom position drag) */}
-        <div
+        {/* Right half - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
@@ -695,11 +798,19 @@ const PortalControls = ({
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
         >
           ↕↔ POS
-        </div>
+        </SnapPositionHandle>
       </div>
 
       {/* Resize handles */}
@@ -883,7 +994,7 @@ Box.craft = {
     
     // Spacing
     margin: "none",
-    padding: '2px',
+    padding: '0',
     
     // Border
     border: "none",

@@ -1,0 +1,320 @@
+'use client';
+
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useNode, useEditor } from '@craftjs/core';
+import { snapGridSystem } from './SnapGridSystem';
+
+/**
+ * SnapPositionHandle - Custom position handle with full snap integration
+ * This replaces Craft.js position handling with snap-aware positioning
+ */
+const SnapPositionHandle = ({ 
+  nodeId, 
+  style = {}, 
+  className = '', 
+  children,
+  onDragStart,
+  onDragMove,
+  onDragEnd 
+}) => {
+  const { actions, query } = useEditor();
+  const { 
+    actions: { setProp },
+    dom
+  } = useNode((node) => ({
+    dom: node.dom
+  }));
+
+  const handleRef = useRef(null);
+  const dragState = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    startElementX: 0,
+    startElementY: 0,
+    elementWidth: 0,
+    elementHeight: 0,
+    canvasRect: null
+  });
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Get canvas/container element
+  const getCanvasElement = useCallback(() => {
+    let canvas = null;
+    
+    try {
+      canvas = query.getDropPlaceholder();
+    } catch (e) {
+      // Fallback to data attribute search
+      canvas = document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
+    }
+    
+    return canvas;
+  }, [query]);
+
+  // Handle drag start
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!dom) return;
+
+    const canvas = getCanvasElement();
+    if (!canvas) return;
+
+    const elementRect = dom.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(dom);
+    
+    // Get border widths for current element (we exclude borders from visual alignment)
+    const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+    const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+    const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+    const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+
+    // Initialize drag state - align to padding box (inside border, including padding)
+    dragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startElementX: elementRect.left - canvasRect.left + borderLeft,
+      startElementY: elementRect.top - canvasRect.top + borderTop,
+      elementWidth: elementRect.width - borderLeft - borderRight,
+      elementHeight: elementRect.height - borderTop - borderBottom,
+      canvasRect
+    };
+
+    setIsDragging(true);
+
+    // Register all elements for snapping
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node && node.dom) {
+        try {
+          const nodeBounds = node.dom.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths (we exclude borders from visual alignment)
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the padding box (inside border, including padding)
+          const relativeBounds = {
+            x: nodeBounds.left - canvasRect.left + borderLeft,
+            y: nodeBounds.top - canvasRect.top + borderTop,
+            width: nodeBounds.width - borderLeft - borderRight,
+            height: nodeBounds.height - borderTop - borderBottom
+          };
+          
+          snapGridSystem.registerElement(id, node.dom, relativeBounds);
+        } catch (error) {
+          console.warn(`Failed to register element ${id} for snapping:`, error);
+        }
+      }
+    });
+
+    // Call external drag start handler
+    onDragStart?.(e);
+
+    // Add global mouse handlers
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [dom, nodeId, query, getCanvasElement, onDragStart]);
+
+  // Handle drag move with snapping
+  const handleMouseMove = useCallback((e) => {
+    if (!dragState.current.isDragging || !dom) return;
+
+    const { 
+      startX, 
+      startY, 
+      startElementX, 
+      startElementY, 
+      elementWidth, 
+      elementHeight,
+      canvasRect 
+    } = dragState.current;
+
+    // Calculate new position
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+    const newX = startElementX + deltaX;
+    const newY = startElementY + deltaY;
+
+    // Get snap position from snap grid system
+    const snapResult = snapGridSystem.getSnapPosition(
+      nodeId,
+      newX,
+      newY,
+      elementWidth,
+      elementHeight
+    );
+
+    // Use snapped position if available, otherwise use calculated position
+    const finalX = snapResult.snapped ? snapResult.x : newX;
+    const finalY = snapResult.snapped ? snapResult.y : newY;
+
+    // Store current position in drag state for final commit
+    dragState.current.currentX = finalX;
+    dragState.current.currentY = finalY;
+
+    // Immediately update actual position for smooth dragging
+    if (dom) {
+      // We calculated positions for the padding box (inside border), 
+      // but style.left/top sets the border box position, so we need to offset
+      const computedStyle = window.getComputedStyle(dom);
+      const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+      const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+      
+      // Update the actual style properties instead of using transform
+      dom.style.position = 'absolute';
+      dom.style.left = `${finalX - borderLeft}px`;  // Subtract border to get border box position
+      dom.style.top = `${finalY - borderTop}px`;    // Subtract border to get border box position
+    }
+
+    // Also update Craft.js state to keep it in sync
+    setProp((props) => {
+      // We calculated positions for the padding box (inside border), 
+      // but Craft.js properties should match the DOM style (border box position)
+      const computedStyle = window.getComputedStyle(dom);
+      const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+      const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+      
+      const borderBoxX = finalX - borderLeft;
+      const borderBoxY = finalY - borderTop;
+      
+      // Handle different position prop structures
+      if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
+        props.left = borderBoxX;
+        props.top = borderBoxY;
+        props.position = 'absolute';
+      } else if (props.style) {
+        props.style = {
+          ...props.style,
+          position: 'absolute',
+          left: `${borderBoxX}px`,
+          top: `${borderBoxY}px`
+        };
+      } else {
+        props.style = {
+          position: 'absolute',
+          left: `${borderBoxX}px`,
+          top: `${borderBoxY}px`
+        };
+      }
+    });
+    
+    // Call external drag move handler
+    onDragMove?.(e, { x: finalX, y: finalY, snapped: snapResult.snapped });
+
+  }, [dom, nodeId, setProp, onDragMove]);
+
+  // Handle drag end
+  const handleMouseUp = useCallback((e) => {
+    if (!dragState.current.isDragging) return;
+
+    dragState.current.isDragging = false;
+    setIsDragging(false);
+
+    // Position is already set during drag, so we don't need to do anything special here
+    // Just ensure the final state is committed to Craft.js
+    const finalX = dragState.current.currentX || 0;
+    const finalY = dragState.current.currentY || 0;
+
+    setProp((props) => {
+      if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
+        props.left = finalX;
+        props.top = finalY;
+        props.position = 'absolute';
+      } else if (props.style) {
+        props.style = {
+          ...props.style,
+          position: 'absolute',
+          left: `${finalX}px`,
+          top: `${finalY}px`
+        };
+      } else {
+        props.style = {
+          position: 'absolute',
+          left: `${finalX}px`,
+          top: `${finalY}px`
+        };
+      }
+    });
+
+    // Clear snap indicators after a brief delay to keep them visible
+    setTimeout(() => {
+      snapGridSystem.clearSnapIndicators();
+    }, 300); // Keep visible for 300ms after drag ends
+
+    // Remove global mouse handlers
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+
+    // Clean up registered elements
+    setTimeout(() => {
+      snapGridSystem.cleanupTrackedElements();
+    }, 100);
+
+    // Call external drag end handler
+    onDragEnd?.(e);
+
+  }, [handleMouseMove, onDragEnd, setProp]);
+
+  // Register current element with snap system
+  useEffect(() => {
+    if (dom && nodeId) {
+      const canvas = getCanvasElement();
+      if (canvas) {
+        const elementRect = dom.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const relativeBounds = {
+          x: elementRect.left - canvasRect.left,
+          y: elementRect.top - canvasRect.top,
+          width: elementRect.width,
+          height: elementRect.height
+        };
+        
+        snapGridSystem.registerElement(nodeId, dom, relativeBounds);
+      }
+    }
+    
+    return () => {
+      if (nodeId) {
+        snapGridSystem.unregisterElement(nodeId);
+      }
+    };
+  }, [dom, nodeId, getCanvasElement]);
+
+  const defaultStyle = {
+    background: '#ff6b35',
+    color: 'white',
+    padding: '2px',
+    borderRadius: '2px',
+    cursor: isDragging ? 'grabbing' : 'grab',
+    userSelect: 'none',
+    fontSize: '10px',
+    fontWeight: 'bold',
+    border: 'none',
+    position: 'relative',
+    zIndex: 1000,
+    ...style
+  };
+
+  return (
+    <div
+      ref={handleRef}
+      className={`snap-position-handle ${className}`}
+      style={defaultStyle}
+      onMouseDown={handleMouseDown}
+      title="Position Handle - Drag to move with snapping"
+    >
+      {children || '✥'}
+    </div>
+  );
+};
+
+export default SnapPositionHandle;

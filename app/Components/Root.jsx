@@ -581,6 +581,8 @@ placeContent,
         position: 'relative',
         cursor: 'default'
       }}
+      data-cy="editor-root"
+      data-editor="true"
       id={id}
       title={title}
       role={role}

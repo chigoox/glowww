@@ -18,12 +18,13 @@ export const GRID_PRESETS = {
 
 // Snap configuration
 export const SNAP_CONFIG = {
-  THRESHOLD: 8, // pixels
-  ELEMENT_THRESHOLD: 12, // pixels for element-to-element snapping
-  GUIDE_COLOR: '#ff0000', // Red snap guides like Figma
-  DISTANCE_COLOR: '#0099ff', // Blue distance indicators
-  SNAP_ANIMATION_DURATION: 150, // ms
-  GUIDE_LINE_WIDTH: 1,
+  THRESHOLD: 25, // pixels - increased for easier snapping
+  ELEMENT_THRESHOLD: 35, // pixels for element-to-element snapping - much higher for better detection
+  CENTER_THRESHOLD: 40, // pixels for center alignment - more forgiving
+  GUIDE_COLOR: '#0066ff', // Blue snap guides instead of red for better visibility
+  DISTANCE_COLOR: '#ff6600', // Orange distance indicators for contrast
+  SNAP_ANIMATION_DURATION: 200, // ms - slightly longer for better visibility
+  GUIDE_LINE_WIDTH: 2, // Thicker lines for better visibility
   DISTANCE_LINE_WIDTH: 1
 };
 
@@ -42,7 +43,7 @@ class SnapGridSystem {
     this.gridVisible = true;
     this.snapEnabled = true;
     this.gridSize = GRID_PRESETS.MEDIUM.size;
-    this.gridOpacity = 0.3;
+    this.gridOpacity = 0.5; // Higher opacity for better visibility
     this.snapThreshold = SNAP_CONFIG.THRESHOLD;
     this.elementSnapThreshold = SNAP_CONFIG.ELEMENT_THRESHOLD;
     
@@ -303,38 +304,93 @@ class SnapGridSystem {
     for (const otherElement of otherElements) {
       const other = otherElement.bounds;
       
-      // Horizontal alignment checks
+      // Horizontal alignment checks - prioritize center alignment
       const horizontalAlignments = [
-        { pos: other.left, type: 'left-to-left', label: 'Left edges' },
-        { pos: other.right, type: 'right-to-right', label: 'Right edges' },
-        { pos: other.centerX, type: 'center-to-center', label: 'Centers' },
-        { pos: other.left - elementBounds.width, type: 'right-to-left', label: 'Right to left' },
-        { pos: other.right, type: 'left-to-right', label: 'Left to right' }
+        { pos: other.centerX, type: 'center-to-center', label: '' }, // Remove labels for cleaner look
+        { pos: other.left, type: 'left-to-left', label: '' },
+        { pos: other.right, type: 'right-to-right', label: '' },
+        { pos: other.left - elementBounds.width, type: 'right-to-left', label: '' },
+        { pos: other.right, type: 'left-to-right', label: '' }
       ];
 
       for (const alignment of horizontalAlignments) {
-        if (Math.abs(elementBounds.left - alignment.pos) <= this.elementSnapThreshold) {
-          snappedX = alignment.pos;
+        let elementPos = elementBounds.left; // Default to left edge
+        let snapOffset = 0; // Offset to apply when snapping
+        
+        // Handle different alignment types with proper positioning
+        if (alignment.type === 'center-to-center') {
+          elementPos = elementBounds.centerX;
+          snapOffset = -(elementBounds.width / 2); // Move back to left edge for positioning
+        } else if (alignment.type === 'right-to-right') {
+          elementPos = elementBounds.right;
+          snapOffset = -elementBounds.width; // Move back to left edge for positioning
+        } else if (alignment.type === 'left-to-left') {
+          elementPos = elementBounds.left;
+          snapOffset = 0; // No offset needed - direct left edge alignment
+        } else if (alignment.type === 'right-to-left') {
+          elementPos = elementBounds.right;
+          snapOffset = -elementBounds.width; // Position right edge of element to left edge of other
+        } else if (alignment.type === 'left-to-right') {
+          elementPos = elementBounds.left;
+          snapOffset = 0; // Direct positioning
+        }
+        
+        // Use more forgiving threshold for center alignment
+        const threshold = alignment.type === 'center-to-center' 
+          ? SNAP_CONFIG.CENTER_THRESHOLD 
+          : this.elementSnapThreshold;
+        
+        if (Math.abs(elementPos - alignment.pos) <= threshold) {
+          snappedX = alignment.pos + snapOffset;
           snapped = true;
+          
+          // Calculate the actual visual alignment line position  
+          // For debugging, let's always use the actual element edge positions
+          let snapLineX;
+          if (alignment.type === 'center-to-center') {
+            snapLineX = other.centerX;
+          } else if (alignment.type === 'left-to-left') {
+            snapLineX = other.left;
+          } else if (alignment.type === 'right-to-right') {
+            snapLineX = other.right;
+          } else if (alignment.type === 'left-to-right') {
+            snapLineX = other.right;
+          } else if (alignment.type === 'right-to-left') {
+            snapLineX = other.left;
+          } else {
+            snapLineX = other.left; // Default to left edge
+          }
           
           // Add snap line
           snapLines.push({
             type: 'vertical',
-            x: alignment.pos,
+            x: snapLineX,
             y1: Math.min(elementBounds.top, other.top) - 20,
             y2: Math.max(elementBounds.bottom, other.bottom) + 20,
             color: SNAP_CONFIG.GUIDE_COLOR,
             label: alignment.label
           });
 
-          // Add distance indicator if elements are separated
+          // Add simple distance indicator for adjacent elements only
           if (alignment.type === 'right-to-left' || alignment.type === 'left-to-right') {
-            const distance = Math.abs(other.left - (elementBounds.left + elementBounds.width));
-            if (distance > 0) {
+            let distance, x1, x2;
+            
+            if (alignment.type === 'left-to-right') {
+              distance = Math.abs(elementBounds.left - other.right);
+              x1 = other.right;
+              x2 = elementBounds.left;
+            } else { // right-to-left
+              distance = Math.abs(elementBounds.right - other.left);
+              x1 = elementBounds.right;
+              x2 = other.left;
+            }
+            
+            // Only show distance indicators for meaningful spacing (not grid-based)
+            if (distance > 10 && distance < 200) {
               distanceIndicators.push({
                 type: 'horizontal',
-                x1: Math.min(other.right, elementBounds.left),
-                x2: Math.max(other.left, elementBounds.right),
+                x1: Math.min(x1, x2),
+                x2: Math.max(x1, x2),
                 y: (elementBounds.centerY + other.centerY) / 2,
                 distance,
                 color: SNAP_CONFIG.DISTANCE_COLOR
@@ -345,38 +401,93 @@ class SnapGridSystem {
         }
       }
 
-      // Vertical alignment checks
+      // Vertical alignment checks - prioritize center alignment  
       const verticalAlignments = [
-        { pos: other.top, type: 'top-to-top', label: 'Top edges' },
-        { pos: other.bottom, type: 'bottom-to-bottom', label: 'Bottom edges' },
-        { pos: other.centerY, type: 'center-to-center', label: 'Centers' },
-        { pos: other.top - elementBounds.height, type: 'bottom-to-top', label: 'Bottom to top' },
-        { pos: other.bottom, type: 'top-to-bottom', label: 'Top to bottom' }
+        { pos: other.centerY, type: 'center-to-center', label: '' }, // Remove labels for cleaner look
+        { pos: other.top, type: 'top-to-top', label: '' },
+        { pos: other.bottom, type: 'bottom-to-bottom', label: '' },
+        { pos: other.top - elementBounds.height, type: 'bottom-to-top', label: '' },
+        { pos: other.bottom, type: 'top-to-bottom', label: '' }
       ];
 
       for (const alignment of verticalAlignments) {
-        if (Math.abs(elementBounds.top - alignment.pos) <= this.elementSnapThreshold) {
-          snappedY = alignment.pos;
+        let elementPos = elementBounds.top; // Default to top edge
+        let snapOffset = 0; // Offset to apply when snapping
+        
+        // Handle different alignment types with proper positioning
+        if (alignment.type === 'center-to-center') {
+          elementPos = elementBounds.centerY;
+          snapOffset = -(elementBounds.height / 2); // Move back to top edge for positioning
+        } else if (alignment.type === 'bottom-to-bottom') {
+          elementPos = elementBounds.bottom;
+          snapOffset = -elementBounds.height; // Move back to top edge for positioning
+        } else if (alignment.type === 'top-to-top') {
+          elementPos = elementBounds.top;
+          snapOffset = 0; // No offset needed - direct top edge alignment
+        } else if (alignment.type === 'bottom-to-top') {
+          elementPos = elementBounds.bottom;
+          snapOffset = -elementBounds.height; // Position bottom edge of element to top edge of other
+        } else if (alignment.type === 'top-to-bottom') {
+          elementPos = elementBounds.top;
+          snapOffset = 0; // Direct positioning
+        }
+        
+        // Use more forgiving threshold for center alignment
+        const threshold = alignment.type === 'center-to-center' 
+          ? SNAP_CONFIG.CENTER_THRESHOLD 
+          : this.elementSnapThreshold;
+        
+        if (Math.abs(elementPos - alignment.pos) <= threshold) {
+          snappedY = alignment.pos + snapOffset;
           snapped = true;
+          
+          // Calculate the actual visual alignment line position
+          // For debugging, let's always use the actual element edge positions  
+          let snapLineY;
+          if (alignment.type === 'center-to-center') {
+            snapLineY = other.centerY;
+          } else if (alignment.type === 'top-to-top') {
+            snapLineY = other.top;
+          } else if (alignment.type === 'bottom-to-bottom') {
+            snapLineY = other.bottom;
+          } else if (alignment.type === 'top-to-bottom') {
+            snapLineY = other.bottom;
+          } else if (alignment.type === 'bottom-to-top') {
+            snapLineY = other.top;
+          } else {
+            snapLineY = other.top; // Default to top edge
+          }
           
           // Add snap line
           snapLines.push({
             type: 'horizontal',
-            y: alignment.pos,
+            y: snapLineY,
             x1: Math.min(elementBounds.left, other.left) - 20,
             x2: Math.max(elementBounds.right, other.right) + 20,
             color: SNAP_CONFIG.GUIDE_COLOR,
             label: alignment.label
           });
 
-          // Add distance indicator if elements are separated
+          // Add simple distance indicator for adjacent elements only
           if (alignment.type === 'bottom-to-top' || alignment.type === 'top-to-bottom') {
-            const distance = Math.abs(other.top - (elementBounds.top + elementBounds.height));
-            if (distance > 0) {
+            let distance, y1, y2;
+            
+            if (alignment.type === 'top-to-bottom') {
+              distance = Math.abs(elementBounds.top - other.bottom);
+              y1 = other.bottom;
+              y2 = elementBounds.top;
+            } else { // bottom-to-top
+              distance = Math.abs(elementBounds.bottom - other.top);
+              y1 = elementBounds.bottom;
+              y2 = other.top;
+            }
+            
+            // Only show distance indicators for meaningful spacing (not grid-based)
+            if (distance > 10 && distance < 200) {
               distanceIndicators.push({
                 type: 'vertical',
-                y1: Math.min(other.bottom, elementBounds.top),
-                y2: Math.max(other.top, elementBounds.bottom),
+                y1: Math.min(y1, y2),
+                y2: Math.max(y1, y2),
                 x: (elementBounds.centerX + other.centerX) / 2,
                 distance,
                 color: SNAP_CONFIG.DISTANCE_COLOR
@@ -416,7 +527,7 @@ class SnapGridSystem {
         y1: 0,
         y2: this.canvasBounds.height,
         color: SNAP_CONFIG.GUIDE_COLOR,
-        label: 'Canvas left edge'
+        label: '' // Remove label for cleaner look
       });
     }
 
@@ -430,7 +541,7 @@ class SnapGridSystem {
         x1: 0,
         x2: this.canvasBounds.width,
         color: SNAP_CONFIG.GUIDE_COLOR,
-        label: 'Canvas top edge'
+        label: '' // Remove label for cleaner look
       });
     }
 
@@ -445,7 +556,7 @@ class SnapGridSystem {
         y1: 0,
         y2: this.canvasBounds.height,
         color: SNAP_CONFIG.GUIDE_COLOR,
-        label: 'Canvas right edge'
+        label: '' // Remove label for cleaner look
       });
     }
 
@@ -460,7 +571,7 @@ class SnapGridSystem {
         x1: 0,
         x2: this.canvasBounds.width,
         color: SNAP_CONFIG.GUIDE_COLOR,
-        label: 'Canvas bottom edge'
+        label: '' // Remove label for cleaner look
       });
     }
 
@@ -541,6 +652,23 @@ class SnapGridSystem {
   // Get current distance indicators (for rendering)
   getActiveDistanceIndicators() {
     return this.activeDistanceIndicators;
+  }
+
+  // Show snap indicators explicitly (for better control during drag)
+  showSnapIndicators(snapLines) {
+    this.activeSnapLines = snapLines || [];
+    this.emitUpdate('snap-indicators-changed', { 
+      snapLines: this.activeSnapLines,
+      distanceIndicators: this.activeDistanceIndicators 
+    });
+  }
+
+  // Update snap indicators (force overlay update)
+  updateSnapIndicators() {
+    this.emitUpdate('snap-indicators-changed', { 
+      snapLines: this.activeSnapLines,
+      distanceIndicators: this.activeDistanceIndicators 
+    });
   }
 
   // Clean up old tracked elements

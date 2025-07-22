@@ -7,6 +7,13 @@ import { snapGridSystem } from './SnapGridSystem';
 /**
  * useCraftSnap - Hook to integrate snap and grid system with Craft.js
  * Provides snapping functionality for draggable elements
+ * 
+ * NOTE: Currently, snap functionality works best with the snapConnect (selection)
+ * For position handle dragging, Craft.js handles the drag internally and doesn't
+ * expose drag events that we can hook into for real-time snapping.
+ * 
+ * The snapDrag connector registers elements as snap targets but doesn't provide
+ * live snapping during Craft.js drag operations.
  */
 export const useCraftSnap = (nodeId) => {
   const { actions, query, enabled } = useEditor((state) => ({
@@ -30,22 +37,69 @@ export const useCraftSnap = (nodeId) => {
     initialBounds: null
   });
 
+  // Early return if nodeId is not available yet
+  if (!nodeId) {
+    return {
+      connectors: {
+        snapConnect: connect,
+        snapDrag: drag
+      }
+    };
+  }
+
   // Register element with snap system
   const registerElement = useCallback(() => {
     if (elementRef.current && nodeId) {
-      const bounds = elementRef.current.getBoundingClientRect();
-      const canvasElement = query.getDropPlaceholder()?.getBoundingClientRect();
-      
-      if (canvasElement) {
-        // Convert to canvas-relative coordinates
-        const relativeBounds = {
-          x: bounds.left - canvasElement.left,
-          y: bounds.top - canvasElement.top,
-          width: bounds.width,
-          height: bounds.height
-        };
+      try {
+        const bounds = elementRef.current.getBoundingClientRect();
         
-        snapGridSystem.registerElement(nodeId, elementRef.current, relativeBounds);
+        // Try multiple methods to find the canvas/container element
+        let canvasElement = null;
+        
+        try {
+          // Method 1: Try Craft.js getDropPlaceholder
+          canvasElement = query.getDropPlaceholder();
+        } catch (e) {
+          // Method 1 failed, try alternative approaches
+        }
+        
+        if (!canvasElement) {
+          // Method 2: Find the closest editor container
+          const editorContainer = elementRef.current.closest('[data-cy="editor-root"], [data-editor="true"], .editor-canvas, .craft-renderer');
+          if (editorContainer) {
+            canvasElement = editorContainer;
+          }
+        }
+        
+        if (!canvasElement) {
+          // Method 3: Find by looking for common editor class patterns
+          const possibleContainers = document.querySelectorAll(
+            '[data-cy*="editor"], [class*="editor"], [class*="canvas"], [class*="craft"]'
+          );
+          if (possibleContainers.length > 0) {
+            canvasElement = possibleContainers[0];
+          }
+        }
+        
+        if (!canvasElement) {
+          // Method 4: Use viewport as fallback
+          canvasElement = document.body;
+        }
+        
+        if (canvasElement) {
+          const canvasBounds = canvasElement.getBoundingClientRect();
+          // Convert to canvas-relative coordinates
+          const relativeBounds = {
+            x: bounds.left - canvasBounds.left,
+            y: bounds.top - canvasBounds.top,
+            width: bounds.width,
+            height: bounds.height
+          };
+          
+          snapGridSystem.registerElement(nodeId, elementRef.current, relativeBounds);
+        }
+      } catch (error) {
+        console.warn('Failed to register element for snapping:', error);
       }
     }
   }, [nodeId, query]);
@@ -71,19 +125,33 @@ export const useCraftSnap = (nodeId) => {
     // Register all elements for snapping
     const nodes = query.getNodes();
     Object.entries(nodes).forEach(([id, node]) => {
-      if (id !== nodeId && node.dom) {
-        const nodeBounds = node.dom.getBoundingClientRect();
-        const canvasElement = query.getDropPlaceholder()?.getBoundingClientRect();
-        
-        if (canvasElement) {
-          const relativeBounds = {
-            x: nodeBounds.left - canvasElement.left,
-            y: nodeBounds.top - canvasElement.top,
-            width: nodeBounds.width,
-            height: nodeBounds.height
-          };
+      if (id !== nodeId && node && node.dom) {
+        try {
+          const nodeBounds = node.dom.getBoundingClientRect();
           
-          snapGridSystem.registerElement(id, node.dom, relativeBounds);
+          // Use the same robust canvas detection as registerElement
+          let canvasElement = null;
+          
+          try {
+            canvasElement = query.getDropPlaceholder();
+          } catch (e) {
+            // Fallback methods
+            canvasElement = node.dom.closest('[data-cy="editor-root"], [data-editor="true"], .editor-canvas, .craft-renderer') || document.body;
+          }
+          
+          if (canvasElement) {
+            const canvasBounds = canvasElement.getBoundingClientRect();
+            const relativeBounds = {
+              x: nodeBounds.left - canvasBounds.left,
+              y: nodeBounds.top - canvasBounds.top,
+              width: nodeBounds.width,
+              height: nodeBounds.height
+            };
+            
+            snapGridSystem.registerElement(id, node.dom, relativeBounds);
+          }
+        } catch (error) {
+          console.warn(`Failed to register element ${id} for snapping:`, error);
         }
       }
     });
@@ -188,16 +256,26 @@ export const useCraftSnap = (nodeId) => {
     return element;
   }, [enabled, registerElement, unregisterElement, handleDragStart, handleDragMove, handleDragEnd]);
 
-  // Enhanced drag connector that includes snap functionality
+  // Enhanced drag connector that integrates with Craft.js drag system
   const snapDrag = useCallback((element) => {
     if (!element) return element;
     
-    // First connect with Craft.js drag
+    // Only use Craft.js drag - no custom drag handling for position handle
     const craftElement = drag(element);
     
-    // Then add snap functionality
-    return connectDrag(craftElement);
-  }, [drag, connectDrag]);
+    // Register element for snapping (as a target for other elements)
+    if (craftElement) {
+      elementRef.current = craftElement;
+      registerElement();
+      
+      // Store cleanup function
+      craftElement._snapCleanup = () => {
+        unregisterElement();
+      };
+    }
+    
+    return craftElement;
+  }, [drag, registerElement, unregisterElement]);
 
   // Enhanced connect that includes snap functionality
   const snapConnect = useCallback((element) => {
@@ -274,7 +352,18 @@ export const useSnapGridCanvas = () => {
 
   // Initialize snap grid system with canvas
   useEffect(() => {
-    const canvas = canvasRef.current || query.getDropPlaceholder();
+    let canvas = canvasRef.current;
+    
+    if (!canvas) {
+      try {
+        canvas = query.getDropPlaceholder();
+      } catch (error) {
+        console.warn('Could not get drop placeholder from Craft.js, using fallback canvas detection');
+        // Fallback: find editor canvas by data attributes
+        canvas = document.querySelector('[data-cy="editor-root"], [data-editor="true"]');
+      }
+    }
+    
     if (canvas) {
       snapGridSystem.initialize(canvas);
     }
