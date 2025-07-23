@@ -328,19 +328,35 @@ placeContent,
           const editorRect = editorRoot.getBoundingClientRect();
           const computedStyle = window.getComputedStyle(node.dom);
           
-          // Get border widths (we exclude borders from visual alignment)
+          // Get border widths for reference
           const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
           const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
           const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
           const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
           
-          // For visual alignment, we want to align to the padding box (inside border, including padding)
-          snapGridSystem.registerElement(id, {
-            x: elementRect.left - editorRect.left + borderLeft,
-            y: elementRect.top - editorRect.top + borderTop,
-            width: elementRect.width - borderLeft - borderRight,
-            height: elementRect.height - borderTop - borderBottom,
+          // For visual alignment, we want to align to the full visual bounds (border box)
+          // This includes padding and borders as users expect visual alignment to the actual edge
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          
+          console.log('📝 Registering element with border box bounds:', {
+            id,
+            elementRect: {
+              left: elementRect.left - editorRect.left,
+              top: elementRect.top - editorRect.top,
+              width: elementRect.width,
+              height: elementRect.height,
+              right: (elementRect.left - editorRect.left) + elementRect.width,
+              bottom: (elementRect.top - editorRect.top) + elementRect.height
+            },
+            borders: { borderLeft, borderRight, borderTop, borderBottom }
           });
+          
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
         }
       }
     });
@@ -393,60 +409,64 @@ placeContent,
       const editorRoot = document.querySelector('[data-editor="true"]');
       if (editorRoot) {
         const editorRect = editorRoot.getBoundingClientRect();
-        const currentX = currentRect.left - editorRect.left;
-        const currentY = currentRect.top - editorRect.top;
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
 
-        // Calculate potential snap positions for the new size
-        // For resize, we want to snap the edges/corners that are being moved
-        let snapTargetX = currentX;
-        let snapTargetY = currentY;
-
-        // Determine which edges are being resized to know what to snap
-        if (direction.includes('e')) {
-          snapTargetX = currentX + newWidth; // Right edge
-        }
+        // Adjust position for edges that move the element's origin
         if (direction.includes('w')) {
-          snapTargetX = currentX; // Left edge (position might change)
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
         }
-        if (direction.includes('s')) {
-          snapTargetY = currentY + newHeight; // Bottom edge
-        }
+        
         if (direction.includes('n')) {
-          snapTargetY = currentY; // Top edge (position might change)
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
         }
 
-        // Get snap position for the resize target point
-        const snapResult = snapGridSystem.getSnapPosition(
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        console.log('🔧 Resize bounds:', { 
+          direction, 
+          currentBounds: {
+            left: currentRect.left - editorRect.left,
+            top: currentRect.top - editorRect.top,
+            width: currentRect.width,
+            height: currentRect.height
+          },
+          intendedBounds,
+          newDimensions: { newWidth, newHeight }
+        });
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
           nodeId,
-          snapTargetX,
-          snapTargetY,
+          direction,
+          intendedBounds,
           newWidth,
           newHeight
         );
 
         if (snapResult.snapped) {
-          // Apply snap adjustments based on resize direction
-          if (direction.includes('e')) {
-            // Snapping right edge - adjust width
-            newWidth = snapResult.x - currentX;
-          } else if (direction.includes('w')) {
-            // Snapping left edge - might need to adjust both position and width
-            const widthChange = currentX - snapResult.x;
-            newWidth = startWidth + widthChange;
-          }
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
           
-          if (direction.includes('s')) {
-            // Snapping bottom edge - adjust height
-            newHeight = snapResult.y - currentY;
-          } else if (direction.includes('n')) {
-            // Snapping top edge - might need to adjust both position and height
-            const heightChange = currentY - snapResult.y;
-            newHeight = startHeight + heightChange;
-          }
-
-          // Ensure we still meet minimum constraints after snapping
-          newWidth = Math.max(newWidth, 50);
-          newHeight = Math.max(newHeight, 20);
+          console.log('🔧 Applied snap result:', { 
+            snappedWidth: newWidth, 
+            snappedHeight: newHeight,
+            originalDimensions: { width: newWidth, height: newHeight }
+          });
         }
       }
       

@@ -2084,7 +2084,6 @@ if (shouldShow('colors')) {
         }
     }
     
-  console.log(localStyle.borderMode)
   // Individual sides
   const hasIndividualSides = shouldShowProperty('borderTopWidth', 'border') || shouldShowProperty('borderRightWidth', 'border') || 
                             shouldShowProperty('borderBottomWidth', 'border') || shouldShowProperty('borderLeftWidth', 'border') ||
