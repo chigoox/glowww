@@ -51,6 +51,7 @@ const SnapGridOverlay = ({
           break;
           
         case 'snap-indicators-changed':
+          console.log('SnapGridOverlay: Received distance indicators:', data.distanceIndicators || []);
           setSnapLines(data.snapLines || []);
           setDistanceIndicators(data.distanceIndicators || []);
           break;
@@ -170,12 +171,12 @@ const SnapGridOverlay = ({
     if (distanceIndicators.length === 0) return;
 
     ctx.save();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = '#ff6600'; // Default to orange
-    ctx.fillStyle = '#ff6600';
+    ctx.lineWidth = 2; // Thicker lines for better visibility
+    ctx.strokeStyle = '#ffcc00'; // Default to yellow
+    ctx.fillStyle = '#ffcc00';
 
     distanceIndicators.forEach(indicator => {
-      const color = indicator.color || '#ff6600'; // Orange for distance indicators
+      const color = indicator.color || '#ffcc00'; // Yellow for distance indicators
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
 

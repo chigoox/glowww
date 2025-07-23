@@ -145,6 +145,7 @@ const SnapPositionHandle = ({
     const newY = startElementY + deltaY;
 
     // Get snap position from snap grid system
+    console.log('🚀 About to call snapGridSystem.getSnapPosition', { nodeId, newX, newY, elementWidth, elementHeight });
     const snapResult = snapGridSystem.getSnapPosition(
       nodeId,
       newX,
@@ -152,6 +153,7 @@ const SnapPositionHandle = ({
       elementWidth,
       elementHeight
     );
+    console.log('🚀 SnapResult:', snapResult);
 
     // Use snapped position if available, otherwise use calculated position
     const finalX = snapResult.snapped ? snapResult.x : newX;

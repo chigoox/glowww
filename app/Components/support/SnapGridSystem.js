@@ -22,10 +22,10 @@ export const SNAP_CONFIG = {
   ELEMENT_THRESHOLD: 35, // pixels for element-to-element snapping - much higher for better detection
   CENTER_THRESHOLD: 40, // pixels for center alignment - more forgiving
   GUIDE_COLOR: '#0066ff', // Blue snap guides instead of red for better visibility
-  DISTANCE_COLOR: '#ff6600', // Orange distance indicators for contrast
+  DISTANCE_COLOR: '#ffcc00', // Yellow distance indicators for better visibility
   SNAP_ANIMATION_DURATION: 200, // ms - slightly longer for better visibility
   GUIDE_LINE_WIDTH: 2, // Thicker lines for better visibility
-  DISTANCE_LINE_WIDTH: 1
+  DISTANCE_LINE_WIDTH: 2 // Thicker lines for distance indicators
 };
 
 // Snap types
@@ -45,7 +45,7 @@ class SnapGridSystem {
     this.gridSize = GRID_PRESETS.MEDIUM.size;
     this.gridOpacity = 0.5; // Higher opacity for better visibility
     this.snapThreshold = SNAP_CONFIG.THRESHOLD;
-    this.elementSnapThreshold = SNAP_CONFIG.ELEMENT_THRESHOLD;
+    this.elementSnapThreshold = 50; // Increased from 12px to 50px for wider detection range
     
     // Current snap state
     this.activeSnapLines = [];
@@ -142,6 +142,8 @@ class SnapGridSystem {
   registerElement(id, element, bounds) {
     if (!element || !bounds) return;
     
+    console.log('📝 Registering element:', id, bounds);
+    
     const elementInfo = {
       id,
       element,
@@ -159,6 +161,7 @@ class SnapGridSystem {
     };
     
     this.trackedElements.set(id, elementInfo);
+    console.log('📝 Total tracked elements:', this.trackedElements.size);
   }
 
   // Unregister an element
@@ -168,7 +171,10 @@ class SnapGridSystem {
 
   // Get snap position for a dragging element
   getSnapPosition(draggedElementId, currentX, currentY, width, height) {
+    console.log('🔥 SnapGridSystem.getSnapPosition called!', { draggedElementId, currentX, currentY, width, height, snapEnabled: this.snapEnabled });
+    
     if (!this.snapEnabled) {
+      console.log('🔥 Snap disabled, returning original position');
       return { x: currentX, y: currentY, snapped: false };
     }
 
@@ -235,6 +241,12 @@ class SnapGridSystem {
     this.activeSnapLines = snapResult.snapLines;
     this.activeDistanceIndicators = snapResult.distanceIndicators;
     
+    console.log('Snap result:', { 
+      snapLines: snapResult.snapLines.length, 
+      distanceIndicators: snapResult.distanceIndicators.length,
+      activeDistanceIndicators: this.activeDistanceIndicators
+    });
+    
     // Emit update for visual feedback
     this.emitUpdate('snap-indicators-changed', {
       snapLines: this.activeSnapLines,
@@ -290,6 +302,7 @@ class SnapGridSystem {
 
   // Snap to other elements
   snapToElements(draggedElementId, elementBounds) {
+    console.log('🎯 snapToElements called for:', draggedElementId);
     const snapLines = [];
     const distanceIndicators = [];
     let snappedX = null;
@@ -300,6 +313,8 @@ class SnapGridSystem {
     const otherElements = Array.from(this.trackedElements.entries())
       .filter(([id]) => id !== draggedElementId)
       .map(([, info]) => info);
+
+    console.log('🎯 Found other elements:', otherElements.length, Array.from(this.trackedElements.keys()));
 
     for (const otherElement of otherElements) {
       const other = otherElement.bounds;
@@ -385,8 +400,9 @@ class SnapGridSystem {
               x2 = other.left;
             }
             
-            // Only show distance indicators for meaningful spacing (not grid-based)
-            if (distance > 10 && distance < 200) {
+            // Show distance indicators for a wider range of meaningful spacing
+            if (distance > 1 && distance < 1000) {
+              console.log('Creating horizontal distance indicator:', { distance, x1, x2, y: (elementBounds.centerY + other.centerY) / 2 });
               distanceIndicators.push({
                 type: 'horizontal',
                 x1: Math.min(x1, x2),
@@ -482,8 +498,9 @@ class SnapGridSystem {
               y2 = other.top;
             }
             
-            // Only show distance indicators for meaningful spacing (not grid-based)
-            if (distance > 10 && distance < 200) {
+            // Show distance indicators for a wider range of meaningful spacing
+            if (distance > 1 && distance < 1000) {
+              console.log('Creating vertical distance indicator:', { distance, y1, y2, x: (elementBounds.centerX + other.centerX) / 2 });
               distanceIndicators.push({
                 type: 'vertical',
                 y1: Math.min(y1, y2),
@@ -495,6 +512,85 @@ class SnapGridSystem {
             }
           }
           break;
+        }
+      }
+    }
+
+    // Additional distance indicators for nearby elements (regardless of alignment)
+    // This makes yellow guides appear at greater distances
+    const now = Date.now(); // Define now timestamp
+    for (const [otherId, otherElement] of this.trackedElements.entries()) {
+      if (otherId === draggedElementId || now - otherElement.lastUpdate > 60000) continue;
+      
+      const other = otherElement.bounds;
+      
+      // Check if elements are vertically close enough to show horizontal distance
+      const verticalOverlap = Math.max(0, Math.min(elementBounds.bottom, other.bottom) - Math.max(elementBounds.top, other.top));
+      const verticalAlignment = verticalOverlap > Math.min(elementBounds.height, other.height) * 0.3; // 30% overlap
+      
+      if (verticalAlignment) {
+        // Calculate horizontal distances
+        let horizontalDistance = 0;
+        let x1, x2;
+        
+        if (elementBounds.right < other.left) {
+          // Element is to the left of other
+          horizontalDistance = other.left - elementBounds.right;
+          x1 = elementBounds.right;
+          x2 = other.left;
+        } else if (other.right < elementBounds.left) {
+          // Element is to the right of other  
+          horizontalDistance = elementBounds.left - other.right;
+          x1 = other.right;
+          x2 = elementBounds.left;
+        }
+        
+        // Show distance indicators for a much wider range
+        if (horizontalDistance > 5 && horizontalDistance < 2000) {
+          console.log('Creating nearby horizontal distance indicator:', { horizontalDistance, x1, x2 });
+          distanceIndicators.push({
+            type: 'horizontal',
+            x1: Math.min(x1, x2),
+            x2: Math.max(x1, x2),
+            y: (elementBounds.centerY + other.centerY) / 2,
+            distance: horizontalDistance,
+            color: SNAP_CONFIG.DISTANCE_COLOR
+          });
+        }
+      }
+      
+      // Check if elements are horizontally close enough to show vertical distance
+      const horizontalOverlap = Math.max(0, Math.min(elementBounds.right, other.right) - Math.max(elementBounds.left, other.left));
+      const horizontalAlignment = horizontalOverlap > Math.min(elementBounds.width, other.width) * 0.3; // 30% overlap
+      
+      if (horizontalAlignment) {
+        // Calculate vertical distances
+        let verticalDistance = 0;
+        let y1, y2;
+        
+        if (elementBounds.bottom < other.top) {
+          // Element is above other
+          verticalDistance = other.top - elementBounds.bottom;
+          y1 = elementBounds.bottom;
+          y2 = other.top;
+        } else if (other.bottom < elementBounds.top) {
+          // Element is below other
+          verticalDistance = elementBounds.top - other.bottom;
+          y1 = other.bottom;
+          y2 = elementBounds.top;
+        }
+        
+        // Show distance indicators for a much wider range
+        if (verticalDistance > 5 && verticalDistance < 2000) {
+          console.log('Creating nearby vertical distance indicator:', { verticalDistance, y1, y2 });
+          distanceIndicators.push({
+            type: 'vertical',
+            y1: Math.min(y1, y2),
+            y2: Math.max(y1, y2),
+            x: (elementBounds.centerX + other.centerX) / 2,
+            distance: verticalDistance,
+            color: SNAP_CONFIG.DISTANCE_COLOR
+          });
         }
       }
     }

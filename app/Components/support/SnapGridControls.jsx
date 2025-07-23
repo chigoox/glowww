@@ -206,7 +206,7 @@ const SnapGridControls = ({ className = '' }) => {
                 </div>
                 <Slider
                   min={6}
-                  max={24}
+                  max={100}
                   step={2}
                   value={settings.elementSnapThreshold}
                   onChange={(value) => updateSetting('elementSnapThreshold', value)}
