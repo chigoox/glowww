@@ -1813,7 +1813,20 @@ Form.craft = {
   rules: {
     canDrag: () => true,
     canDrop: () => true,
-    canMoveIn: () => true,
+    canMoveIn: (incoming, self, helpers) => {
+      // Only allow moving in FormInput components
+      if (!incoming) return false;
+      const nodes = Array.isArray(incoming) ? incoming : [incoming];
+      return nodes.every(node => {
+        const type = helpers && helpers.getNodeType ? helpers.getNodeType(node) : node.data?.type;
+        return (
+          type?.craft?.displayName === 'FormInput' ||
+          type?.displayName === 'FormInput' ||
+          (typeof type === 'function' && type.name === 'FormInput') ||
+          type?.resolvedName === 'FormInput'
+        );
+      });
+    },
     canMoveOut: () => true,
   },
   related: {
@@ -1826,8 +1839,21 @@ FormInputDropArea.craft = {
   props: {},
   rules: {
     canDrag: () => false,
-    canDrop: () => true,
-    canMoveIn: () => true,
+    canDrop: (incoming, self, helpers) => true,
+    canMoveIn: (incoming, self, helpers) => {
+      // Only allow moving in FormInput components
+      if (!incoming) return false;
+      const nodes = Array.isArray(incoming) ? incoming : [incoming];
+      return nodes.every(node => {
+        const type = helpers && helpers.getNodeType ? helpers.getNodeType(node) : node.data?.type;
+        return (
+          type?.craft?.displayName === 'FormInput' ||
+          type?.displayName === 'FormInput' ||
+          (typeof type === 'function' && type.name === 'FormInput') ||
+          type?.resolvedName === 'FormInput'
+        );
+      });
+    },
     canMoveOut: () => true,
   }
 };

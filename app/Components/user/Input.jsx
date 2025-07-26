@@ -101,7 +101,7 @@ export const FormInput = ({
     showLabel = true,
     
     // Layout properties
-    width = "100%",
+    width = "90%",
     height = "auto",
     minWidth = 200,
     maxWidth,
@@ -1628,7 +1628,7 @@ FormInput.craft = {
         showLabel: true,
         
         // Layout properties
-        width: "100%",
+        width: "90%",
         height: "auto",
         minWidth: 200,
         maxWidth: undefined,
