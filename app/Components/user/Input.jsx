@@ -1681,19 +1681,18 @@ FormInput.craft = {
     },
     rules: {
         canDrag: () => true,
-        canDrop: (dropTarget) => {
+       canDrop: (parentNode) => {
+            // Only allow FormInput to be dropped inside Form components
+            const parentType = parentNode.data.type;
+            const parentName = parentNode.data.name;
             
-console.log(dropTarget)
-          const parentId = dropTarget.data?.parent;
-          if (!parentId) return false;
-          const parent = dropTarget.store.nodes[parentId];
-          return parent.data.displayName === "FormInputDropArea";
+          
+            // Allow dropping in Form components or containers that might contain forms
+            return parentType === 'FormInputDropArea' || 
+                   parentName === 'FormInputDropArea' ||
+                   parentNode.data.displayName === 'FormInputDropArea'
 
-      
-        }, // FormInput cannot accept other components
-        canMoveIn: () => false, // FormInput cannot accept other components
-        canMoveOut: () => true,
-        canDropIn: (parentNode) => true,
+        },
     },
     related: {
         settings: InputConfigModal,
