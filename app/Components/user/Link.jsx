@@ -1521,7 +1521,7 @@ export const Link = ({
       </a>
 
       {/* Link Portal Controls - show only on hover or multi-selection */}
-      {!isEditing && isClient && !hideEditorUI && (isHovered || isMultiSelected) && (
+      {(selected || isHovered) && isClient && !hideEditorUI  && (
         <LinkPortalControls
           linkPosition={linkPosition}
           setModalVisible={setModalVisible}

@@ -3,13 +3,10 @@
 import { EditOutlined, UploadOutlined, CalendarOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { Element, useNode } from "@craftjs/core";
 import { createPortal } from 'react-dom';
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
-import { useMultiSelect } from '../support/MultiSelectContext';
-import { useCraftSnap } from '../support/useCraftSnap';
-import SnapPositionHandle from '../support/SnapPositionHandle';
 import { 
   Button, 
   ColorPicker, 
@@ -158,36 +155,12 @@ export const FormInput = ({
     title = "",
     children
 }) => {
-    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected, id: nodeId, parent } = useNode((node) => ({
+    const { connectors: { connect, drag }, actions: { setProp }, selected: isSelected, id: nodeId } = useNode((node) => ({
         selected: node.events.selected,
-        id: node.id,
-        parent: node.data.parent,
+        id: node.id
     }));
     
     const { hideEditorUI } = useEditorDisplay();
-
-    // Multi-selection hook
-    const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
-
-    // Snap functionality
-    const { connect: snapConnect } = useCraftSnap();
-
-    // Track parent changes to reset position properties
-    const prevParentRef = useRef(parent);
-
-    useEffect(() => {
-        if (prevParentRef.current !== parent) {
-            console.log('FormInput: Parent changed, resetting position properties');
-            setProp(props => {
-                props.top = undefined;
-                props.left = undefined;
-                props.right = undefined;
-                props.bottom = undefined;
-                props.position = "relative";
-            });
-            prevParentRef.current = parent;
-        }
-    }, [parent, setProp]);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
@@ -195,15 +168,13 @@ export const FormInput = ({
     const [isClient, setIsClient] = useState(false);
     const [isInputHovered, setIsInputHovered] = useState(false);
     const [inputPosition, setInputPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
-    const [isDragging, setIsDragging] = useState(false);
 
     // Context menu functionality
     const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
     const inputRef = useRef(null);
-    const dragRef = useRef(null);
     // Function to update input position for portal positioning
-    const updateInputPosition = useCallback(() => {
+    const updateInputPosition = () => {
         if (inputRef.current) {
             // For Ant Design components, we need to get the actual DOM element
             const element = inputRef.current.input || inputRef.current.nativeElement || inputRef.current;
@@ -217,7 +188,7 @@ export const FormInput = ({
                 });
             }
         }
-    }, []);
+    };
 
     // Update input position when hovered or selected changes
     useEffect(() => {
@@ -238,25 +209,12 @@ export const FormInput = ({
                 window.removeEventListener('resize', handleResize);
             };
         }
-    }, [isInputHovered, isSelected, updateInputPosition]);
+    }, [isInputHovered, isSelected]);
 
     // Set up client-side rendering check
     useEffect(() => {
         setIsClient(true);
     }, []);
-
-    // Connect drag elements
-    useEffect(() => {
-        const connectElements = () => {
-            if (dragRef.current) {
-                drag(dragRef.current);
-            }
-        };
-
-        connectElements();
-        const timer = setTimeout(connectElements, 50);
-        return () => clearTimeout(timer);
-    }, [drag]);
 
     const inputTypeOptions = [
         // Basic Text Inputs
@@ -749,19 +707,19 @@ export const FormInput = ({
         <>
             <FlexBox
                 ref={(ref) => {
-                    inputRef.current = ref;
                     if (ref && connect) {
-                        const combinedRef = snapConnect(drag(ref));
+                        connect(ref); // Connect for Craft.js selection
                     }
                 }}
-                className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isMultiSelected ? 'ring-2 ring-purple-500' : ''} ${className} form-input`}
-                onClick={(e) => {
-                    if (e.ctrlKey || e.metaKey) {
-                        e.stopPropagation();
-                        toggleSelection(nodeId);
-                    }
-                }}
-                onContextMenu={hideEditorUI ? undefined : handleContextMenu}
+                width={width}
+                height={height}
+                display={display}
+                flexDirection={flexDirection}
+                gap={gap}
+                padding={padding}
+                backgroundColor={backgroundColor}
+                borderRadius={borderRadius}
+                className={`${className} form-input`}
                 style={{
                     position: position,
                     top: top,
@@ -811,13 +769,8 @@ export const FormInput = ({
             {/* Input Portal Controls - show when input is hovered or component is selected */}
             {(isInputHovered || isSelected) && !hideEditorUI && (
                 <InputPortalControls
-                    boxPosition={inputPosition}
-                    dragRef={dragRef}
-                    handleResizeStart={() => {}} // Input doesn't need resize
-                    handleEditClick={() => setIsEditModalOpen(true)}
-                    nodeId={nodeId}
-                    isDragging={isDragging}
-                    setIsDragging={setIsDragging}
+                    inputPosition={{...inputPosition, inputType}}
+                    setIsEditModalOpen={setIsEditModalOpen}
                 />
             )}
 
@@ -886,15 +839,10 @@ export const FormInput = ({
     );
 };
 
-// Portal Controls Component - with new pattern
+// Portal Controls Component - renders only the edit button
 const InputPortalControls = ({ 
-    boxPosition, 
-    dragRef,
-    handleResizeStart,
-    handleEditClick,
-    nodeId,
-    isDragging,
-    setIsDragging
+    inputPosition, 
+    setIsEditModalOpen
 }) => {
     if (typeof window === 'undefined') return null; // SSR check
     
@@ -908,12 +856,12 @@ const InputPortalControls = ({
                 zIndex: 999999
             }}
         >
-            {/* Combined pill-shaped drag controls */}
+            {/* Edit button only */}
             <div
                 style={{
                     position: 'absolute',
-                    top: boxPosition.top - 28,
-                    left: boxPosition.left + boxPosition.width / 2,
+                    top: inputPosition.top - 28,
+                    left: inputPosition.left + inputPosition.width / 2,
                     transform: 'translateX(-50%)',
                     display: 'flex',
                     background: 'white',
@@ -927,15 +875,14 @@ const InputPortalControls = ({
                     zIndex: 10000
                 }}
             >
-                {/* Left half - MOVE (Craft.js drag) */}
+                {/* EDIT button */}
                 <div
-                    ref={dragRef}
                     style={{
-                        background: '#52c41a',
+                        background: '#722ed1',
                         color: 'white',
-                        padding: '2px',
-                        borderRadius: '14px 0 0 14px',
-                        cursor: 'grab',
+                        padding: '4px 8px',
+                        borderRadius: '14px',
+                        cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '2px',
@@ -943,65 +890,11 @@ const InputPortalControls = ({
                         justifyContent: 'center',
                         transition: 'background 0.2s ease'
                     }}
-                    title="Drag to move between containers"
+                    onClick={() => setIsEditModalOpen(true)}
+                    title="Configure input field"
                 >
-                    📦 MOVE
+                    ⚙️ EDIT
                 </div>
-                
-                {/* Right half - POS (Custom position drag with snapping) */}
-                <SnapPositionHandle
-                    nodeId={nodeId}
-                    style={{
-                        background: '#1890ff',
-                        color: 'white',
-                        padding: '4px',
-                        borderRadius: '0 14px 14px 0',
-                        cursor: 'move',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        minWidth: '48px',
-                        justifyContent: 'center',
-                        transition: 'background 0.2s ease'
-                    }}
-                    onDragStart={(e) => {
-                        setIsDragging(true);
-                    }}
-                    onDragMove={(e, { x, y, snapped }) => {
-                        // Optional: Add visual feedback for snapping
-                        console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
-                    }}
-                    onDragEnd={(e) => {
-                        setIsDragging(false);
-                    }}
-                >
-                    ↕↔ POS
-                </SnapPositionHandle>
-            </div>
-
-            {/* EDIT Button - separate control */}
-            <div
-                style={{
-                    position: 'absolute',
-                    top: boxPosition.top - 28,
-                    left: boxPosition.left + boxPosition.width + 10,
-                    background: '#722ed1',
-                    color: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    fontSize: '9px',
-                    fontWeight: 'bold',
-                    userSelect: 'none',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                    pointerEvents: 'auto',
-                    zIndex: 10000,
-                    transition: 'background 0.2s ease'
-                }}
-                onClick={handleEditClick}
-                title="Configure input field"
-            >
-                ⚙️ EDIT
             </div>
         </div>,
         document.body
@@ -1788,7 +1681,16 @@ FormInput.craft = {
     },
     rules: {
         canDrag: () => true,
-        canDrop: () => true, // FormInput cannot accept other components
+        canDrop: (dropTarget) => {
+            
+console.log(dropTarget)
+          const parentId = dropTarget.data?.parent;
+          if (!parentId) return false;
+          const parent = dropTarget.store.nodes[parentId];
+          return parent.data.displayName === "FormInputDropArea";
+
+      
+        }, // FormInput cannot accept other components
         canMoveIn: () => false, // FormInput cannot accept other components
         canMoveOut: () => true,
         canDropIn: (parentNode) => true,

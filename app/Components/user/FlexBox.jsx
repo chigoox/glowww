@@ -966,15 +966,15 @@ FlexBox.craft = {
     spellCheck: true,
     translate: 'yes',
     dir: "auto"
-  },
-  rules: {
+    },
+    rules: {
     canDrag: () => true,
-    canDrop: () => true,
+    canDrop: (node, parent) => true,
     canMoveIn: () => true,
     canMoveOut: () => true
-  },
-   custom: {
-  styleMenu: {
+    },
+     custom: {
+    styleMenu: {
     supportedProps: [
       // Layout & Position
       'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',

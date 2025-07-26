@@ -1578,7 +1578,7 @@ export const Button = ({
       </ButtonElement>
 
       {/* Button Portal Controls - show when button is hovered or component is selected (hide in preview mode) */}
-      {(isHovered || selected) && !isEditing && !hideEditorUI && (
+      {( selected) && !isEditing && !hideEditorUI && (
         <ButtonPortalControls
           buttonPosition={buttonPosition}
           setModalVisible={setModalVisible}

@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useMultiSelect } from './MultiSelectContext';
 import ContextMenu from './ContextMenu';
 
 const MultiSelectBoundingBox = () => {
+  const [isClient, setIsClient] = useState(false);
+  
   const {
     boundingBox,
     isMultiSelecting,
@@ -21,6 +23,11 @@ const MultiSelectBoundingBox = () => {
     selectedNodes
   } = useMultiSelect();
 
+  // Client-side check
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   console.log('🎯 BoundingBox Debug:', { 
     selectedNodes: Array.from(selectedNodes), 
     count: selectedNodes.size,
@@ -30,7 +37,7 @@ const MultiSelectBoundingBox = () => {
   console.log('🎯 Drag Selection Debug:', { 
     isDragSelecting,
     dragSelection,
-    hasPortalTarget: !!document.body
+    hasPortalTarget: isClient && !!document.body
   });
 
   const [dragState, setDragState] = useState(null);
@@ -247,6 +254,11 @@ const MultiSelectBoundingBox = () => {
     cursor: 'pointer',
     boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
   };
+
+  // Don't render anything on server-side
+  if (!isClient) {
+    return null;
+  }
 
   return createPortal(
     <>
