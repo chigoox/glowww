@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import { PlayCircleOutlined } from '@ant-design/icons';
@@ -8,6 +8,9 @@ import MediaLibrary from '../support/MediaLibrary';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useMultiSelect } from '../support/MultiSelectContext';
+import { useCraftSnap } from '../support/useCraftSnap';
+import SnapPositionHandle from '../support/SnapPositionHandle';
 
 export const Video = ({
   // Video Source
@@ -60,12 +63,14 @@ export const Video = ({
   id = "",
   title = "",
 }) => {
-  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
 
   const videoRef = useRef(null);
+  const dragRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -73,14 +78,23 @@ export const Video = ({
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   
+  // Track previous parent to detect container changes
+  const prevParentRef = useRef(parent);
+  
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
+
+  // Multi-selection hook
+  const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
+
+  // Snap functionality
+  const { connect: snapConnect } = useCraftSnap();
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update box position for portal positioning
-  const updateBoxPosition = () => {
+  const updateBoxPosition = useCallback(() => {
     if (videoRef.current) {
       const rect = videoRef.current.getBoundingClientRect();
       setBoxPosition({
@@ -90,7 +104,7 @@ export const Video = ({
         height: rect.height
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -99,14 +113,46 @@ export const Video = ({
   useEffect(() => {
     const connectElements = () => {
       if (videoRef.current) {
-        connect(drag(videoRef.current));
+        // Chain both connections
+        const combinedRef = snapConnect(drag(videoRef.current));
+      }
+      if (dragRef.current) {
+        // Also setup the dragRef for the portal controls
+        drag(dragRef.current);
       }
     };
 
     connectElements();
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
-  }, [connect, drag, isSelected, isClient]);
+  }, [connect, drag, snapConnect]);
+
+  // Detect parent changes and reset position properties
+  useEffect(() => {
+    // Skip the initial render (when prevParentRef.current is first set)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Video ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      
+      // Reset position properties to default
+      setProp((props) => {
+        // Only reset if position properties were actually set
+        if (props.top !== undefined || props.left !== undefined || 
+            props.right !== undefined || props.bottom !== undefined) {
+          console.log('🔄 Resetting position properties after container move');
+          props.top = undefined;
+          props.left = undefined;
+          props.right = undefined;
+          props.bottom = undefined;
+          // Keep position as relative for normal flow
+          props.position = "relative";
+        }
+      });
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -124,7 +170,7 @@ export const Video = ({
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [isSelected, isHovered]);
+  }, [isSelected, isHovered, updateBoxPosition]);
 
   // Handle resize start
   const handleResizeStart = (e, direction) => {
@@ -418,7 +464,7 @@ export const Video = ({
 
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected ? 'ring-2 ring-purple-500' : ''} ${className || ''}`}
       ref={(el) => {
         videoRef.current = el;
         if (el) {
@@ -434,6 +480,12 @@ export const Video = ({
       }}
       id={id}
       title={title}
+      onClick={(e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.stopPropagation();
+          toggleSelection(nodeId);
+        }
+      }}
       onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
@@ -445,9 +497,12 @@ export const Video = ({
       {isClient && isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
-          handleDragStart={handleDragStart}
+          dragRef={dragRef}
           handleResizeStart={handleResizeStart}
           handleEditClick={() => setShowMediaLibrary(true)}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
 
@@ -502,67 +557,119 @@ export const Video = ({
 // Portal Controls Component
 const PortalControls = ({ 
   boxPosition, 
-  handleDragStart, 
+  dragRef,
   handleResizeStart,
-  handleEditClick 
+  handleEditClick,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') return null; // SSR check
 
   return createPortal(
-    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
-      {/* Control pills */}
-      <div style={{
-        position: 'absolute',
-        top: boxPosition.top - 35,
-        left: boxPosition.left,
-        display: 'flex',
-        pointerEvents: 'auto'
-      }}>
-        {/* Left - POS */}
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left half - MOVE (Craft.js drag) */}
         <div
+          ref={dragRef}
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '6px 8px',
+            padding: '2px',
             borderRadius: '14px 0 0 14px',
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          title="Drag to move between containers"
+        >
+          📦 MOVE
+        </div>
+        
+        {/* Right half - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px',
+            borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '40px',
+            minWidth: '48px',
             justifyContent: 'center',
-            transition: 'background 0.2s ease',
-            fontSize: '11px',
-            fontWeight: 'bold'
+            transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
         >
           ↕↔ POS
-        </div>
+        </SnapPositionHandle>
+      </div>
 
-        {/* Right - EDIT */}
-        <div
-          style={{
-            background: '#faad14',
-            color: 'white',
-            padding: '6px 8px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '45px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease',
-            fontSize: '11px',
-            fontWeight: 'bold'
-          }}
-          onClick={handleEditClick}
-          title="Change video"
-        >
-          🎥 EDIT
-        </div>
+      {/* EDIT Button - separate control */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width + 10,
+          background: '#722ed1',
+          color: 'white',
+          padding: '4px 8px',
+          borderRadius: '12px',
+          cursor: 'pointer',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto',
+          zIndex: 10000,
+          transition: 'background 0.2s ease'
+        }}
+        onClick={handleEditClick}
+        title="Change video"
+      >
+        🎬 EDIT
       </div>
 
       {/* Resize handles */}

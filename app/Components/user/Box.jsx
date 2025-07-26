@@ -9,6 +9,7 @@ import useEditorDisplay from "../support/useEditorDisplay";
 import { useCraftSnap } from "../support/useCraftSnap";
 import SnapPositionHandle from "../support/SnapPositionHandle";
 import { snapGridSystem } from "../support/SnapGridSystem";
+import { useMultiSelect } from '../support/MultiSelectContext';
 
 export const Box = ({
   
@@ -194,14 +195,18 @@ placeContent,
 
   children 
 }) => {
-  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
   const { actions: editorActions, query } = useEditor();
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use multi-selection functionality
+  const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
@@ -213,6 +218,9 @@ placeContent,
   const [isDragging, setIsDragging] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   
+  // Track previous parent to detect container changes
+  const prevParentRef = useRef(parent);
+  
   // Context menu state
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
 
@@ -220,6 +228,12 @@ placeContent,
   const handleContextMenu = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // If this element is not already selected, add it to the selection
+    if (!isMultiSelected(nodeId)) {
+      console.log('🎯 Right-click on unselected element, adding to selection:', nodeId);
+      addToSelection(nodeId);
+    }
     
     // Calculate position to keep menu on screen
     const menuWidth = 320;
@@ -285,6 +299,33 @@ placeContent,
       return () => clearTimeout(timer);
     }
   }, [snapConnect, snapDrag, isSelected]);
+
+  // Detect parent changes and reset position properties
+  useEffect(() => {
+    // Skip the initial render (when prevParentRef.current is first set)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      
+      // Reset position properties to default
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+        // Only reset if position properties were actually set
+        if (props.top !== undefined || props.left !== undefined || 
+            props.right !== undefined || props.bottom !== undefined) {
+          console.log('🔄 Resetting position properties after container move');
+          props.top = undefined;
+          props.left = undefined;
+          props.right = undefined;
+          props.bottom = undefined;
+          // Keep position as relative for normal flow
+          props.position = "relative";
+        }
+      });
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -471,7 +512,7 @@ placeContent,
       }
       
       // Update dimensions using Craft.js throttled setProp for smooth history
-      editorActions.history.throttle(200).setProp(nodeId, (props) => {
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -686,7 +727,7 @@ placeContent,
 
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
       ref={cardRef}
       style={{
         ...computedStyles,
@@ -713,6 +754,22 @@ placeContent,
         updateBoxPosition();
       }}
       onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onClick={(e) => {
+        if (!hideEditorUI) {
+          if (e.ctrlKey || e.metaKey) {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('🎯 Ctrl+click detected on:', nodeId);
+            // Toggle selection - works even if no previous selection
+            if (isMultiSelected(nodeId)) {
+              removeFromSelection(nodeId);
+            } else {
+              addToSelection(nodeId);
+            }
+          }
+          // For regular clicks, let the global handler manage clearing/selecting
+        }
+      }}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping (hide in preview mode) */}

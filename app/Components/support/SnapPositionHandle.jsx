@@ -39,19 +39,39 @@ const SnapPositionHandle = ({
 
   const [isDragging, setIsDragging] = useState(false);
 
-  // Get canvas/container element
-  const getCanvasElement = useCallback(() => {
-    let canvas = null;
+  // Get parent container element (immediate parent, not root canvas)
+  const getParentContainer = useCallback(() => {
+    if (!dom) return null;
     
     try {
-      canvas = query.getDropPlaceholder();
+      // Get the parent element from Craft.js
+      const parentElement = dom.parentElement;
+      
+      // If parent has position relative/absolute, use it as container
+      if (parentElement) {
+        const parentStyle = window.getComputedStyle(parentElement);
+        if (['relative', 'absolute', 'fixed'].includes(parentStyle.position)) {
+          return parentElement;
+        }
+      }
+      
+      // Fallback to finding the nearest positioned ancestor
+      let current = parentElement;
+      while (current && current !== document.body) {
+        const computedStyle = window.getComputedStyle(current);
+        if (['relative', 'absolute', 'fixed'].includes(computedStyle.position)) {
+          return current;
+        }
+        current = current.parentElement;
+      }
+      
+      // Final fallback to root canvas
+      return query.getDropPlaceholder() || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
     } catch (e) {
-      // Fallback to data attribute search
-      canvas = document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
+      // Fallback to root canvas
+      return query.getDropPlaceholder() || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
     }
-    
-    return canvas;
-  }, [query]);
+  }, [dom, query]);
 
   // Handle drag start
   const handleMouseDown = useCallback((e) => {
@@ -60,11 +80,11 @@ const SnapPositionHandle = ({
 
     if (!dom) return;
 
-    const canvas = getCanvasElement();
-    if (!canvas) return;
+    const container = getParentContainer();
+    if (!container) return;
 
     const elementRect = dom.getBoundingClientRect();
-    const canvasRect = canvas.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
     const computedStyle = window.getComputedStyle(dom);
     
     // Get border widths for current element (we exclude borders from visual alignment)
@@ -73,21 +93,25 @@ const SnapPositionHandle = ({
     const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
     const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
 
+    // Calculate position relative to parent container, not root canvas
+    const currentLeft = elementRect.left - containerRect.left + borderLeft;
+    const currentTop = elementRect.top - containerRect.top + borderTop;
+
     // Initialize drag state - align to padding box (inside border, including padding)
     dragState.current = {
       isDragging: true,
       startX: e.clientX,
       startY: e.clientY,
-      startElementX: elementRect.left - canvasRect.left + borderLeft,
-      startElementY: elementRect.top - canvasRect.top + borderTop,
+      startElementX: currentLeft,
+      startElementY: currentTop,
       elementWidth: elementRect.width - borderLeft - borderRight,
       elementHeight: elementRect.height - borderTop - borderBottom,
-      canvasRect
+      canvasRect: containerRect // Use container rect instead of canvas rect
     };
 
     setIsDragging(true);
 
-    // Register all elements for snapping
+    // Register all elements for snapping (relative to the same container)
     const nodes = query.getNodes();
     Object.entries(nodes).forEach(([id, node]) => {
       if (id !== nodeId && node && node.dom) {
@@ -102,9 +126,10 @@ const SnapPositionHandle = ({
           const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
           
           // For visual alignment, we want to align to the padding box (inside border, including padding)
+          // Calculate relative to the same container
           const relativeBounds = {
-            x: nodeBounds.left - canvasRect.left + borderLeft,
-            y: nodeBounds.top - canvasRect.top + borderTop,
+            x: nodeBounds.left - containerRect.left + borderLeft,
+            y: nodeBounds.top - containerRect.top + borderTop,
             width: nodeBounds.width - borderLeft - borderRight,
             height: nodeBounds.height - borderTop - borderBottom
           };
@@ -122,7 +147,7 @@ const SnapPositionHandle = ({
     // Add global mouse handlers
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [dom, nodeId, query, getCanvasElement, onDragStart]);
+  }, [dom, nodeId, query, getParentContainer, onDragStart]);
 
   // Handle drag move with snapping
   const handleMouseMove = useCallback((e) => {
@@ -269,13 +294,13 @@ const SnapPositionHandle = ({
   // Register current element with snap system
   useEffect(() => {
     if (dom && nodeId) {
-      const canvas = getCanvasElement();
-      if (canvas) {
+      const container = getParentContainer();
+      if (container) {
         const elementRect = dom.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         const relativeBounds = {
-          x: elementRect.left - canvasRect.left,
-          y: elementRect.top - canvasRect.top,
+          x: elementRect.left - containerRect.left,
+          y: elementRect.top - containerRect.top,
           width: elementRect.width,
           height: elementRect.height
         };
@@ -289,7 +314,7 @@ const SnapPositionHandle = ({
         snapGridSystem.unregisterElement(nodeId);
       }
     };
-  }, [dom, nodeId, getCanvasElement]);
+  }, [dom, nodeId, getParentContainer]);
 
   const defaultStyle = {
     background: '#ff6b35',

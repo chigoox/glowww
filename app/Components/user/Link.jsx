@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useEffect, useState, useMemo } from "react";
+import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import ContextMenu from "../support/ContextMenu";
@@ -8,6 +8,10 @@ import { useContextMenu } from "../support/useContextMenu";
 import { usePages } from "../PagesContext";
 import { connectCraftElement } from "../support/craftUtils";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useMultiSelect } from '../support/MultiSelectContext';
+import { useCraftSnap } from '../support/useCraftSnap';
+import SnapPositionHandle from '../support/SnapPositionHandle';
+import { snapGridSystem } from '../support/SnapGridSystem';
 import { 
   Modal, 
   Input, 
@@ -422,10 +426,11 @@ const LinkSettingsModal = ({
 const LinkPortalControls = ({ 
   linkPosition, 
   setModalVisible,
-  handleDragStart,
+  dragRef,
   handleResizeStart,
-  handleDoubleClick,
-  handleDeleteLink
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -439,7 +444,7 @@ const LinkPortalControls = ({
         zIndex: 999999
       }}
     >
-      {/* Combined pill-shaped drag controls */}
+      {/* Combined pill-shaped drag controls with EDIT in the middle */}
       <div
         style={{
           position: 'absolute',
@@ -458,47 +463,78 @@ const LinkPortalControls = ({
           zIndex: 10000
         }}
       >
-        {/* Left half - POS (Custom position drag) */}
+        {/* Left - MOVE (Craft.js drag) */}
         <div
+          ref={dragRef}
           style={{
-            background: '#1890ff',
+            background: '#52c41a',
             color: 'white',
-            padding: '4px 6px',
+            padding: '4px 8px',
             borderRadius: '14px 0 0 14px',
-            cursor: 'move',
+            cursor: 'grab',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '48px',
+            minWidth: '40px',
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          title="Drag to move between containers"
         >
-          ↕↔ POS
+          📦 MOVE
         </div>
 
-        {/* Right half - EDIT (Settings modal) */}
+        {/* Middle - EDIT Button */}
         <div
           style={{
             background: '#722ed1',
             color: 'white',
-            padding: '4px 6px',
-            borderRadius: '0 14px 14px 0',
+            padding: '4px 8px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '48px',
+            minWidth: '40px',
             justifyContent: 'center',
-            transition: 'background 0.2s ease'
+            transition: 'background 0.2s ease',
+            borderLeft: '1px solid rgba(255,255,255,0.2)',
+            borderRight: '1px solid rgba(255,255,255,0.2)'
           }}
           onClick={() => setModalVisible(true)}
           title="Configure link settings"
         >
           ⚙️ EDIT
         </div>
+
+        {/* Right - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '40px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
+        >
+          ↕↔ POS
+        </SnapPositionHandle>
       </div>
 
       {/* Resize handles */}
@@ -740,19 +776,78 @@ export const Link = ({
   
   children,
 }) => {
+  /*
+   * 🎯 MULTI-SELECTION FEATURES:
+   * - Ctrl+Click: Add/remove from multi-selection
+   * - Visual indicators: Blue outline for Craft.js selection, Purple outline for multi-selection
+   * - Portal controls: Show for both selected and multi-selected items
+   * - Keyboard support: Delete key works on selected items
+   * - Context menu: Enhanced for multi-selected items
+   * - Snap system: Full integration with professional resize and position snapping
+   */
   const { 
     id: nodeId, 
     connectors: { connect, drag }, 
     actions: { setProp }, 
-    selected 
+    selected,
+    parent
   } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
   
-  const { actions } = useEditor();
+  const { actions: editorActions, query } = useEditor();
+  
+  // Use our shared editor display hook (must be called early)
+  const { hideEditorUI, isPreviewMode } = useEditorDisplay();
+  
+  // Multi-selection hook
+  const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
+
+  // Handle delete (define early for use in keyboard effects)
+  const handleDeleteLink = () => {
+    editorActions.delete(nodeId);
+  };
+
+  // Debug logging for multi-selection state
+  useEffect(() => {
+    if (isMultiSelected) {
+      console.log(`🎯 Link ${nodeId} is multi-selected`);
+    }
+  }, [isMultiSelected, nodeId]);
+
+  // Keyboard support for multi-selection
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only handle keyboard when this element is selected
+      if (selected && !hideEditorUI) {
+        // Ctrl/Cmd + A for select all (if implemented in MultiSelectContext)
+        if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+          e.preventDefault();
+          // Future: implement select all functionality
+          console.log('🎯 Select All requested from Link component');
+        }
+        
+        // Delete key to remove selected elements
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          handleDeleteLink();
+        }
+      }
+    };
+
+    if (selected && !hideEditorUI) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [selected, hideEditorUI, nodeId, handleDeleteLink]);
+
+  // Use snap functionality
+  const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
   
   const linkRef = useRef(null);
+  const dragRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(text);
@@ -761,13 +856,15 @@ export const Link = ({
   const [linkPosition, setLinkPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [resizeData, setResizeData] = useState(null);
+
+  // Track previous parent to detect container changes
+  const prevParentRef = useRef(parent);
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update link position for portal positioning
-  const updateLinkPosition = () => {
+  const updateLinkPosition = useCallback(() => {
     if (linkRef.current) {
       const rect = linkRef.current.getBoundingClientRect();
       setLinkPosition({
@@ -777,7 +874,7 @@ export const Link = ({
         height: rect.height
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -786,22 +883,49 @@ export const Link = ({
   useEffect(() => {
     const connectElements = () => {
       if (linkRef.current) {
-        // Use our utility function to connect the element
-        connectCraftElement(connect, drag, linkRef.current);
+        // Chain all connections properly
+        connect(drag(snapConnect(snapDrag(linkRef.current))));
       }
     };
 
-    // Always connect on mount and when dependencies change
     connectElements();
-    
-    // Reconnect when selection state changes
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
-  }, [connect, drag, selected, isClient]);
+  }, [connect, drag, snapConnect, snapDrag]);
 
-  // Update link position when hovered or selected changes
+  // Detect parent changes and reset position properties
   useEffect(() => {
-    if (isHovered || selected) {
+    // Skip the initial render (when prevParentRef.current is first set)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Link ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      
+      // Reset position properties to default
+      setProp((props) => {
+        // Only reset if position properties were actually set
+        if (props.top !== undefined || props.left !== undefined || 
+            props.right !== undefined || props.bottom !== undefined) {
+          console.log('🔄 Resetting position properties after container move');
+          props.top = undefined;
+          props.left = undefined;
+          props.right = undefined;
+          props.bottom = undefined;
+          // Keep position as relative for normal flow
+          props.position = "relative";
+        }
+      });
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp]);
+
+  // Update link position - only track when hovered or multi-selected
+  useEffect(() => {
+    // Ensure hideEditorUI is defined before proceeding
+    if (hideEditorUI === undefined) return;
+    
+    if (!hideEditorUI && (isHovered || isMultiSelected)) {
       // Defer position update to avoid render cycle issues
       const timer = setTimeout(() => updateLinkPosition(), 0);
       
@@ -818,18 +942,13 @@ export const Link = ({
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [isHovered, selected]);
+  }, [hideEditorUI, isHovered, isMultiSelected, updateLinkPosition]);
 
   useEffect(() => {
     if (!isEditing) {
       setLocalText(text);
     }
   }, [text, isEditing]);
-
-  // Handle delete
-  const handleDeleteLink = () => {
-    actions.delete(nodeId);
-  };
 
   // Handle drag start for position changes
   const handleDragStart = (e) => {
@@ -867,95 +986,189 @@ export const Link = ({
 
   // Handle resize start
   const handleResizeStart = (e, direction) => {
-    e.preventDefault();
     e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = linkRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
     
     setIsResizing(true);
-    const linkRect = linkRef.current.getBoundingClientRect();
-    
-    setResizeData({
-      direction,
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: linkRect.width,
-      startHeight: linkRect.height,
-      startLeft: linkRect.left,
-      startTop: linkRect.top
-    });
 
-    const handleMouseMove = (moveEvent) => {
-      if (!resizeData || !linkRef.current) return;
-
-      const deltaX = moveEvent.clientX - resizeData.startX;
-      const deltaY = moveEvent.clientY - resizeData.startY;
-
-      setProp(props => {
-        const minSize = 20; // Minimum size constraint
-        
-        switch (direction) {
-          case 'se': // Southeast - resize width and height
-            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
-            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
-            break;
-          case 'sw': // Southwest - resize width and height, adjust left
-            const newWidth = Math.max(minSize, resizeData.startWidth - deltaX);
-            props.width = newWidth;
-            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
-            if (props.position === 'absolute') {
-              props.left = resizeData.startLeft - (newWidth - resizeData.startWidth);
-            }
-            break;
-          case 'ne': // Northeast - resize width and height, adjust top
-            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
-            const newHeight = Math.max(minSize, resizeData.startHeight - deltaY);
-            props.height = newHeight;
-            if (props.position === 'absolute') {
-              props.top = resizeData.startTop - (newHeight - resizeData.startHeight);
-            }
-            break;
-          case 'nw': // Northwest - resize width and height, adjust left and top
-            const newWidthNW = Math.max(minSize, resizeData.startWidth - deltaX);
-            const newHeightNW = Math.max(minSize, resizeData.startHeight - deltaY);
-            props.width = newWidthNW;
-            props.height = newHeightNW;
-            if (props.position === 'absolute') {
-              props.left = resizeData.startLeft - (newWidthNW - resizeData.startWidth);
-              props.top = resizeData.startTop - (newHeightNW - resizeData.startHeight);
-            }
-            break;
-          case 'n': // North - resize height, adjust top
-            const newHeightN = Math.max(minSize, resizeData.startHeight - deltaY);
-            props.height = newHeightN;
-            if (props.position === 'absolute') {
-              props.top = resizeData.startTop - (newHeightN - resizeData.startHeight);
-            }
-            break;
-          case 's': // South - resize height
-            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
-            break;
-          case 'w': // West - resize width, adjust left
-            const newWidthW = Math.max(minSize, resizeData.startWidth - deltaX);
-            props.width = newWidthW;
-            if (props.position === 'absolute') {
-              props.left = resizeData.startLeft - (newWidthW - resizeData.startWidth);
-            }
-            break;
-          case 'e': // East - resize width
-            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
-            break;
+    // Register all elements for snapping during resize
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths for reference
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the full visual bounds (border box)
+          // This includes padding and borders as users expect visual alignment to the actual edge
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          
+          console.log('📝 Registering element with border box bounds:', {
+            id,
+            elementRect: {
+              left: elementRect.left - editorRect.left,
+              top: elementRect.top - editorRect.top,
+              width: elementRect.width,
+              height: elementRect.height,
+              right: (elementRect.left - editorRect.left) + elementRect.width,
+              bottom: (elementRect.top - editorRect.top) + elementRect.height
+            },
+            borders: { borderLeft, borderRight, borderTop, borderBottom }
+          });
+          
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
         }
+      }
+    });
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      // Calculate new dimensions based on resize direction
+      switch (direction) {
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      // Apply minimum constraints
+      newWidth = Math.max(newWidth, 50);
+      newHeight = Math.max(newHeight, 20);
+
+      // Get current position for snap calculations
+      const currentRect = linkRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
+
+        // Adjust position for edges that move the element's origin
+        if (direction.includes('w')) {
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        
+        if (direction.includes('n')) {
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        console.log('🔧 Resize bounds:', { 
+          direction, 
+          currentBounds: {
+            left: currentRect.left - editorRect.left,
+            top: currentRect.top - editorRect.top,
+            width: currentRect.width,
+            height: currentRect.height
+          },
+          intendedBounds,
+          newDimensions: { newWidth, newHeight }
+        });
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+          
+          console.log('🔧 Applied snap result:', { 
+            snappedWidth: newWidth, 
+            snappedHeight: newHeight,
+            originalDimensions: { width: newWidth, height: newHeight }
+          });
+        }
+      }
+      
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
       });
-
-      updateLinkPosition();
     };
-
+    
     const handleMouseUp = () => {
       setIsResizing(false);
-      setResizeData(null);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-
+    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -999,9 +1212,6 @@ export const Link = ({
   // Get pages context
   const { pages } = usePages();
   
-  // Use our shared editor display hook
-  const { hideEditorUI, isPreviewMode } = useEditorDisplay();
-  
   // Check if link is internal (starts with / but not with //)
   const isInternalLink = useMemo(() => {
     if (!href) return false;
@@ -1033,11 +1243,19 @@ export const Link = ({
       return;
     }
     
-    // In editor mode, prevent navigation for safety
-    // But allow navigation in preview mode
-    if (selected && !hideEditorUI) {
+    // Handle multi-selection in editor mode
+    if (!hideEditorUI) {
+      if (e.ctrlKey || e.metaKey) {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('🎯 Ctrl+click detected on:', nodeId);
+        // Toggle selection using multi-select pattern
+        // This adds/removes the element from the multi-selection set
+        toggleSelection(nodeId);
+        return; // Don't execute link navigation in editor mode with Ctrl+click
+      }
+      // For regular clicks in editor mode, let the global handler manage clearing/selecting
       e.preventDefault();
-      console.log('Link clicked (editor mode):', href);
       return;
     }
 
@@ -1221,8 +1439,9 @@ export const Link = ({
     
     // Interaction
     cursor: isEditing ? 'text' : 'pointer',
-    outline: (selected && !hideEditorUI) ? '2px solid #1890ff' : 'none',
-    outlineOffset: (selected && !hideEditorUI) ? '2px' : 'none',
+    outline: (selected && !hideEditorUI) ? '2px solid #1890ff' : 
+             (isMultiSelected && !hideEditorUI) ? '2px solid #722ed1' : 'none',
+    outlineOffset: ((selected || isMultiSelected) && !hideEditorUI) ? '2px' : 'none',
     
     // Link specific
     textDecorationColor: isHovered ? colorHover : color,
@@ -1256,7 +1475,7 @@ export const Link = ({
   return (
     <>
       <a
-        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isMultiSelected && !hideEditorUI ? 'ring-2 ring-purple-500' : ''} ${className}`}
         ref={linkRef}
         style={computedStyles}
         href={href}
@@ -1301,15 +1520,16 @@ export const Link = ({
         {children}
       </a>
 
-      {/* Link Portal Controls - show when link is hovered or component is selected, but not in preview mode */}
-      {(isHovered || selected) && !isEditing && isClient && !hideEditorUI && (
+      {/* Link Portal Controls - show only on hover or multi-selection */}
+      {!isEditing && isClient && !hideEditorUI && (isHovered || isMultiSelected) && (
         <LinkPortalControls
           linkPosition={linkPosition}
           setModalVisible={setModalVisible}
-          handleDragStart={handleDragStart}
+          dragRef={dragRef}
           handleResizeStart={handleResizeStart}
-          handleDoubleClick={handleDoubleClick}
-          handleDeleteLink={handleDeleteLink}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
 
@@ -1330,6 +1550,7 @@ export const Link = ({
           position={{ x: contextMenu.x, y: contextMenu.y }}
           onClose={closeContextMenu}
           targetNodeId={nodeId}
+          isMultiSelected={isMultiSelected}
         />
       )}
     </>

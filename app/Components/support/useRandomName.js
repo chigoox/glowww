@@ -60,9 +60,7 @@ async function generateProjectName() {
 
   const result = `${word1}-${word2}-${word3}-${randomNumber}`;
   
-  // Debug logging to verify parts of speech
-  console.log('Generated project name:', result);
-  console.log('Parts:', { adjective: word1, noun1: word2, noun2: word3, number: randomNumber });
+
   
   return result;
 }

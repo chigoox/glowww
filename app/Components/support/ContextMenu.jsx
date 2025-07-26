@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Card, Slider, ColorPicker, Button, Tooltip, Divider } from 'antd';
 import { 
@@ -20,6 +20,7 @@ import {
   AppstoreOutlined
 } from '@ant-design/icons';
 import { useEditor, useNode } from '@craftjs/core';
+import { useMultiSelect } from './MultiSelectContext';
 import { Box } from '../user/Box';
 import { Text } from '../user/Text';
 import { Button as CustomButton } from '../user/Button';
@@ -42,9 +43,24 @@ const ContextMenu = ({
   targetNodeId 
 }) => {
   const { actions, query } = useEditor();
+  const { selectedNodes, isMultiSelecting } = useMultiSelect();
   const { recentComponents, addToRecent, clearRecent } = useRecentComponents();
   const menuRef = useRef(null);
   const drawerRef = useRef(null);
+  
+  // Determine which nodes to operate on (memoized to prevent infinite re-renders)
+  const operationNodes = useMemo(() => {
+    return isMultiSelecting && selectedNodes.size > 0 
+      ? Array.from(selectedNodes) 
+      : targetNodeId ? [targetNodeId] : [];
+  }, [isMultiSelecting, selectedNodes, targetNodeId]);
+  
+  console.log('🎯 ContextMenu nodes:', { 
+    targetNodeId, 
+    selectedNodes: Array.from(selectedNodes), 
+    isMultiSelecting, 
+    operationNodes 
+  });
   
   // All available components - using displayName for consistency
   const allComponents = [
@@ -117,41 +133,59 @@ const ContextMenu = ({
 
   // Get current node props to initialize slider values
   useEffect(() => {
-    if (targetNodeId) {
+    if (operationNodes.length > 0) {
       try {
-        const node = query.node(targetNodeId).get();
-        if (node && node.data && node.data.props) {
-          const props = node.data.props;
+        // Helper function to safely parse margin values
+        const parseMargin = (margin) => {
+          if (typeof margin === 'number') {
+            return margin;
+          }
+          if (typeof margin === 'string') {
+            // Try to extract first number from string like "0 4px" or "10px"
+            const match = margin.match(/\d+/);
+            return match ? parseInt(match[0]) : 5;
+          }
+          return 5; // default fallback
+        };
+
+        // Get properties from all operation nodes
+        const nodeProperties = operationNodes.map(nodeId => {
+          const node = query.node(nodeId).get();
+          if (node && node.data && node.data.props) {
+            const props = node.data.props;
+            return {
+              borderRadius: parseInt(props.borderRadius) || 0,
+              padding: parseInt(props.padding) || 4,
+              margin: parseMargin(props.margin),
+              zIndex: parseInt(props.zIndex) || 1,
+              rotation: 0, // We'll add this as a new feature
+              order: parseInt(props.order) || 0,
+              backgroundColor: props.backgroundColor || '#ffffff'
+            };
+          }
+          return null;
+        }).filter(Boolean);
+
+        if (nodeProperties.length > 0) {
+          // Calculate shared properties (use first node's values, but could be enhanced to show "mixed" state)
+          const sharedProps = nodeProperties[0];
           
-          // Helper function to safely parse margin values
-          const parseMargin = (margin) => {
-            if (typeof margin === 'number') {
-              return margin;
-            }
-            if (typeof margin === 'string') {
-              // Try to extract first number from string like "0 4px" or "10px"
-              const match = margin.match(/\d+/);
-              return match ? parseInt(match[0]) : 5;
-            }
-            return 5; // default fallback
-          };
+          // For multi-selection, you could check if all nodes have the same value
+          // and show "Mixed" or average values if they differ
+          if (operationNodes.length > 1) {
+            console.log('🎨 Multi-node properties:', nodeProperties);
+          }
           
           setStyleValues(prev => ({
             ...prev,
-            borderRadius: parseInt(props.borderRadius) || 0,
-            padding: parseInt(props.padding) || 4,
-            margin: parseMargin(props.margin),
-            zIndex: parseInt(props.zIndex) || 1,
-            rotation: 0, // We'll add this as a new feature
-            order: parseInt(props.order) || 0,
-            backgroundColor: props.backgroundColor || '#ffffff'
+            ...sharedProps
           }));
         }
       } catch (error) {
         console.error('Error getting node props:', error);
       }
     }
-  }, [targetNodeId, query]);
+  }, [operationNodes, query]);
 
   // Handle clicks outside menu
   useEffect(() => {
@@ -578,16 +612,22 @@ const ContextMenu = ({
   };
 
   const deleteNode = () => {
-    if (targetNodeId && targetNodeId !== 'ROOT') {
+    if (operationNodes.length > 0) {
       try {
-        // Check if node exists before deleting
-        const node = query.node(targetNodeId).get();
-        if (node) {
-          actions.delete(targetNodeId);
-          console.log('Deleted node:', node.data.displayName);
-        }
+        // Delete all operation nodes
+        operationNodes.forEach(nodeId => {
+          if (nodeId !== 'ROOT') {
+            const node = query.node(nodeId).get();
+            if (node) {
+              actions.delete(nodeId);
+              console.log('Deleted node:', node.data.displayName);
+            }
+          }
+        });
+        
+        console.log(`🗑️ Deleted ${operationNodes.length} nodes`);
       } catch (error) {
-        console.error('Error deleting node:', error);
+        console.error('Error deleting nodes:', error);
       }
     }
     onClose();
@@ -595,32 +635,37 @@ const ContextMenu = ({
 
   // Update style property
   const updateStyle = (property, value) => {
-    if (targetNodeId && !lockedControls.has(property)) {
-      actions.setProp(targetNodeId, (props) => {
-        switch (property) {
-          case 'borderRadius':
-            props.borderRadius = value;
-            break;
-          case 'padding':
-            props.padding = value;
-            break;
-          case 'margin':
-            props.margin = `${value}px 0`;
-            break;
-          case 'zIndex':
-            props.zIndex = value;
-            break;
-          case 'rotation':
-            props.transform = `rotate(${value}deg)`;
-            break;
-          case 'order':
-            props.order = value;
-            break;
-          case 'backgroundColor':
-            props.backgroundColor = value;
-            break;
-        }
+    if (operationNodes.length > 0 && !lockedControls.has(property)) {
+      // Apply to all operation nodes (either selected nodes or target node)
+      operationNodes.forEach(nodeId => {
+        actions.setProp(nodeId, (props) => {
+          switch (property) {
+            case 'borderRadius':
+              props.borderRadius = value;
+              break;
+            case 'padding':
+              props.padding = value;
+              break;
+            case 'margin':
+              props.margin = `${value}px 0`;
+              break;
+            case 'zIndex':
+              props.zIndex = value;
+              break;
+            case 'rotation':
+              props.transform = `rotate(${value}deg)`;
+              break;
+            case 'order':
+              props.order = value;
+              break;
+            case 'backgroundColor':
+              props.backgroundColor = value;
+              break;
+          }
+        });
       });
+      
+      console.log(`🎨 Applied ${property}: ${value} to ${operationNodes.length} nodes`);
     }
   };
 

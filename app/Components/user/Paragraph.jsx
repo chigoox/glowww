@@ -64,9 +64,10 @@ export const Paragraph = ({
   id,
   title,
 }) => {
-  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
   const { actions } = useEditor();
   const { hideEditorUI } = useEditorDisplay();
@@ -82,6 +83,9 @@ export const Paragraph = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [currentContent, setCurrentContent] = useState(content); // Track current editing content
+
+  // Track previous parent to detect container changes
+  const prevParentRef = useRef(parent);
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
@@ -125,6 +129,33 @@ export const Paragraph = ({
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
   }, [connect, drag, isSelected, isClient]);
+
+  // Detect parent changes and reset position properties
+  useEffect(() => {
+    // Skip the initial render (when prevParentRef.current is first set)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Paragraph ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      
+      // Reset position properties to default
+      setProp((props) => {
+        // Only reset if position properties were actually set
+        if (props.top !== undefined || props.left !== undefined || 
+            props.right !== undefined || props.bottom !== undefined) {
+          console.log('🔄 Resetting position properties after container move');
+          props.top = undefined;
+          props.left = undefined;
+          props.right = undefined;
+          props.bottom = undefined;
+          // Keep position as relative for normal flow
+          props.position = "relative";
+        }
+      });
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {

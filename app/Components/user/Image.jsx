@@ -1,11 +1,15 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import MediaLibrary from '../support/MediaLibrary';
 import ContextMenu from "../support/ContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useCraftSnap } from "../support/useCraftSnap";
+import SnapPositionHandle from "../support/SnapPositionHandle";
+import { snapGridSystem } from "../support/SnapGridSystem";
+import { useMultiSelect } from '../support/MultiSelectContext';
 
 const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -54,16 +58,41 @@ export const Image = ({
   id,
   title,
 }) => {
-  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
   const { actions } = useEditor();
+  
+  // Use snap functionality
+  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use multi-selection functionality
+  const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
+  
+  // Track parent changes to reset position properties
+  const prevParentRef = useRef(parent);
+
+  useEffect(() => {
+    if (prevParentRef.current !== parent) {
+      console.log('Image: Parent changed, resetting position properties');
+      setProp(props => {
+        props.top = undefined;
+        props.left = undefined;
+        props.right = undefined;
+        props.bottom = undefined;
+        props.position = "relative";
+      });
+      prevParentRef.current = parent;
+    }
+  }, [parent, setProp]);
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
   const imageRef = useRef(null);
+  const dragRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -78,6 +107,12 @@ export const Image = ({
   const handleContextMenu = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // If this element is not already selected, add it to the selection
+    if (!isMultiSelected(nodeId)) {
+      console.log('🎯 Right-click on unselected element, adding to selection:', nodeId);
+      addToSelection(nodeId);
+    }
     
     // Calculate position to keep menu on screen
     const menuWidth = 320;
@@ -112,7 +147,7 @@ export const Image = ({
   };
 
   // Function to update box position for portal positioning
-  const updateBoxPosition = () => {
+  const updateBoxPosition = useCallback(() => {
     if (imageRef.current) {
       const rect = imageRef.current.getBoundingClientRect();
       setBoxPosition({
@@ -122,7 +157,7 @@ export const Image = ({
         height: rect.height
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -131,8 +166,10 @@ export const Image = ({
   useEffect(() => {
     const connectElements = () => {
       if (imageRef.current) {
-        // Connect both selection and dragging to the main element
-        connect(drag(imageRef.current));
+        snapConnect(imageRef.current); // Connect for selection with snap functionality
+      }
+      if (dragRef.current) {
+        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
       }
     };
 
@@ -142,7 +179,7 @@ export const Image = ({
     // Reconnect when selection state changes
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
-  }, [connect, drag, isSelected, isClient]);
+  }, [snapConnect, snapDrag]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -161,7 +198,7 @@ export const Image = ({
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [isSelected, isHovered]);
+  }, [isSelected, isHovered, updateBoxPosition]);
 
   // Handle resize start
   const handleResizeStart = (e, direction) => {
@@ -341,14 +378,8 @@ export const Image = ({
 
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
-      ref={(el) => {
-        imageRef.current = el;
-        if (el) {
-          // Immediate connection when element is available
-          connect(drag(el));
-        }
-      }}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
+      ref={imageRef}
       style={{
         position: 'relative',
         cursor: 'default',
@@ -363,15 +394,34 @@ export const Image = ({
         updateBoxPosition();
       }}
       onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onClick={(e) => {
+        if (!hideEditorUI) {
+          if (e.ctrlKey || e.metaKey) {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('🎯 Ctrl+click detected on:', nodeId);
+            // Toggle selection - works even if no previous selection
+            if (isMultiSelected(nodeId)) {
+              removeFromSelection(nodeId);
+            } else {
+              addToSelection(nodeId);
+            }
+          }
+          // For regular clicks, let the global handler manage clearing/selecting
+        }
+      }}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
       {isClient && isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
-          handleDragStart={handleDragStart}
+          dragRef={dragRef}
           handleResizeStart={handleResizeStart}
           handleEditClick={() => setShowMediaLibrary(true)}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
 
@@ -421,67 +471,119 @@ export const Image = ({
 // Portal Controls Component - renders outside of the Image to avoid overflow clipping
 const PortalControls = ({ 
   boxPosition, 
-  handleDragStart, 
+  dragRef,
   handleResizeStart,
-  handleEditClick 
+  handleEditClick,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
 
   return createPortal(
-    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
-      {/* Control pills */}
-      <div style={{
-        position: 'absolute',
-        top: boxPosition.top - 35,
-        left: boxPosition.left,
-        display: 'flex',
-        pointerEvents: 'auto'
-      }}>
-        {/* Left - POS (Position/custom drag) */}
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left half - MOVE (Craft.js drag) */}
         <div
+          ref={dragRef}
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '6px 8px',
+            padding: '2px',
             borderRadius: '14px 0 0 14px',
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          title="Drag to move between containers"
+        >
+          📦 MOVE
+        </div>
+        
+        {/* Right half - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px',
+            borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '40px',
+            minWidth: '48px',
             justifyContent: 'center',
-            transition: 'background 0.2s ease',
-            fontSize: '11px',
-            fontWeight: 'bold'
+            transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
         >
           ↕↔ POS
-        </div>
+        </SnapPositionHandle>
+      </div>
 
-        {/* Right - EDIT (Open media library) */}
-        <div
-          style={{
-            background: '#faad14',
-            color: 'white',
-            padding: '6px 8px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '45px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease',
-            fontSize: '11px',
-            fontWeight: 'bold'
-          }}
-          onClick={handleEditClick}
-          title="Change image"
-        >
-          🖼️ EDIT
-        </div>
+      {/* EDIT Button - separate control */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width + 10,
+          background: '#722ed1',
+          color: 'white',
+          padding: '4px 8px',
+          borderRadius: '12px',
+          cursor: 'pointer',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto',
+          zIndex: 10000,
+          transition: 'background 0.2s ease'
+        }}
+        onClick={handleEditClick}
+        title="Change image"
+      >
+        🖼️ EDIT
       </div>
 
       {/* Resize handles */}

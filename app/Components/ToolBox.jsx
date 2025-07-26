@@ -73,21 +73,21 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           name: 'Box',
           icon: <LayoutOutlined />,
           description: 'Basic container',
-          element: <Element is={Box} padding={10} canvas />
+          element: <Element is={Box} canvas />
         },
         {
           ref: flexBoxRef,
           name: 'Flex Box',
           icon: <AppstoreOutlined />,
           description: 'Flexible layout',
-          element: <Element is={FlexBox} padding={10} display="flex" flexDirection="row" canvas />
+          element: <Element is={FlexBox} display="flex" flexDirection="row" canvas />
         },
         {
           ref: gridBoxRef,
           name: 'Grid Box',
           icon: <BorderlessTableOutlined />,
           description: 'Grid layout',
-          element: <Element is={GridBox} padding={10} display="grid" gridTemplateColumns="repeat(3, 1fr)" canvas />
+          element: <Element is={GridBox} display="grid" gridTemplateColumns="repeat(3, 1fr)" canvas />
         }
       ]
     },

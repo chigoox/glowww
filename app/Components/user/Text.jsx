@@ -6,6 +6,10 @@ import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useCraftSnap } from "../support/useCraftSnap";
+import SnapPositionHandle from "../support/SnapPositionHandle";
+import { snapGridSystem } from "../support/SnapGridSystem";
+import { useMultiSelect } from '../support/MultiSelectContext';
 
 export const Text = ({
   // Content
@@ -238,11 +242,18 @@ export const Text = ({
   // Data Attributes
   dataAttributes = {}
 }) => {
-  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
   const { actions } = useEditor();
+  
+  // Use snap functionality
+  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use multi-selection functionality
+  const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
@@ -257,8 +268,54 @@ export const Text = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
 
+  // Track previous parent to detect container changes
+  const prevParentRef = useRef(parent);
+
   // Context menu functionality
-  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+
+  // Handle context menu (right-click)
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // If this element is not already selected, add it to the selection
+    if (!isMultiSelected(nodeId)) {
+      console.log('🎯 Right-click on unselected element, adding to selection:', nodeId);
+      addToSelection(nodeId);
+    }
+    
+    // Calculate position to keep menu on screen
+    const menuWidth = 320;
+    const menuHeight = 500;
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Adjust if menu would go off right edge
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    
+    // Adjust if menu would go off bottom edge
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    // Ensure minimum margins
+    x = Math.max(10, x);
+    y = Math.max(10, y);
+    
+    setContextMenu({
+      visible: true,
+      x: x,
+      y: y
+    });
+  };
+
+  // Close context menu
+  const closeContextMenu = () => {
+    setContextMenu({ visible: false, x: 0, y: 0 });
+  };
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -286,10 +343,10 @@ export const Text = ({
   useEffect(() => {
     const connectElements = () => {
       if (textRef.current) {
-        connect(textRef.current); // Connect for selection
+        snapConnect(textRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        drag(dragRef.current); // Connect the drag handle for Craft.js dragging
+        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
       }
     };
 
@@ -301,7 +358,34 @@ export const Text = ({
       const timer = setTimeout(connectElements, 10);
       return () => clearTimeout(timer);
     }
-  }, [connect, drag, isSelected]);
+  }, [snapConnect, snapDrag, isSelected]);
+
+  // Detect parent changes and reset position properties
+  useEffect(() => {
+    // Skip the initial render (when prevParentRef.current is first set)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Text ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      
+      // Reset position properties to default
+      setProp((props) => {
+        // Only reset if position properties were actually set
+        if (props.top !== undefined || props.left !== undefined || 
+            props.right !== undefined || props.bottom !== undefined) {
+          console.log('🔄 Resetting position properties after container move');
+          props.top = undefined;
+          props.left = undefined;
+          props.right = undefined;
+          props.bottom = undefined;
+          // Keep position as relative for normal flow
+          props.position = "relative";
+        }
+      });
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -659,7 +743,7 @@ export const Text = ({
 
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
       ref={textRef}
       style={{
         ...computedStyles,
@@ -681,6 +765,22 @@ export const Text = ({
       lang={lang}
       hidden={hidden}
       onDoubleClick={hideEditorUI ? undefined : handleDoubleClick}
+      onClick={(e) => {
+        if (!hideEditorUI) {
+          if (e.ctrlKey || e.metaKey) {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('🎯 Ctrl+click detected on:', nodeId);
+            // Toggle selection - works even if no previous selection
+            if (isMultiSelected(nodeId)) {
+              removeFromSelection(nodeId);
+            } else {
+              addToSelection(nodeId);
+            }
+          }
+          // For regular clicks, let the global handler manage clearing/selecting
+        }
+      }}
       onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
@@ -700,8 +800,10 @@ export const Text = ({
         <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
-          handleDragStart={handleDragStart}
           handleResizeStart={handleResizeStart}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
       
@@ -739,8 +841,10 @@ export const Text = ({
 const PortalControls = ({ 
   boxPosition, 
   dragRef, 
-  handleDragStart, 
-  handleResizeStart 
+  handleResizeStart,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -793,8 +897,9 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Right half - POS (Custom position drag) */}
-        <div
+        {/* Right half - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
@@ -808,11 +913,19 @@ const PortalControls = ({
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
         >
           ↕↔ POS
-        </div>
+        </SnapPositionHandle>
       </div>
 
       {/* Resize handles */}

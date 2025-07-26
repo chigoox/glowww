@@ -6,6 +6,10 @@ import { createPortal } from 'react-dom';
 import ContextMenu from "../support/ContextMenu";
 import { useContextMenu } from "../support/useContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useMultiSelect } from '../support/MultiSelectContext';
+import { useCraftSnap } from '../support/useCraftSnap';
+import SnapPositionHandle from '../support/SnapPositionHandle';
+import { snapGridSystem } from '../support/SnapGridSystem';
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -870,11 +874,30 @@ export const Carousel = ({
     id: nodeId, 
     connectors: { connect, drag }, 
     actions: { setProp }, 
-    selected 
+    selected,
+    parent
   } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
+  
+  // Track parent changes to reset position properties
+  const prevParentRef = useRef(parent);
+
+  useEffect(() => {
+    if (prevParentRef.current !== parent) {
+      console.log('Carousel: Parent changed, resetting position properties');
+      setProp(props => {
+        props.top = undefined;
+        props.left = undefined;
+        props.right = undefined;
+        props.bottom = undefined;
+        props.position = "relative";
+      });
+      prevParentRef.current = parent;
+    }
+  }, [parent, setProp]);
   
   const carouselRef = useRef(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -888,6 +911,15 @@ export const Carousel = ({
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const { hideEditorUI } = useEditorDisplay();
+
+  // Multi-selection hook
+  const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
+
+  // Snap functionality
+  const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
+
+  // Use shared editor functionality
+  const { actions: editorActions, query } = useEditor();
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -909,13 +941,15 @@ export const Carousel = ({
   useEffect(() => {
     const connectElements = () => {
       if (carouselRef.current) {
-        connect(drag(carouselRef.current));
+        // Chain all connections properly
+        connect(drag(snapConnect(snapDrag(carouselRef.current))));
       }
     };
+
     connectElements();
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
-  }, [connect, drag, selected, isClient]);
+  }, [connect, drag, snapConnect, snapDrag]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -947,6 +981,49 @@ export const Carousel = ({
     const startHeight = rect.height;
     
     setIsResizing(true);
+
+    // Register all elements for snapping during resize
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths for reference
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the full visual bounds (border box)
+          // This includes padding and borders as users expect visual alignment to the actual edge
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          
+          console.log('📝 Registering element with border box bounds:', {
+            id,
+            elementRect: {
+              left: elementRect.left - editorRect.left,
+              top: elementRect.top - editorRect.top,
+              width: elementRect.width,
+              height: elementRect.height,
+              right: (elementRect.left - editorRect.left) + elementRect.width,
+              bottom: (elementRect.top - editorRect.top) + elementRect.height
+            },
+            borders: { borderLeft, borderRight, borderTop, borderBottom }
+          });
+          
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
+        }
+      }
+    });
     
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
@@ -955,6 +1032,7 @@ export const Carousel = ({
       let newWidth = startWidth;
       let newHeight = startHeight;
       
+      // Calculate new dimensions based on resize direction
       switch (direction) {
         case 'se': // bottom-right
           newWidth = startWidth + deltaX;
@@ -986,13 +1064,82 @@ export const Carousel = ({
           break;
       }
       
+      // Apply minimum constraints
       newWidth = Math.max(newWidth, minWidth || 200);
       newHeight = Math.max(newHeight, minHeight || 200);
-      
+
+      // Apply maximum constraints
       if (maxWidth) newWidth = Math.min(newWidth, maxWidth);
       if (maxHeight) newHeight = Math.min(newHeight, maxHeight);
+
+      // Get current position for snap calculations
+      const currentRect = carouselRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
+
+        // Adjust position for edges that move the element's origin
+        if (direction.includes('w')) {
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        
+        if (direction.includes('n')) {
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        console.log('🔧 Resize bounds:', { 
+          direction, 
+          currentBounds: {
+            left: currentRect.left - editorRect.left,
+            top: currentRect.top - editorRect.top,
+            width: currentRect.width,
+            height: currentRect.height
+          },
+          intendedBounds,
+          newDimensions: { newWidth, newHeight }
+        });
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+          
+          console.log('🔧 Applied snap result:', { 
+            snappedWidth: newWidth, 
+            snappedHeight: newHeight,
+            originalDimensions: { width: newWidth, height: newHeight }
+          });
+        }
+      }
       
-      setProp(props => {
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -1000,6 +1147,13 @@ export const Carousel = ({
     
     const handleMouseUp = () => {
       setIsResizing(false);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -1008,37 +1162,37 @@ export const Carousel = ({
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle custom drag for position changes
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const currentTop = parseInt(top) || 0;
-    const currentLeft = parseInt(left) || 0;
-    
-    setIsDragging(true);
-    
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      
-      setProp(props => {
-        props.left = currentLeft + deltaX;
-        props.top = currentTop + deltaY;
-      });
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
+  // Handle custom drag for position changes - REPLACED by SnapPositionHandle
+  // const handleDragStart = (e) => {
+  //   e.stopPropagation();
+  //   e.preventDefault();
+  //   
+  //   const startX = e.clientX;
+  //   const startY = e.clientY;
+  //   const currentTop = parseInt(top) || 0;
+  //   const currentLeft = parseInt(left) || 0;
+  //   
+  //   setIsDragging(true);
+  //   
+  //   const handleMouseMove = (moveEvent) => {
+  //     const deltaX = moveEvent.clientX - startX;
+  //     const deltaY = moveEvent.clientY - startY;
+  //     
+  //     setProp(props => {
+  //       props.left = currentLeft + deltaX;
+  //       props.top = currentTop + deltaY;
+  //     });
+  //   };
+  //   
+  //   const handleMouseUp = () => {
+  //     setIsDragging(false);
+  //     document.removeEventListener('mousemove', handleMouseMove);
+  //     document.removeEventListener('mouseup', handleMouseUp);
+  //   };
+  //   
+  //   document.addEventListener('mousemove', handleMouseMove);
+  //   document.addEventListener('mouseup', handleMouseUp);
+  // };
 
   // Auto-play functionality
   useEffect(() => {
@@ -1133,11 +1287,11 @@ export const Carousel = ({
   return (
     <>
       <div
-        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected ? 'ring-2 ring-purple-500' : ''} ${className}`}
         ref={(el) => {
           carouselRef.current = el;
           if (el) {
-            connect(drag(el));
+            connect(drag(snapConnect(snapDrag(el))));
           }
         }}
         style={{
@@ -1149,6 +1303,12 @@ export const Carousel = ({
         }}
         id={id}
         title={title}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.stopPropagation();
+            toggleSelection(nodeId);
+          }
+        }}
         onMouseEnter={hideEditorUI ? undefined : () => {
           setIsHovered(true);
           updateBoxPosition();
@@ -1160,9 +1320,11 @@ export const Carousel = ({
         {isClient && selected && !hideEditorUI && (
           <PortalControls
             boxPosition={boxPosition}
-            handleDragStart={handleDragStart}
             handleResizeStart={handleResizeStart}
             handleEditClick={() => setModalVisible(true)}
+            nodeId={nodeId}
+            isDragging={isDragging}
+            setIsDragging={setIsDragging}
           />
         )}
 
@@ -1315,213 +1477,144 @@ export const Carousel = ({
 // Portal Controls Component - renders outside of the Carousel to avoid overflow clipping
 const PortalControls = ({ 
   boxPosition, 
-  handleDragStart, 
   handleResizeStart,
-  handleEditClick 
+  handleEditClick,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
 
   return createPortal(
-    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
-      {/* Control pills */}
-      <div style={{
-        position: 'absolute',
-        top: boxPosition.top - 35,
-        left: boxPosition.left,
-        display: 'flex',
-        pointerEvents: 'auto'
-      }}>
-        {/* Left - POS (Position/custom drag) */}
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls with EDIT in center */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left section - MOVE (Craft.js drag) */}
         <div
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '6px 8px',
+            padding: '4px',
             borderRadius: '14px 0 0 14px',
-            cursor: 'move',
+            cursor: 'grab',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '40px',
+            minWidth: '48px',
             justifyContent: 'center',
-            transition: 'background 0.2s ease',
-            fontSize: '11px',
-            fontWeight: 'bold'
+            transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          title="Drag to move between containers"
         >
-          ↕↔ POS
+          📦 MOVE
         </div>
-
-        {/* Right - EDIT (Open carousel settings) */}
+        
+        {/* Center section - EDIT (Purple) */}
         <div
           style={{
-            background: '#faad14',
+            background: '#722ed1',
             color: 'white',
-            padding: '6px 8px',
-            borderRadius: '0 14px 14px 0',
+            padding: '4px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '45px',
+            minWidth: '48px',
             justifyContent: 'center',
-            transition: 'background 0.2s ease',
-            fontSize: '11px',
-            fontWeight: 'bold'
+            transition: 'background 0.2s ease'
           }}
           onClick={handleEditClick}
           title="Edit carousel settings"
         >
           🎠 EDIT
         </div>
+        
+        {/* Right section - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
+        >
+          ↕↔ POS
+        </SnapPositionHandle>
       </div>
 
       {/* Resize handles */}
-      {/* Top-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'nw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'nw')}
-      />
-
-      {/* Top-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'ne-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'ne')}
-      />
-
-      {/* Bottom-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'sw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'sw')}
-      />
-
-      {/* Bottom-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'se-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'se')}
-      />
-
-      {/* Top edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'n-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'n')}
-      />
-
-      {/* Bottom edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 's-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 's')}
-      />
-
-      {/* Left edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height / 2 - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'w-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'w')}
-      />
-
-      {/* Right edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height / 2 - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'e-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'e')}
-      />
+      {[
+        { position: 'nw', cursor: 'nw-resize', top: -4, left: -4 },
+        { position: 'ne', cursor: 'ne-resize', top: -4, left: boxPosition.width - 4 },
+        { position: 'sw', cursor: 'sw-resize', top: boxPosition.height - 4, left: -4 },
+        { position: 'se', cursor: 'se-resize', top: boxPosition.height - 4, left: boxPosition.width - 4 },
+        { position: 'n', cursor: 'n-resize', top: -4, left: boxPosition.width / 2 - 4 },
+        { position: 's', cursor: 's-resize', top: boxPosition.height - 4, left: boxPosition.width / 2 - 4 },
+        { position: 'w', cursor: 'w-resize', top: boxPosition.height / 2 - 4, left: -4 },
+        { position: 'e', cursor: 'e-resize', top: boxPosition.height / 2 - 4, left: boxPosition.width - 4 }
+      ].map(handle => (
+        <div
+          key={handle.position}
+          style={{
+            position: 'absolute',
+            top: boxPosition.top + handle.top,
+            left: boxPosition.left + handle.left,
+            width: 8,
+            height: 8,
+            background: 'white',
+            border: '2px solid #1890ff',
+            borderRadius: '2px',
+            cursor: handle.cursor,
+            zIndex: 10001,
+            pointerEvents: 'auto'
+          }}
+          onMouseDown={(e) => handleResizeStart(e, handle.position)}
+          title="Resize"
+        />
+      ))}
     </div>,
     document.body
   );

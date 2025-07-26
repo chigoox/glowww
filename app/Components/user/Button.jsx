@@ -14,7 +14,12 @@ import {
 } from 'antd';
 import { Text } from "./Text";
 import ContextMenu from "../support/ContextMenu";
+import { useContextMenu } from "../support/useContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useCraftSnap } from "../support/useCraftSnap";
+import SnapPositionHandle from "../support/SnapPositionHandle";
+import { snapGridSystem } from "../support/SnapGridSystem";
+import { useMultiSelect } from '../support/MultiSelectContext';
 
 // Built-in action types
 const ACTION_TYPES = [
@@ -74,7 +79,7 @@ const ButtonSettingsModal = ({
     setFormData(prev => ({ ...prev, [key]: value }));
     
     // Update the actual component prop
-    actions.setProp(nodeId, (props) => {
+    editorActions.setProp(nodeId, (props) => {
       props[key] = value;
     });
   };
@@ -421,10 +426,13 @@ const ButtonSettingsModal = ({
 const ButtonPortalControls = ({ 
   buttonPosition, 
   setModalVisible,
-  handleDragStart,
+  dragRef,
   handleResizeStart,
   handleDoubleClick,
-  handleDeleteButton
+  handleDeleteButton,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -438,7 +446,7 @@ const ButtonPortalControls = ({
         zIndex: 999999
       }}
     >
-      {/* Combined pill-shaped drag controls */}
+      {/* Combined pill-shaped drag controls with EDIT in the middle */}
       <div
         style={{
           position: 'absolute',
@@ -457,47 +465,78 @@ const ButtonPortalControls = ({
           zIndex: 10000
         }}
       >
-        {/* Left half - POS (Custom position drag) */}
+        {/* Left - MOVE (Craft.js drag) */}
         <div
+          ref={dragRef}
           style={{
-            background: '#1890ff',
+            background: '#52c41a',
             color: 'white',
-            padding: '4px 6px',
+            padding: '4px 8px',
             borderRadius: '14px 0 0 14px',
-            cursor: 'move',
+            cursor: 'grab',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '48px',
+            minWidth: '40px',
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          title="Drag to move between containers"
         >
-          ↕↔ POS
+          📦 MOVE
         </div>
 
-        {/* Right half - EDIT (Settings modal) */}
+        {/* Middle - EDIT Button */}
         <div
           style={{
             background: '#722ed1',
             color: 'white',
-            padding: '4px 6px',
-            borderRadius: '0 14px 14px 0',
+            padding: '4px 8px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '48px',
+            minWidth: '40px',
             justifyContent: 'center',
-            transition: 'background 0.2s ease'
+            transition: 'background 0.2s ease',
+            borderLeft: '1px solid rgba(255,255,255,0.2)',
+            borderRight: '1px solid rgba(255,255,255,0.2)'
           }}
           onClick={() => setModalVisible(true)}
           title="Configure button settings"
         >
           ⚙️ EDIT
         </div>
+
+        {/* Right - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '40px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
+        >
+          ↕↔ POS
+        </SnapPositionHandle>
       </div>
 
       {/* Resize handles */}
@@ -724,15 +763,41 @@ export const Button = ({
     id: nodeId, 
     connectors: { connect, drag }, 
     actions: { setProp }, 
-    selected 
+    selected,
+    parent
   } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
+    parent: node.data.parent,
   }));
   
-  const { actions, query } = useEditor();
+  const { actions: editorActions, query } = useEditor();
+  
+  // Use snap functionality
+  const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use multi-selection functionality
+  const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
+  
+  // Track parent changes to reset position properties
+  const prevParentRef = useRef(parent);
+
+  useEffect(() => {
+    if (prevParentRef.current !== parent) {
+      console.log('Button: Parent changed, resetting position properties');
+      setProp(props => {
+        props.top = undefined;
+        props.left = undefined;
+        props.right = undefined;
+        props.bottom = undefined;
+        props.position = "relative";
+      });
+      prevParentRef.current = parent;
+    }
+  }, [parent, setProp]);
   
   const buttonRef = useRef(null);
+  const dragRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(text);
@@ -748,45 +813,8 @@ export const Button = ({
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
-
-  // Handle context menu (right-click)
-  const handleContextMenu = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Calculate position to keep menu on screen
-    const menuWidth = 320;
-    const menuHeight = 500;
-    let x = e.clientX;
-    let y = e.clientY;
-    
-    // Adjust if menu would go off right edge
-    if (x + menuWidth > window.innerWidth) {
-      x = window.innerWidth - menuWidth - 10;
-    }
-    
-    // Adjust if menu would go off bottom edge
-    if (y + menuHeight > window.innerHeight) {
-      y = window.innerHeight - menuHeight - 10;
-    }
-    
-    // Ensure minimum margins
-    x = Math.max(10, x);
-    y = Math.max(10, y);
-    
-    setContextMenu({
-      visible: true,
-      x: x,
-      y: y
-    });
-  };
-
-  // Close context menu
-  const closeContextMenu = () => {
-    setContextMenu({ visible: false, x: 0, y: 0 });
-  };
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update button position for portal positioning
   const updateButtonPosition = () => {
@@ -814,18 +842,15 @@ export const Button = ({
   useEffect(() => {
     const connectElements = () => {
       if (buttonRef.current) {
-        // Connect both selection and dragging to the main element - makes whole button draggable
-        connect(drag(buttonRef.current));
+        // Chain all connections properly
+        connect(drag(snapConnect(snapDrag(buttonRef.current))));
       }
     };
 
-    // Always connect on mount and when dependencies change
     connectElements();
-    
-    // Reconnect when selection state changes
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
-  }, [connect, drag, selected, isClient]);
+  }, [connect, drag, snapConnect, snapDrag]);
 
   // Update button position when hovered or selected changes
   useEffect(() => {
@@ -864,7 +889,7 @@ export const Button = ({
 
   // Handle delete
   const handleDeleteButton = () => {
-    actions.delete(nodeId);
+    editorActions.delete(nodeId);
   };
 
   // Handle drag start for position changes
@@ -903,95 +928,189 @@ export const Button = ({
 
   // Handle resize start
   const handleResizeStart = (e, direction) => {
-    e.preventDefault();
     e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
     
     setIsResizing(true);
-    const buttonRect = buttonRef.current.getBoundingClientRect();
-    
-    setResizeData({
-      direction,
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: buttonRect.width,
-      startHeight: buttonRect.height,
-      startLeft: buttonRect.left,
-      startTop: buttonRect.top
-    });
 
-    const handleMouseMove = (moveEvent) => {
-      if (!resizeData || !buttonRef.current) return;
-
-      const deltaX = moveEvent.clientX - resizeData.startX;
-      const deltaY = moveEvent.clientY - resizeData.startY;
-
-      setProp(props => {
-        const minSize = 20; // Minimum size constraint
-        
-        switch (direction) {
-          case 'se': // Southeast - resize width and height
-            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
-            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
-            break;
-          case 'sw': // Southwest - resize width and height, adjust left
-            const newWidth = Math.max(minSize, resizeData.startWidth - deltaX);
-            props.width = newWidth;
-            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
-            if (props.position === 'absolute') {
-              props.left = resizeData.startLeft - (newWidth - resizeData.startWidth);
-            }
-            break;
-          case 'ne': // Northeast - resize width and height, adjust top
-            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
-            const newHeight = Math.max(minSize, resizeData.startHeight - deltaY);
-            props.height = newHeight;
-            if (props.position === 'absolute') {
-              props.top = resizeData.startTop - (newHeight - resizeData.startHeight);
-            }
-            break;
-          case 'nw': // Northwest - resize width and height, adjust left and top
-            const newWidthNW = Math.max(minSize, resizeData.startWidth - deltaX);
-            const newHeightNW = Math.max(minSize, resizeData.startHeight - deltaY);
-            props.width = newWidthNW;
-            props.height = newHeightNW;
-            if (props.position === 'absolute') {
-              props.left = resizeData.startLeft - (newWidthNW - resizeData.startWidth);
-              props.top = resizeData.startTop - (newHeightNW - resizeData.startHeight);
-            }
-            break;
-          case 'n': // North - resize height, adjust top
-            const newHeightN = Math.max(minSize, resizeData.startHeight - deltaY);
-            props.height = newHeightN;
-            if (props.position === 'absolute') {
-              props.top = resizeData.startTop - (newHeightN - resizeData.startHeight);
-            }
-            break;
-          case 's': // South - resize height
-            props.height = Math.max(minSize, resizeData.startHeight + deltaY);
-            break;
-          case 'w': // West - resize width, adjust left
-            const newWidthW = Math.max(minSize, resizeData.startWidth - deltaX);
-            props.width = newWidthW;
-            if (props.position === 'absolute') {
-              props.left = resizeData.startLeft - (newWidthW - resizeData.startWidth);
-            }
-            break;
-          case 'e': // East - resize width
-            props.width = Math.max(minSize, resizeData.startWidth + deltaX);
-            break;
+    // Register all elements for snapping during resize
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths for reference
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the full visual bounds (border box)
+          // This includes padding and borders as users expect visual alignment to the actual edge
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          
+          console.log('📝 Registering element with border box bounds:', {
+            id,
+            elementRect: {
+              left: elementRect.left - editorRect.left,
+              top: elementRect.top - editorRect.top,
+              width: elementRect.width,
+              height: elementRect.height,
+              right: (elementRect.left - editorRect.left) + elementRect.width,
+              bottom: (elementRect.top - editorRect.top) + elementRect.height
+            },
+            borders: { borderLeft, borderRight, borderTop, borderBottom }
+          });
+          
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
         }
+      }
+    });
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      
+      // Calculate new dimensions based on resize direction
+      switch (direction) {
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      // Apply minimum constraints
+      newWidth = Math.max(newWidth, 50);
+      newHeight = Math.max(newHeight, 20);
+
+      // Get current position for snap calculations
+      const currentRect = buttonRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
+
+        // Adjust position for edges that move the element's origin
+        if (direction.includes('w')) {
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        
+        if (direction.includes('n')) {
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        console.log('🔧 Resize bounds:', { 
+          direction, 
+          currentBounds: {
+            left: currentRect.left - editorRect.left,
+            top: currentRect.top - editorRect.top,
+            width: currentRect.width,
+            height: currentRect.height
+          },
+          intendedBounds,
+          newDimensions: { newWidth, newHeight }
+        });
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+          
+          console.log('🔧 Applied snap result:', { 
+            snappedWidth: newWidth, 
+            snappedHeight: newHeight,
+            originalDimensions: { width: newWidth, height: newHeight }
+          });
+        }
+      }
+      
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
       });
-
-      updateButtonPosition();
     };
-
+    
     const handleMouseUp = () => {
       setIsResizing(false);
-      setResizeData(null);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-
+    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -1040,6 +1159,20 @@ export const Button = ({
   // Enhanced click handler with built-in actions
   const handleClick = useCallback(async (e) => {
     if (isEditing) return;
+    
+    // Handle multi-selection in editor mode
+    if (!hideEditorUI) {
+      if (e.ctrlKey || e.metaKey) {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('🎯 Ctrl+click detected on:', nodeId);
+        // Toggle selection using new pattern
+        toggleSelection(nodeId);
+        return; // Don't execute button actions in editor mode with Ctrl+click
+      }
+      // For regular clicks in editor mode, let the global handler manage clearing/selecting
+      return;
+    }
     
     // Show confirmation dialog if enabled
     if (confirmDialog && !window.confirm(confirmMessage)) {
@@ -1107,7 +1240,7 @@ export const Button = ({
               // Method 1: Check if the component has a 'visible' prop (like modals)
               if (targetNode.data.props.hasOwnProperty('visible')) {
                 console.log('🔍 Using visible prop method');
-                actions.setProp(targetNodeId, (props) => {
+                editorActions.setProp(targetNodeId, (props) => {
                   console.log('🔍 Before toggle - visible:', props.visible);
                   props.visible = !props.visible;
                   console.log('🔍 After toggle - visible:', props.visible);
@@ -1116,14 +1249,14 @@ export const Button = ({
               // Method 2: Check if the component has a 'hidden' prop
               else if (targetNode.data.props.hasOwnProperty('hidden')) {
                 console.log('🔍 Using hidden prop method');
-                actions.setProp(targetNodeId, (props) => {
+                editorActions.setProp(targetNodeId, (props) => {
                   props.hidden = !props.hidden;
                 });
               }
               // Method 3: Check if the component has 'display' prop (most common for Text, Image, etc.)
               else if (targetNode.data.props.hasOwnProperty('display')) {
                 console.log('🔍 Using display prop method');
-                actions.setProp(targetNodeId, (props) => {
+                editorActions.setProp(targetNodeId, (props) => {
                   const currentDisplay = props.display;
                   props.display = currentDisplay === "none" ? "block" : "none";
                   console.log('🔍 Toggled display from', currentDisplay, 'to', props.display);
@@ -1132,7 +1265,7 @@ export const Button = ({
               // Method 4: Use visibility prop (fallback)
               else if (targetNode.data.props.hasOwnProperty('visibility')) {
                 console.log('🔍 Using visibility prop method');
-                actions.setProp(targetNodeId, (props) => {
+                editorActions.setProp(targetNodeId, (props) => {
                   const currentVisibility = props.visibility;
                   props.visibility = currentVisibility === "hidden" ? "visible" : "hidden";
                   console.log('🔍 Toggled visibility from', currentVisibility, 'to', props.visibility);
@@ -1141,7 +1274,7 @@ export const Button = ({
               // Method 5: Add display prop if it doesn't exist
               else {
                 console.log('🔍 Creating display prop method');
-                actions.setProp(targetNodeId, (props) => {
+                editorActions.setProp(targetNodeId, (props) => {
                   // Default to hiding the component by setting display to none
                   props.display = "none";
                   console.log('🔍 Added display: none to component');
@@ -1155,7 +1288,7 @@ export const Button = ({
 
         case "modal":
           if (targetNodeId) {
-            actions.setProp(targetNodeId, (props) => {
+            editorActions.setProp(targetNodeId, (props) => {
               props.visible = !props.visible;
             });
           }
@@ -1214,7 +1347,8 @@ export const Button = ({
   }, [
     isEditing, actionType, href, target, targetNodeId, scrollOffset, 
     animationType, scriptComponentId, confirmDialog, confirmMessage, 
-    query, nodeId, actions, text
+    query, nodeId, editorActions, text, hideEditorUI, isMultiSelected, 
+    toggleSelection
   ]);
 
   // Keep all your existing style logic
@@ -1363,7 +1497,7 @@ export const Button = ({
   return (
     <>
       <ButtonElement
-        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className}`}
+        className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected ? 'ring-2 ring-purple-500' : ''} ${className}`}
         ref={buttonRef}
         style={{
           ...computedStyles,
@@ -1448,10 +1582,13 @@ export const Button = ({
         <ButtonPortalControls
           buttonPosition={buttonPosition}
           setModalVisible={setModalVisible}
-          handleDragStart={handleDragStart}
+          dragRef={dragRef}
           handleResizeStart={handleResizeStart}
           handleDoubleClick={handleDoubleClick}
           handleDeleteButton={handleDeleteButton}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
 

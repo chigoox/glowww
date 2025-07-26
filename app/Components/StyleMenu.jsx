@@ -18,6 +18,7 @@ import {
 import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag, Radio } from "antd";
 import { useEditor } from "@craftjs/core";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useMultiSelect } from './support/MultiSelectContext';
 
 const { TextArea } = Input;
 // Debounce utility
@@ -425,6 +426,25 @@ const IconButtonGroup = React.memo(({ options, value, onChange }) => (
   </Space.Compact>
 ));
 
+// Helper function to get shared properties across multiple nodes
+const getSharedProps = (nodes) => {
+  if (nodes.length === 0) return {};
+  if (nodes.length === 1) return nodes[0].props;
+
+  const firstProps = nodes[0].props;
+  const sharedProps = {};
+
+  // Only include properties that are the same across ALL selected nodes
+  Object.keys(firstProps).forEach(key => {
+    const firstValue = firstProps[key];
+    const allMatch = nodes.every(node => node.props[key] === firstValue);
+    if (allMatch) {
+      sharedProps[key] = firstValue;
+    }
+  });
+
+  return sharedProps;
+};
 
 export function StyleMenu({
   nodeId,
@@ -436,14 +456,41 @@ export function StyleMenu({
 }) {
 
   // Use useEditor to get selected node and actions
+  const { selectedNodes: multiSelectedNodes, isMultiSelecting } = useMultiSelect();
+  
   const { selected, actions } = useEditor((state) => {
     const [currentNodeId] = state.events.selected;
     let selected;
 
+    // If multi-selecting, use the multi-selected nodes
+    if (isMultiSelecting && multiSelectedNodes.size > 0) {
+      const selectedNodeIds = Array.from(multiSelectedNodes);
+      const nodes = selectedNodeIds.map(nodeId => {
+        const node = state.nodes[nodeId];
+        return node ? {
+          id: nodeId,
+          name: node.data.name,
+          displayName: node.data.displayName,
+          props: node.data.props,
+          isDeletable: node.data.name !== 'ROOT',
+          supportedProps: node.data.custom?.styleMenu?.supportedProps || 
+                          node.related?.craft?.styleMenu?.supportedProps ||
+                          supportedProps
+        } : null;
+      }).filter(Boolean);
 
-    if (currentNodeId) {
+      selected = {
+        isMultiple: true,
+        nodes: nodes,
+        count: nodes.length,
+        // Get shared properties
+        sharedProps: getSharedProps(nodes),
+        isDeletable: nodes.every(n => n.isDeletable)
+      };
+    } else if (currentNodeId) {
       const node = state.nodes[currentNodeId];
       selected = {
+        isMultiple: false,
         id: currentNodeId,
         name: node.data.name,
         displayName: node.data.displayName,
@@ -687,54 +734,80 @@ export function StyleMenu({
 
 // Sync local state with selected node props when selection changes
   useEffect(() => {
-    if (selected?.props) {
+    if (selected) {
       const defaultStyle = getDefaultLocalStyle();
       
-      setLocalStyle({
-        ...defaultStyle,
-        // Override with actual props from selected node
-        ...selected.props,
-        // Ensure nested objects are properly structured
-        marginSidesVals: {
-          top: selected.props?.marginTop || "",
-          right: selected.props?.marginRight || "",
-          bottom: selected.props?.marginBottom || "",
-          left: selected.props?.marginLeft || "",
-          x: selected.props?.marginX || "",
-          y: selected.props?.marginY || ""
-        },
-        paddingSidesVals: {
-          top: selected.props?.paddingTop || "",
-          right: selected.props?.paddingRight || "",
-          bottom: selected.props?.paddingBottom || "",
-          left: selected.props?.paddingLeft || "",
-          x: selected.props?.paddingX || "",
-          y: selected.props?.paddingY || ""
-        }
-      });
-    } else {
-      setLocalStyle(getDefaultLocalStyle());
+      // Use shared props for multiple selection, or single node props
+      const propsToUse = selected.isMultiple ? selected.sharedProps : selected.props;
+      
+      if (propsToUse) {
+        setLocalStyle({
+          ...defaultStyle,
+          // Override with actual props from selected node(s)
+          ...propsToUse,
+          // Ensure nested objects are properly structured
+          marginSidesVals: {
+            top: propsToUse?.marginTop || "",
+            right: propsToUse?.marginRight || "",
+            bottom: propsToUse?.marginBottom || "",
+            left: propsToUse?.marginLeft || "",
+            x: propsToUse?.marginX || "",
+            y: propsToUse?.marginY || ""
+          },
+          paddingSidesVals: {
+            top: propsToUse?.paddingTop || "",
+            right: propsToUse?.paddingRight || "",
+            bottom: propsToUse?.paddingBottom || "",
+            left: propsToUse?.paddingLeft || "",
+            x: propsToUse?.paddingX || "",
+            y: propsToUse?.paddingY || ""
+          }
+        });
+      } else {
+        setLocalStyle(getDefaultLocalStyle());
+      }
     }
   }, [selected, getDefaultLocalStyle]);
 
-  // Debounced sync to selected node
+  // Debounced sync to selected node(s)
   const debouncedSync = useCallback(
     debounce((key, value) => {
       if (selected) {
-        actions.setProp(selected.id, (props) => {
-          // Handle nested properties
-          if (key.includes('.')) {
-            const keys = key.split('.');
-            let current = props;
-            for (let i = 0; i < keys.length - 1; i++) {
-              if (!current[keys[i]]) current[keys[i]] = {};
-              current = current[keys[i]];
+        if (selected.isMultiple) {
+          // Update all selected nodes
+          selected.nodes.forEach(node => {
+            actions.setProp(node.id, (props) => {
+              // Handle nested properties
+              if (key.includes('.')) {
+                const keys = key.split('.');
+                let current = props;
+                for (let i = 0; i < keys.length - 1; i++) {
+                  if (!current[keys[i]]) current[keys[i]] = {};
+                  current = current[keys[i]];
+                }
+                current[keys[keys.length - 1]] = value;
+              } else {
+                props[key] = value;
+              }
+            });
+          });
+        } else {
+          // Single node update
+          actions.setProp(selected.id, (props) => {
+            // Handle nested properties
+            if (key.includes('.')) {
+              const keys = key.split('.');
+              let current = props;
+              for (let i = 0; i < keys.length - 1; i++) {
+                if (!current[keys[i]]) current[keys[i]] = {};
+                current = current[keys[i]];
+              }
+              current[keys[keys.length - 1]] = value;
+            } else {
+              props[key] = value;
             }
-            current[keys[keys.length - 1]] = value;
-          } else {
-            props[key] = value;
-          }
-        });
+          });
+        }
       }
     }, 300),
     [selected, actions]
@@ -3520,9 +3593,15 @@ if (shouldShow('attributes')) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Typography.Text strong>Selected:</Typography.Text>
-          <Tag color="blue" style={{ margin: 0 }}>
-            {selected.displayName || selected.name}
-          </Tag>
+          {selected.isMultiple ? (
+            <Tag color="purple" style={{ margin: 0 }}>
+              {selected.count} elements
+            </Tag>
+          ) : (
+            <Tag color="blue" style={{ margin: 0 }}>
+              {selected.displayName || selected.name}
+            </Tag>
+          )}
         </div>
         {selected.isDeletable && (
           <Tooltip title="Delete" getPopupContainer={(triggerNode) => triggerNode.parentNode}>

@@ -7,6 +7,7 @@ import ContextMenu from "./support/ContextMenu";
 import useEditorDisplay from "./support/useEditorDisplay";
 import SnapGridOverlay from "./support/SnapGridOverlay";
 import { useSnapGridCanvas } from "./support/useCraftSnap";
+import MultiSelectBoundingBox from "./support/MultiSelectBoundingBox";
 
 export const Root = ({
   // Layout & Position
@@ -626,6 +627,9 @@ placeContent,
           targetNodeId={nodeId}
         />
       )}
+      
+      {/* Multi-select bounding box - only show in editor mode */}
+      {!hideEditorUI && <MultiSelectBoundingBox />}
     </div>
   );
 };

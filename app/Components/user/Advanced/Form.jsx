@@ -155,12 +155,31 @@ export const Form = ({
     actions: { setProp }, 
     selected: isSelected, 
     hovered: isHovered,
-    id: nodeId 
+    id: nodeId,
+    parent
   } = useNode((node) => ({
     selected: node.events.selected,
     hovered: node.events.hovered,
     id: node.id,
+    parent: node.data.parent,
   }));
+
+  // Track parent changes to reset position properties
+  const prevParentRef = useRef(parent);
+
+  useEffect(() => {
+    if (prevParentRef.current !== parent) {
+      console.log('Form: Parent changed, resetting position properties');
+      setProp(props => {
+        props.top = undefined;
+        props.left = undefined;
+        props.right = undefined;
+        props.bottom = undefined;
+        props.position = "relative";
+      });
+      prevParentRef.current = parent;
+    }
+  }, [parent, setProp]);
 
   // Component state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);

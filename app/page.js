@@ -23,6 +23,7 @@ import {Carousel} from './Components/user/Carousel';
 import { NavBar, NavItem } from './Components/user/Nav/NavBar';
 import { Flex } from 'antd';
 import { Root } from './Components/Root';
+import { MultiSelectProvider } from './Components/support/MultiSelectContext';
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
@@ -161,7 +162,9 @@ export default function App() {
       Box, FlexBox, GridBox, Text, Image, Button, Link, FormInputDropArea,Root,
       Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel, NavBar, NavItem
     }}> 
-      <EditorLayout />
+      <MultiSelectProvider>
+        <EditorLayout />
+      </MultiSelectProvider>
     </Editor>
   );
 }
