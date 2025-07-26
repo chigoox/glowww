@@ -2,17 +2,23 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../support/ContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
+import { useCraftSnap } from "../support/useCraftSnap";
+import SnapPositionHandle from "../support/SnapPositionHandle";
+import { snapGridSystem } from "../support/SnapGridSystem";
+import { useMultiSelect } from '../support/MultiSelectContext';
 
 export const FlexBox = ({
+  
   // Layout & Position
   width = "auto",
   height = "auto",
   minWidth,
   maxWidth,
-  minHeight  = '3rem',
+  minHeight,
   maxHeight,
   display = "block",
   position = "relative",
@@ -40,7 +46,7 @@ export const FlexBox = ({
   marginLeft,
   marginX,
   marginY,
-  padding = '2px',
+  padding = 0,
   paddingTop,
   paddingRight,
   paddingBottom,
@@ -194,22 +200,27 @@ placeContent,
     selected: node.events.selected,
     parent: node.data.parent,
   }));
-  const { actions } = useEditor();
+  const { actions: editorActions, query } = useEditor();
+  
+  // Use snap functionality
+  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use multi-selection functionality
+  const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
+  
+  // Use our shared editor display hook
+  const { hideEditorUI } = useEditorDisplay();
 
-  const flexBoxRef = useRef(null);
+  const cardRef = useRef(null);
   const dragRef = useRef(null);
-  const [isClient, setIsClient] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   
   // Track previous parent to detect container changes
   const prevParentRef = useRef(parent);
   
-  // Use our shared editor display hook
-  const { hideEditorUI } = useEditorDisplay();
-
   // Context menu state
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
 
@@ -217,6 +228,12 @@ placeContent,
   const handleContextMenu = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // If this element is not already selected, add it to the selection
+    if (!isMultiSelected(nodeId)) {
+      console.log('🎯 Right-click on unselected element, adding to selection:', nodeId);
+      addToSelection(nodeId);
+    }
     
     // Calculate position to keep menu on screen
     const menuWidth = 320;
@@ -252,8 +269,8 @@ placeContent,
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
-    if (flexBoxRef.current) {
-      const rect = flexBoxRef.current.getBoundingClientRect();
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
       setBoxPosition({
         top: rect.top + window.scrollY,
         left: rect.left + window.scrollX,
@@ -264,16 +281,12 @@ placeContent,
   };
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
     const connectElements = () => {
-      if (flexBoxRef.current) {
-        connect(flexBoxRef.current); // Connect for selection
+      if (cardRef.current) {
+        snapConnect(cardRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        drag(dragRef.current); // Connect the drag handle for Craft.js dragging
+        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
       }
     };
 
@@ -285,17 +298,17 @@ placeContent,
       const timer = setTimeout(connectElements, 10);
       return () => clearTimeout(timer);
     }
-  }, [connect, drag, isSelected]);
+  }, [snapConnect, snapDrag, isSelected]);
 
   // Detect parent changes and reset position properties
   useEffect(() => {
     // Skip the initial render (when prevParentRef.current is first set)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
       // Parent has changed - element was moved to a different container
-      console.log(`📦 FlexBox ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
       
       // Reset position properties to default
-      setProp((props) => {
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
         // Only reset if position properties were actually set
         if (props.top !== undefined || props.left !== undefined || 
             props.right !== undefined || props.bottom !== undefined) {
@@ -340,11 +353,54 @@ placeContent,
     
     const startX = e.clientX;
     const startY = e.clientY;
-    const rect = flexBoxRef.current.getBoundingClientRect();
+    const rect = cardRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
     
     setIsResizing(true);
+
+    // Register all elements for snapping during resize
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths for reference
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the full visual bounds (border box)
+          // This includes padding and borders as users expect visual alignment to the actual edge
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          
+          console.log('📝 Registering element with border box bounds:', {
+            id,
+            elementRect: {
+              left: elementRect.left - editorRect.left,
+              top: elementRect.top - editorRect.top,
+              width: elementRect.width,
+              height: elementRect.height,
+              right: (elementRect.left - editorRect.left) + elementRect.width,
+              bottom: (elementRect.top - editorRect.top) + elementRect.height
+            },
+            borders: { borderLeft, borderRight, borderTop, borderBottom }
+          });
+          
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
+        }
+      }
+    });
     
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
@@ -388,9 +444,75 @@ placeContent,
       // Apply minimum constraints
       newWidth = Math.max(newWidth, 50);
       newHeight = Math.max(newHeight, 20);
+
+      // Get current position for snap calculations
+      const currentRect = cardRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
+
+        // Adjust position for edges that move the element's origin
+        if (direction.includes('w')) {
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        
+        if (direction.includes('n')) {
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        console.log('🔧 Resize bounds:', { 
+          direction, 
+          currentBounds: {
+            left: currentRect.left - editorRect.left,
+            top: currentRect.top - editorRect.top,
+            width: currentRect.width,
+            height: currentRect.height
+          },
+          intendedBounds,
+          newDimensions: { newWidth, newHeight }
+        });
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+          
+          console.log('🔧 Applied snap result:', { 
+            snappedWidth: newWidth, 
+            snappedHeight: newHeight,
+            originalDimensions: { width: newWidth, height: newHeight }
+          });
+        }
+      }
       
-      // Update dimensions using Craft.js setProp
-      setProp(props => {
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -398,6 +520,13 @@ placeContent,
     
     const handleMouseUp = () => {
       setIsResizing(false);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -406,43 +535,44 @@ placeContent,
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle custom drag for position changes
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const currentTop = parseInt(top) || 0;
-    const currentLeft = parseInt(left) || 0;
-    
-    setIsDragging(true);
-    
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      
-      // Update position using Craft.js setProp
-      setProp(props => {
-        props.left = currentLeft + deltaX;
-        props.top = currentTop + deltaY;
-      });
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
+  // Handle custom drag for position changes - REPLACED by SnapPositionHandle
+  // const handleDragStart = (e) => {
+  //   e.stopPropagation();
+  //   e.preventDefault();
+  //   
+  //   const startX = e.clientX;
+  //   const startY = e.clientY;
+  //   const currentTop = parseInt(top) || 0;
+  //   const currentLeft = parseInt(left) || 0;
+  //   
+  //   setIsDragging(true);
+  //   
+  //   const handleMouseMove = (moveEvent) => {
+  //     const deltaX = moveEvent.clientX - startX;
+  //     const deltaY = moveEvent.clientY - startY;
+  //     
+  //     // Update position using Craft.js throttled setProp for smooth history
+  //     editorActions.history.throttle(200).setProp(nodeId, (props) => {
+  //       props.left = currentLeft + deltaX;
+  //       props.top = currentTop + deltaY;
+  //     });
+  //   };
+  //   
+  //   const handleMouseUp = () => {
+  //     setIsDragging(false);
+  //     document.removeEventListener('mousemove', handleMouseMove);
+  //     document.removeEventListener('mouseup', handleMouseUp);
+  //   };
+  //   
+  //   document.addEventListener('mousemove', handleMouseMove);
+  //   document.addEventListener('mouseup', handleMouseUp);
+  // };
 
   // Helper function to process values (add px to numbers where appropriate)
   const processValue = (value, property) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight'].includes(property)) {
+    if (value === undefined || value === null) return undefined;
+    if (value === "") return undefined;
+    if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight', 'flexGrow', 'flexShrink', 'order'].includes(property)) {
       return `${value}px`;
     }
     return value;
@@ -469,10 +599,19 @@ placeContent,
     clear,
     boxSizing,
     
-    // Overflow
-    overflow,
-    overflowX,
-    overflowY,
+    // Overflow - ensure valid values are always set
+    // Overflow - handle precedence correctly (overflow should override overflowX/Y)
+    ...(overflow && overflow !== "visible" 
+      ? {
+          // When overflow is explicitly set, it overrides X and Y
+          overflow: overflow
+        }
+      : {
+          // When overflow is not set or is "visible", use individual X and Y values
+          overflowX: overflowX || "visible",
+          overflowY: overflowY || "visible"
+        }
+    ),
     resize,
     
     // Spacing - handle individual sides or combined values
@@ -578,17 +717,18 @@ placeContent,
   };
 
 
-  // Remove undefined values
+  // Remove undefined values, but preserve important properties that should always be applied
+  const importantProperties = ['overflow', 'overflowX', 'overflowY', 'display', 'position', 'visibility'];
   Object.keys(computedStyles).forEach(key => {
-    if (computedStyles[key] === undefined) {
+    if (computedStyles[key] === undefined && !importantProperties.includes(key)) {
       delete computedStyles[key];
     }
   });
 
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${className || ''}`}
-      ref={flexBoxRef}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
+      ref={cardRef}
       style={{
         ...computedStyles,
         position: 'relative',
@@ -614,6 +754,22 @@ placeContent,
         updateBoxPosition();
       }}
       onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
+      onClick={(e) => {
+        if (!hideEditorUI) {
+          if (e.ctrlKey || e.metaKey) {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('🎯 Ctrl+click detected on:', nodeId);
+            // Toggle selection - works even if no previous selection
+            if (isMultiSelected(nodeId)) {
+              removeFromSelection(nodeId);
+            } else {
+              addToSelection(nodeId);
+            }
+          }
+          // For regular clicks, let the global handler manage clearing/selecting
+        }
+      }}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping (hide in preview mode) */}
@@ -621,14 +777,15 @@ placeContent,
         <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
-          handleDragStart={handleDragStart}
           handleResizeStart={handleResizeStart}
+          nodeId={nodeId}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
         />
       )}
       {children}
       
-      {/* Context Menu */}
-      {/* Hide context menu in preview mode */}
+      {/* Context Menu - hide in preview mode */}
       {!hideEditorUI && (
         <ContextMenu
           visible={contextMenu.visible}
@@ -641,12 +798,14 @@ placeContent,
   );
 };
 
-// Portal Controls Component - renders outside of the FlexBox to avoid overflow clipping
+// Portal Controls Component - renders outside of the Box to avoid overflow clipping
 const PortalControls = ({ 
   boxPosition, 
   dragRef, 
-  handleDragStart, 
-  handleResizeStart 
+  handleResizeStart,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -675,7 +834,8 @@ const PortalControls = ({
           fontWeight: 'bold',
           userSelect: 'none',
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto' // Re-enable pointer events for this element
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
         }}
       >
         {/* Left half - MOVE (Craft.js drag) - Now interactive */}
@@ -684,7 +844,7 @@ const PortalControls = ({
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '6px 12px',
+            padding: '2px',
             borderRadius: '14px 0 0 14px',
             cursor: 'grab',
             display: 'flex',
@@ -699,12 +859,13 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Right half - POS (Custom position drag) */}
-        <div
+        {/* Right half - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
-            padding: '6px 12px',
+            padding: '4px',
             borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
@@ -714,11 +875,19 @@ const PortalControls = ({
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
         >
           ↕↔ POS
-        </div>
+        </SnapPositionHandle>
       </div>
 
       {/* Resize handles */}
@@ -885,6 +1054,7 @@ FlexBox.craft = {
     // Layout & Position
     width: "auto",
     height: "auto",
+    minHeight: "5rem",
     display: "block",
     position: "relative",
     zIndex: 1,
@@ -901,7 +1071,7 @@ FlexBox.craft = {
     
     // Spacing
     margin: "none",
-    padding: '2px',
+    padding: '0',
     
     // Border
     border: "none",
@@ -913,8 +1083,8 @@ FlexBox.craft = {
     borderRadius: 0,
     
     // Typography
-    fontFamily: "inherit",
-    fontSize: 'inherit',
+    fontFamily: "Arial",
+    fontSize: 16,
     fontWeight: "400",
     fontStyle: "normal",
     lineHeight: 1.4,
@@ -966,7 +1136,7 @@ FlexBox.craft = {
     spellCheck: true,
     translate: 'yes',
     dir: "auto"
-    },
+  },
     rules: {
     canDrag: () => true,
     canDrop: (node, parent) => true,

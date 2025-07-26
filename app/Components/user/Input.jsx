@@ -1690,7 +1690,7 @@ FormInput.craft = {
             // Allow dropping in Form components or containers that might contain forms
             return parentType === 'FormInputDropArea' || 
                    parentName === 'FormInputDropArea' ||
-                   parentNode.data.displayName === 'FormInputDropArea'
+                   parentNode.data.displayName === 'InputDropArea'
 
         },
     },

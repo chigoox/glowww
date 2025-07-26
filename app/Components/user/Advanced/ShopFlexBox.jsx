@@ -806,27 +806,31 @@ export const ShopFlexBox = ({
                     <div
                         style={{
                             position: "absolute",
-                            top: -12,
-                            left: -12,
-                            width: 24,
-                            height: 24,
-                            background: "#52c41a",
-                            borderRadius: "50%",
+                            top: -28,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            background: "#722ed1",
+                            color: "white",
+                            padding: "4px 8px",
+                            borderRadius: "12px",
                             cursor: "pointer",
+                            fontSize: "9px",
+                            fontWeight: "bold",
+                            userSelect: "none",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
                             zIndex: 1000,
                             display: "flex",
                             alignItems: "center",
+                            gap: "2px",
+                            minWidth: "48px",
                             justifyContent: "center",
-                            color: "white",
-                            fontSize: 12,
-                            border: "2px solid white",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                            border: "2px solid #d9d9d9"
                         }}
                         onClick={() => setIsEditModalOpen(true)}
                         onMouseDown={e => e.stopPropagation()}
                         title="Configure shop items"
                     >
-                        <EditOutlined />
+                        ⚙️ EDIT
                     </div>
                 )}
 

@@ -6,6 +6,10 @@ import { useNode, useEditor, Element } from "@craftjs/core";
 import ContextMenu from "../../support/ContextMenu";
 import { useContextMenu } from "../../support/useContextMenu";
 import useEditorDisplay from "../../support/useEditorDisplay";
+import { useCraftSnap } from "../../support/useCraftSnap";
+import SnapPositionHandle from "../../support/SnapPositionHandle";
+import { snapGridSystem } from "../../support/SnapGridSystem";
+import { useMultiSelect } from '../../support/MultiSelectContext';
 import { 
   EditOutlined, 
   DatabaseOutlined, 
@@ -164,6 +168,14 @@ export const Form = ({
     parent: node.data.parent,
   }));
 
+  const { actions: editorActions } = useEditor();
+  
+  // Use snap functionality
+  const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use multi-selection functionality
+  const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
+
   // Track parent changes to reset position properties
   const prevParentRef = useRef(parent);
 
@@ -187,10 +199,16 @@ export const Form = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formPosition, setFormPosition] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isPositionTracked, setIsPositionTracked] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const { hideEditorUI } = useEditorDisplay();
+
+  // Refs
+  const formRef = useRef(null);
+  const dragRef = useRef(null);
 
   // Use the correct Craft.js way to get descendants and detect FormInputs
   const { inputFields, descendants } = useEditor((state, query) => {
@@ -322,9 +340,6 @@ useEffect(() => {
     { id: 'feedback', name: 'Customer Feedback' }
   ], []);
 
-  // Refs
-  const formRef = useRef(null);
-
   // Connect form element and setup drag
   useEffect(() => {
     if (formRef.current) {
@@ -332,6 +347,14 @@ useEffect(() => {
       connect(drag(element));
     }
   }, [connect, drag]);
+
+  // Connect snap functionality when selected
+  useEffect(() => {
+    if (formRef.current && isSelected) {
+      const element = formRef.current;
+      snapConnect(snapDrag(element));
+    }
+  }, [snapConnect, snapDrag, isSelected]);
 
   // Position tracking for portal controls
   const updateFormPosition = useCallback(() => {
@@ -690,6 +713,12 @@ useEffect(() => {
             onEdit={handleEditClick}
             setProp={setProp}
             updateFormPosition={updateFormPosition}
+            nodeId={nodeId}
+            dragRef={dragRef}
+            isDragging={isDragging}
+            setIsDragging={setIsDragging}
+            editorActions={editorActions}
+            formRef={formRef}
           />,
           document.body
         )
@@ -816,306 +845,407 @@ useEffect(() => {
 };
 
 // Portal Controls Component
-const FormPortalControls = ({ formPosition, isSelected, isHovered, onEdit, setProp, updateFormPosition }) => {
+const FormPortalControls = ({ 
+  formPosition, 
+  isSelected, 
+  isHovered, 
+  onEdit, 
+  setProp, 
+  updateFormPosition, 
+  nodeId, 
+  dragRef, 
+  isDragging, 
+  setIsDragging,
+  editorActions,
+  formRef
+}) => {
   const [isResizing, setIsResizing] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
 
-  // Handle position dragging
-  const handleDragStart = useCallback((e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setIsDragging(true);
+  if (typeof window === 'undefined') return null; // SSR check
 
-    // Get the button's position relative to the page
-    const buttonRect = e.target.getBoundingClientRect();
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    
-    // Calculate offset from button click to form's top-left corner
-    const clickOffsetX = buttonRect.left + scrollLeft - formPosition.x + (e.clientX - buttonRect.left);
-    const clickOffsetY = buttonRect.top + scrollTop - formPosition.y + (e.clientY - buttonRect.top);
-
-    const handleMouseMove = (e) => {
-      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      
-      // Calculate new position accounting for the click offset
-      const newLeft = e.clientX + scrollLeft - clickOffsetX;
-      const newTop = e.clientY + scrollTop - clickOffsetY;
-
-      setProp(props => {
-        props.position = 'absolute';
-        props.left = `${newLeft}px`;
-        props.top = `${newTop}px`;
-      });
-      
-      // Update portal position immediately for smooth following
-      setFormPosition(prev => ({
-        ...prev,
-        x: newLeft,
-        y: newTop
-      }));
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      
-      // Update final position after drag
-      setTimeout(updateFormPosition, 10);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [formPosition, setProp, updateFormPosition]);
-
-  // Handle resizing
+  // Handle resize start with snap functionality (from Box component)
   const handleResizeStart = useCallback((e, direction) => {
     e.stopPropagation();
     e.preventDefault();
-    setIsResizing(true);
-
+    
     const startX = e.clientX;
     const startY = e.clientY;
-    const startWidth = formPosition.width;
-    const startHeight = formPosition.height;
-    const startLeft = formPosition.x;
-    const startTop = formPosition.y;
+    
+    if (!formRef.current) return;
+    
+    const rect = formRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    
+    setIsResizing(true);
 
     const handleMouseMove = (e) => {
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
-
+      
       let newWidth = startWidth;
       let newHeight = startHeight;
-      let newLeft = startLeft;
-      let newTop = startTop;
-
-      if (direction.includes('right')) {
-        newWidth = Math.max(100, startWidth + deltaX);
-      }
-      if (direction.includes('left')) {
-        newWidth = Math.max(100, startWidth - deltaX);
-        newLeft = startLeft + deltaX;
-      }
-      if (direction.includes('bottom')) {
-        newHeight = Math.max(50, startHeight + deltaY);
-      }
-      if (direction.includes('top')) {
-        newHeight = Math.max(50, startHeight - deltaY);
-        newTop = startTop + deltaY;
-      }
-
-      setProp(props => {
-        props.width = `${newWidth}px`;
-        props.height = `${newHeight}px`;
-        
-        // Update position if resizing from top or left
-        if (direction.includes('left')) {
-          props.position = 'absolute';
-          props.left = `${newLeft}px`;
-        }
-        if (direction.includes('top')) {
-          props.position = 'absolute';
-          props.top = `${newTop}px`;
-        }
-      });
       
-      // Update portal position immediately for smooth following
-      setFormPosition(prev => ({
-        ...prev,
-        x: newLeft,
-        y: newTop,
-        width: newWidth,
-        height: newHeight
-      }));
-    };
+      // Calculate new dimensions based on direction
+      switch (direction) {
+        case 'nw': // top-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'ne': // top-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          break;
+        case 'sw': // bottom-left
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'se': // bottom-right
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'e': // right edge
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w': // left edge
+          newWidth = startWidth - deltaX;
+          break;
+        case 's': // bottom edge
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n': // top edge
+          newHeight = startHeight - deltaY;
+          break;
+      }
+      
+      // Apply minimum constraints
+      newWidth = Math.max(newWidth, 100);
+      newHeight = Math.max(newHeight, 50);
+      
+      // Get current position for snap calculations
+      const currentRect = formRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
 
+        // Adjust position for edges that move the element's origin
+        if (direction.includes('w')) {
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        
+        if (direction.includes('n')) {
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+        }
+      }
+      
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+      });
+    };
+    
     const handleMouseUp = () => {
       setIsResizing(false);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
-      
-      // Update final position after resize
-      setTimeout(updateFormPosition, 10);
     };
-
+    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [formPosition, setProp, updateFormPosition]);
+  }, [nodeId, editorActions, setProp]);
 
-  const controlsStyle = {
-    position: 'absolute',
-    top: formPosition.y,
-    left: formPosition.x,
-    width: formPosition.width,
-    height: formPosition.height,
-    pointerEvents: 'none',
-    zIndex: 9999,
-  };
-
-  const pillStyle = {
-    position: 'absolute',
-    top: -40,
-    left: 0,
-    display: 'flex',
-    gap: '4px',
-    pointerEvents: 'auto',
-  };
-
-  const buttonStyle = {
-    padding: '4px 8px',
-    fontSize: '12px',
-    fontWeight: 500,
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-    transition: 'all 0.2s ease',
-  };
-
-  const resizeHandleStyle = {
-    position: 'absolute',
-    backgroundColor: '#1890ff',
-    border: '2px solid white',
-    borderRadius: '50%',
-    width: '12px',
-    height: '12px',
-    pointerEvents: 'auto',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-    opacity: isSelected ? 1 : 0.7,
-  };
-
-  return (
-    <div style={controlsStyle}>
-      {/* Control Pills */}
-      <div style={pillStyle}>
-        <button
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 999999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: formPosition.y - 28,
+          left: formPosition.x + formPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left - MOVE (Craft.js drag) */}
+        <div
+          ref={dragRef}
           style={{
-            ...buttonStyle,
-            backgroundColor: isDragging ? '#9254de' : '#722ed1',
+            background: '#52c41a',
             color: 'white',
-            cursor: isDragging ? 'grabbing' : 'grab',
+            padding: '2px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
           }}
-          onMouseDown={handleDragStart}
-          title="Drag to reposition"
+          title="Drag to move between containers"
         >
-          <DragOutlined style={{ fontSize: '10px' }} />
-          POS
-        </button>
+          📦 MOVE
+        </div>
         
-        <button
+        {/* Center - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
           style={{
-            ...buttonStyle,
-            backgroundColor: '#52c41a',
+            background: '#1890ff',
             color: 'white',
+            padding: '4px',
+            borderRadius: '0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Form moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
+        >
+          ↕↔ POS
+        </SnapPositionHandle>
+
+        {/* Right - EDIT */}
+        <div
+          style={{
+            background: '#722ed1',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
           }}
           onClick={onEdit}
           onMouseDown={(e) => e.stopPropagation()}
           title="Edit form settings"
         >
-          <EditOutlined style={{ fontSize: '10px' }} />
-          EDIT
-        </button>
+          ⚙️ EDIT
+        </div>
       </div>
 
-      {/* Resize Handles */}
+      {/* Resize handles - similar to Box component */}
       {isSelected && (
         <>
           {/* Corner handles */}
           <div
             style={{
-              ...resizeHandleStyle,
-              top: -6,
-              left: -6,
+              position: 'absolute',
+              top: formPosition.y - 4,
+              left: formPosition.x - 4,
+              width: 8,
+              height: 8,
+              background: 'white',
+              border: '2px solid #1890ff',
+              borderRadius: '2px',
               cursor: 'nw-resize',
+              zIndex: 10001,
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'top-left')}
+            onMouseDown={(e) => handleResizeStart(e, 'nw')}
             title="Resize"
           />
           <div
             style={{
-              ...resizeHandleStyle,
-              top: -6,
-              right: -6,
+              position: 'absolute',
+              top: formPosition.y - 4,
+              left: formPosition.x + formPosition.width - 4,
+              width: 8,
+              height: 8,
+              background: 'white',
+              border: '2px solid #1890ff',
+              borderRadius: '2px',
               cursor: 'ne-resize',
+              zIndex: 10001,
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'top-right')}
+            onMouseDown={(e) => handleResizeStart(e, 'ne')}
             title="Resize"
           />
           <div
             style={{
-              ...resizeHandleStyle,
-              bottom: -6,
-              left: -6,
+              position: 'absolute',
+              top: formPosition.y + formPosition.height - 4,
+              left: formPosition.x - 4,
+              width: 8,
+              height: 8,
+              background: 'white',
+              border: '2px solid #1890ff',
+              borderRadius: '2px',
               cursor: 'sw-resize',
+              zIndex: 10001,
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'bottom-left')}
+            onMouseDown={(e) => handleResizeStart(e, 'sw')}
             title="Resize"
           />
           <div
             style={{
-              ...resizeHandleStyle,
-              bottom: -6,
-              right: -6,
+              position: 'absolute',
+              top: formPosition.y + formPosition.height - 4,
+              left: formPosition.x + formPosition.width - 4,
+              width: 8,
+              height: 8,
+              background: 'white',
+              border: '2px solid #1890ff',
+              borderRadius: '2px',
               cursor: 'se-resize',
+              zIndex: 10001,
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'bottom-right')}
+            onMouseDown={(e) => handleResizeStart(e, 'se')}
             title="Resize"
           />
 
-          {/* Edge handles */}
+          {/* Edge resize handles - beautiful semi-transparent style */}
+          {/* Top edge */}
           <div
             style={{
-              ...resizeHandleStyle,
-              top: -6,
-              left: '50%',
-              transform: 'translateX(-50%)',
+              position: 'absolute',
+              top: formPosition.y - 4,
+              left: formPosition.x + formPosition.width / 2 - 10,
+              width: 20,
+              height: 8,
+              background: 'rgba(24, 144, 255, 0.3)',
               cursor: 'n-resize',
+              zIndex: 9999,
+              borderRadius: '4px',
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'top')}
+            onMouseDown={(e) => handleResizeStart(e, 'n')}
             title="Resize height"
           />
+
+          {/* Bottom edge */}
           <div
             style={{
-              ...resizeHandleStyle,
-              bottom: -6,
-              left: '50%',
-              transform: 'translateX(-50%)',
+              position: 'absolute',
+              top: formPosition.y + formPosition.height - 4,
+              left: formPosition.x + formPosition.width / 2 - 10,
+              width: 20,
+              height: 8,
+              background: 'rgba(24, 144, 255, 0.3)',
               cursor: 's-resize',
+              zIndex: 9999,
+              borderRadius: '4px',
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'bottom')}
+            onMouseDown={(e) => handleResizeStart(e, 's')}
             title="Resize height"
           />
+
+          {/* Left edge */}
           <div
             style={{
-              ...resizeHandleStyle,
-              top: '50%',
-              left: -6,
-              transform: 'translateY(-50%)',
+              position: 'absolute',
+              top: formPosition.y + formPosition.height / 2 - 10,
+              left: formPosition.x - 4,
+              width: 8,
+              height: 20,
+              background: 'rgba(24, 144, 255, 0.3)',
               cursor: 'w-resize',
+              zIndex: 9999,
+              borderRadius: '4px',
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'left')}
+            onMouseDown={(e) => handleResizeStart(e, 'w')}
             title="Resize width"
           />
+
+          {/* Right edge */}
           <div
             style={{
-              ...resizeHandleStyle,
-              top: '50%',
-              right: -6,
-              transform: 'translateY(-50%)',
+              position: 'absolute',
+              top: formPosition.y + formPosition.height / 2 - 10,
+              left: formPosition.x + formPosition.width - 4,
+              width: 8,
+              height: 20,
+              background: 'rgba(24, 144, 255, 0.3)',
               cursor: 'e-resize',
+              zIndex: 9999,
+              borderRadius: '4px',
+              pointerEvents: 'auto'
             }}
-            onMouseDown={(e) => handleResizeStart(e, 'right')}
+            onMouseDown={(e) => handleResizeStart(e, 'e')}
             title="Resize width"
           />
         </>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1835,7 +1965,7 @@ Form.craft = {
 };
 
 FormInputDropArea.craft = {
-  displayName: 'FormInputDropArea',
+  displayName: 'InputDropArea',
   props: {},
   rules: {
     canDrag: () => false,
