@@ -25,6 +25,11 @@ export const MultiSelectProvider = ({ children }) => {
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [dragSelection, setDragSelection] = useState(null);
   const dragStartRef = useRef(null);
+  
+  // Drag delay state
+  const dragDelayTimerRef = useRef(null);
+  const isDragDelayActiveRef = useRef(false);
+  const DRAG_DELAY_MS = 300; // 150ms delay before drag selection starts (adjustable)
 
   // Track key states
   const keysPressed = useRef(new Set());
@@ -308,27 +313,46 @@ export const MultiSelectProvider = ({ children }) => {
         return;
       }
       
-      // Start drag selection
-      console.log('🖱️ ✅ Starting drag selection');
+      // Clear any existing delay timer
+      if (dragDelayTimerRef.current) {
+        clearTimeout(dragDelayTimerRef.current);
+        dragDelayTimerRef.current = null;
+      }
+      
+      // Prepare for potential drag selection (but don't start yet)
+      console.log('🖱️ ⏰ Preparing for potential drag selection with delay');
       e.preventDefault(); // Prevent text selection
       
-      setIsDragSelecting(true);
+      isDragDelayActiveRef.current = true;
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       
-      const initialRect = {
-        left: e.clientX,
-        top: e.clientY,
-        width: 0,
-        height: 0
-      };
-      setDragSelection(initialRect);
-      console.log('🖱️ Set initial drag selection:', initialRect);
+      // If not holding Ctrl, prepare to clear existing selection (but don't do it yet)
+      const shouldClearSelection = !e.ctrlKey && !e.metaKey;
       
-      // If not holding Ctrl, clear existing selection
-      if (!e.ctrlKey && !e.metaKey) {
-        setSelectedNodes(new Set());
-        setIsMultiSelecting(false);
-      }
+      // Start delay timer for drag selection
+      dragDelayTimerRef.current = setTimeout(() => {
+        if (isDragDelayActiveRef.current && dragStartRef.current) {
+          console.log('🖱️ ✅ Delay completed, starting drag selection');
+          
+          setIsDragSelecting(true);
+          
+          const initialRect = {
+            left: dragStartRef.current.x,
+            top: dragStartRef.current.y,
+            width: 0,
+            height: 0
+          };
+          setDragSelection(initialRect);
+          console.log('🖱️ Set initial drag selection:', initialRect);
+          
+          // Clear existing selection if needed
+          if (shouldClearSelection) {
+            setSelectedNodes(new Set());
+            setIsMultiSelecting(false);
+          }
+        }
+        dragDelayTimerRef.current = null;
+      }, DRAG_DELAY_MS);
     };
 
     const handleMouseMove = (e) => {
@@ -392,11 +416,23 @@ export const MultiSelectProvider = ({ children }) => {
     };
 
     const handleMouseUp = (e) => {
-      console.log('🖱️ Mouse up, isDragSelecting:', isDragSelecting);
+      console.log('🖱️ Mouse up, isDragSelecting:', isDragSelecting, 'delayActive:', isDragDelayActiveRef.current);
+      
+      // If delay is active, clear it (this was a quick click, not a drag)
+      if (isDragDelayActiveRef.current && dragDelayTimerRef.current) {
+        console.log('🖱️ ⏰ Clearing delay timer - quick click detected');
+        clearTimeout(dragDelayTimerRef.current);
+        dragDelayTimerRef.current = null;
+        isDragDelayActiveRef.current = false;
+        dragStartRef.current = null;
+      }
+      
+      // If we were actually drag selecting, end it
       if (isDragSelecting) {
         console.log('🖱️ ✅ Ending drag selection');
         setIsDragSelecting(false);
         setDragSelection(null);
+        isDragDelayActiveRef.current = false;
         dragStartRef.current = null;
       }
     };
@@ -409,6 +445,13 @@ export const MultiSelectProvider = ({ children }) => {
     
     return () => {
       console.log('🖱️ Removing event listeners');
+      // Clear any pending delay timer
+      if (dragDelayTimerRef.current) {
+        clearTimeout(dragDelayTimerRef.current);
+        dragDelayTimerRef.current = null;
+      }
+      isDragDelayActiveRef.current = false;
+      
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
