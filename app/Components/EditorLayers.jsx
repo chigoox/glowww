@@ -1,6 +1,9 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
+// Context to provide search term to all layers
+const LayerSearchContext = React.createContext('');
+
 import { useEditor } from "@craftjs/core";
 import { Layers, useLayer, DefaultLayerHeader, EditableLayerName } from "@craftjs/layers";
 import { 
@@ -40,8 +43,9 @@ const getComponentIcon = (componentType) => {
 };
 
 // Custom Layer Header Component
-// Custom Layer Header Component
-const CustomLayerHeader = () => {
+const CustomLayerHeader = (props) => {
+  // Use context for search term
+  const searchTerm = useContext(LayerSearchContext);
   const {
     id,
     depth,
@@ -55,21 +59,18 @@ const CustomLayerHeader = () => {
 
   const { node, isSelected, isHovered } = useEditor((state) => {
     const node = state.nodes[id];
-    
     // Check if this layer is selected
     let isNodeSelected = false;
     const selected = state.events.selected;
-    
     if (selected) {
       if (typeof selected === 'string') {
         isNodeSelected = selected === id;
-      } else if (selected.has && typeof selected.has === 'function') {
+      } else if (selected?.has && typeof selected.has === 'function') {
         isNodeSelected = selected.has(id);
       } else if (Array.isArray(selected)) {
         isNodeSelected = selected.includes(id);
       }
     }
-
     return {
       node,
       isSelected: isNodeSelected,
@@ -81,11 +82,33 @@ const CustomLayerHeader = () => {
 
   if (!node) return null;
 
-  const componentType = node.data.type || node.data.name;
-  const nodeName = node.data.custom?.displayName || 
-                   node.data.displayName || 
-                   componentType || 
-                   'Unknown';
+
+  // Always use 'ROOT' for the root node
+  let componentType, nodeName;
+  if (id === 'ROOT') {
+    componentType = 'ROOT';
+    nodeName = 'ROOT';
+  } else {
+    componentType = node.data.type;
+    if (typeof componentType === 'function') {
+      componentType = componentType.displayName || componentType.name || '';
+    }
+    componentType = String(componentType || node.data.name || '');
+    nodeName = node.data.custom?.displayName || node.data.displayName || componentType || 'Unknown';
+    nodeName = String(nodeName);
+  }
+
+  // Simple search filtering
+  const isSearching = searchTerm && searchTerm.trim().length > 0;
+  if (isSearching) {
+    const searchLower = searchTerm.toLowerCase();
+    const typeMatches = componentType.toLowerCase().includes(searchLower);
+    const nameMatches = nodeName.toLowerCase().includes(searchLower);
+    // Hide if doesn't match (except ROOT which should always show)
+    if (!typeMatches && !nameMatches && id !== 'ROOT') {
+      return null;
+    }
+  }
 
   const hasChildren = node.data.nodes && node.data.nodes.length > 0;
 
@@ -187,6 +210,7 @@ const CustomLayerHeader = () => {
 
 // Custom Layer Component
 const CustomLayer = ({ children }) => {
+  const searchTerm = useContext(LayerSearchContext);
   const {
     id,
     expanded,
@@ -195,11 +219,28 @@ const CustomLayer = ({ children }) => {
     expanded: layer.expanded
   }));
 
+  // Removed debug log
+
   return (
     <div ref={(ref) => ref && connectors?.layer && connectors.layer(ref, id)}>
       <CustomLayerHeader />
       {expanded && children}
     </div>
+  );
+};
+
+// Wrapper component to provide search term context to all layers
+const LayersWithSearch = ({ searchTerm, expandRootOnLoad }) => {
+  const renderLayerWithSearch = React.useCallback((props) => {
+    return <CustomLayer {...props} />;
+  }, []);
+  return (
+    <LayerSearchContext.Provider value={searchTerm}>
+      <Layers
+        expandRootOnLoad={expandRootOnLoad}
+        renderLayer={renderLayerWithSearch}
+      />
+    </LayerSearchContext.Provider>
   );
 };
 
@@ -210,6 +251,33 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
   }));
 
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Count visible nodes when searching
+  const getVisibleNodeCount = () => {
+    if (!searchTerm.trim()) return Object.keys(nodes).length;
+    
+    const searchLower = searchTerm.toLowerCase();
+    let count = 0;
+    
+    Object.keys(nodes).forEach(nodeId => {
+      const node = nodes[nodeId];
+      if (!node) return;
+      
+      const type = String(node.data.type || node.data.name || '');
+      const name = String(node.data.custom?.displayName || 
+                         node.data.displayName || 
+                         type || '');
+      
+      const typeMatches = type.toLowerCase().includes(searchLower);
+      const nameMatches = name.toLowerCase().includes(searchLower);
+      
+      if (typeMatches || nameMatches || nodeId === 'ROOT') {
+        count++;
+      }
+    });
+    
+    return count;
+  };
 
   // Check if we have any nodes
   if (!nodes || Object.keys(nodes).length === 0) {
@@ -222,14 +290,20 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
     );
   }
 
+  const isSearching = searchTerm.trim().length > 0;
+  const visibleCount = getVisibleNodeCount();
+
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Header */}
-      <div className="p-3 border-b border-gray-200">
+      <div className="flex-shrink-0 p-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-2">
           <Text strong className="text-sm">Layers</Text>
           <Text className="text-xs text-gray-500">
-            {Object.keys(nodes).length} items
+            {isSearching ? 
+              `${visibleCount} of ${Object.keys(nodes).length} items` :
+              `${Object.keys(nodes).length} items`
+            }
           </Text>
         </div>
         
@@ -245,15 +319,15 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
       </div>
 
       {/* Layers Tree */}
-      <div className="flex-1 overflow-y-auto">
-        <Layers
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <LayersWithSearch 
+          searchTerm={searchTerm}
           expandRootOnLoad={expandRootOnLoad}
-          renderLayer={CustomLayer}
         />
       </div>
 
       {/* Footer */}
-      <div className="p-2 border-t border-gray-200 bg-gray-50">
+      <div className="flex-shrink-0 p-2 border-t border-gray-200 bg-gray-50">
         <Text className="text-xs text-gray-500">
           💡 Click to select • Drag to reorder • Double-click to rename
         </Text>

@@ -1,30 +1,30 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Button, Modal, Input, message, Select, Tooltip, Space, Typography } from 'antd';
+import { Button, Modal, Input, message, Tooltip, Space, Typography } from 'antd';
 import { 
   ExportOutlined, 
   DownloadOutlined,
   CodeOutlined,
-  FolderOutlined,
-  FileTextOutlined
+  FolderOutlined
 } from '@ant-design/icons';
 import { useEditor } from '@craftjs/core';
-import JSZip from 'jszip';
+import useSaveOperations from './useSaveOperations';
 
-const { Text, Title } = Typography;
-const { Option } = Select;
+const { Text } = Typography;
 
 /**
- * ExportManager - Advanced Next.js export system for Craft.js projects
- * Now integrated with PageManager for project-based exports
+ * ExportManager - Server-Side Complete Project Export System
+ * Uses the /api/export route for actual file copying and project generation
+ * Creates a 1:1 copy of the entire project structure with data folder approach
  */
 const ExportManager = () => {
   const { query } = useEditor();
+  const { getProjectData } = useSaveOperations();
   
   // State management
   const [exportModalVisible, setExportModalVisible] = useState(false);
-  const [projectName, setProjectName] = useState('my-next-app');
+  const [projectName, setProjectName] = useState('my-exported-project');
   const [isExporting, setIsExporting] = useState(false);
   const [currentProjectPages, setCurrentProjectPages] = useState([]);
 
@@ -33,7 +33,7 @@ const ExportManager = () => {
     const handlePageUpdate = (event) => {
       if (event.detail && event.detail.pages) {
         setCurrentProjectPages(event.detail.pages);
-        setProjectName(event.detail.projectName || 'my-next-app');
+        setProjectName(event.detail.projectName || 'my-exported-project');
       }
     };
 
@@ -45,973 +45,111 @@ const ExportManager = () => {
   }, []);
 
   /**
-   * Generate the complete Next.js project structure from PageManager data
+   * Get current project data for export
    */
-  const generateNextJSProject = () => {
+  const getCurrentProjectData = () => {
     try {
-      const files = {};
+      const activeProjectName = localStorage.getItem('glow_active_project');
+      const projectData = getProjectData(activeProjectName);
       
-      // Get current serialized data
-      const currentSerializedData = query.serialize();
-      
-      // Use pages from PageManager or fallback to single page
-      const pagesToExport = currentProjectPages.length > 0 ? currentProjectPages : [
-        {
-          key: 'home',
-          title: 'Home',
-          path: '/',
-          parentKey: null,
-          isHome: true,
-          serializedData: currentSerializedData
-        }
-      ];
-
-      // 1. Generate package.json with exact versions from current project
-      files['package.json'] = JSON.stringify({
-        name: projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        version: '1.0.0',
-        private: true,
-        scripts: {
-          dev: 'next dev',
-          build: 'next build',
-          start: 'next start',
-          lint: 'next lint'
-        },
-        dependencies: {
-          '@craftjs/core': '^0.2.12',
-          'next': '15.3.2',
-          'react': '^19.0.0',
-          'react-dom': '^19.0.0',
-          'styled-components': '^6.1.19'
-        },
-        devDependencies: {
-          '@tailwindcss/postcss': '^4',
-          'tailwindcss': '^4'
-        }
-      }, null, 2);
-
-      // 2. Generate next.config.mjs (matching current project)
-      files['next.config.mjs'] = `/** @type {import('next').NextConfig} */
-const nextConfig = {};
-
-export default nextConfig;`;
-
-      // 3. Generate PostCSS config (matching current project)
-      files['postcss.config.mjs'] = `const config = {
-  plugins: ["@tailwindcss/postcss"],
-};
-
-export default config;`;
-
-      // 4. Generate App Router layout (matching current project)
-      files['app/layout.js'] = `import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata = {
-  title: "${projectName}",
-  description: "Generated with Glowww",
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="en">
-      <body
-        className={\`\${geistSans.variable} \${geistMono.variable} antialiased\`}
-      >
-        {children}
-      </body>
-    </html>
-  );
-}`;
-
-      // 5. Generate global CSS (matching current project)
-      files['app/globals.css'] = `@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}`;
-
-      // 6. Generate data files and page files for Next.js App Router structure
-      const generatePageFiles = (page) => {
-        // Generate data file
-        files[`app/data/${page.key}.json`] = JSON.stringify({
-          key: page.key,
-          title: page.title,
-          path: page.path,
-          folderPath: page.folderPath,
-          parentKey: page.parentKey,
-          serializedData: page.serializedData || currentSerializedData,
-          generatedAt: new Date().toISOString()
-        }, null, 2);
-        
-        // Generate the actual page file based on Next.js App Router structure
-        if (page.key === 'home') {
-          // Home page: app/page.js (root page)
-          files['app/page.js'] = generateAppRouterPage(page.key, {
-            path: page.path,
-            displayName: page.title,
-            serializedData: page.serializedData || currentSerializedData
-          });
-        } else {
-          // All other pages: app/[folderPath]/page.js
-          const folderPath = page.folderPath;
-          files[`app/${folderPath}/page.js`] = generateAppRouterPage(page.key, {
-            path: page.path,
-            displayName: page.title,
-            serializedData: page.serializedData || currentSerializedData
-          });
-        }
-      };
-
-      // Process all pages
-      pagesToExport.forEach(page => {
-        generatePageFiles(page);
-      });
-
-      // 7. Generate App Router route utilities based on page hierarchy
-      files['app/utils/routeMap.js'] = `// Auto-generated route mapping
-const routeMap = {
-${pagesToExport
-  .map(page => `  '${page.path}': '${page.key}'`)
-  .join(',\n')}
-};
-
-export const getRouteData = (path) => {
-  const routeName = routeMap[path] || 'home';
-  return routeName;
-};
-
-export const getAllRoutes = () => {
-  return Object.keys(routeMap);
-};
-
-export const getPageHierarchy = () => {
-  return ${JSON.stringify(pagesToExport, null, 2)};
-};
-
-export default routeMap;`;
-
-      // 8. Generate Craft.js resolver utility  
-      files['app/utils/resolveCraftNodes.js'] = `import { resolveComponent } from '@craftjs/core';
-
-/**
- * Resolves Craft.js nodes from serialized JSON
- */
-export const resolveCraftNodesFromJson = (serializedJson, componentMap) => {
-  try {
-    const data = typeof serializedJson === 'string' ? JSON.parse(serializedJson) : serializedJson;
-    
-    const resolvedNodes = {};
-    
-    Object.keys(data).forEach(nodeId => {
-      const node = { ...data[nodeId] };
-      
-      if (node.type && node.type.resolvedName) {
-        const componentName = node.type.resolvedName;
-        if (componentMap[componentName]) {
-          node.type = componentMap[componentName];
-        }
+      if (!projectData) {
+        throw new Error('No active project found to export');
       }
-      
-      resolvedNodes[nodeId] = node;
-    });
-    
-    return resolvedNodes;
-  } catch (error) {
-    console.error('Error resolving Craft.js nodes:', error);
-    return {};
-  }
-};`;
 
-      // 9. Copy actual user components instead of generating generic ones
-      generateUserComponents(files);
-
-      // 10. Generate CraftRenderer for App Router
-      files['app/components/CraftRenderer.js'] = `'use client';
-
-import React from 'react';
-import { Editor, Frame, Element } from '@craftjs/core';
-import { resolveCraftNodesFromJson } from '../utils/resolveCraftNodes';
-import * as CustomComponents from './index';
-
-export default function CraftRenderer({ json, enabled = false }) {
-  if (!json) {
-    return <div>No content to render</div>;
-  }
-
-  const resolvedTree = resolveCraftNodesFromJson(json, CustomComponents);
-
-  return (
-    <div className="craft-renderer">
-      <Editor 
-        enabled={enabled} 
-        resolver={CustomComponents}
-      >
-        <Frame data={JSON.stringify(resolvedTree)}>
-          <Element 
-            is="div" 
-            id="root"
-            canvas
-            style={{
-              minHeight: '100vh',
-              width: '100%'
-            }}
-          />
-        </Frame>
-      </Editor>
-    </div>
-  );
-}`;
-
-      // 11. Generate README.md
-      files['README.md'] = `# ${projectName}
-
-This is a [Next.js](https://nextjs.org) project generated with [Glowww](https://glow.vercel.app).
-
-## Project Structure
-
-This project uses a hierarchical page structure:
-${pagesToExport.map(page => `- ${page.title} (${page.path})`).join('\n')}
-
-## Getting Started
-
-First, install the dependencies:
-
-\`\`\`bash
-npm install
-\`\`\`
-
-Then, run the development server:
-
-\`\`\`bash
-npm run dev
-\`\`\`
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
----
-
-*Generated on ${new Date().toLocaleString()} with Glowww Visual Website Builder*
-`;
-
-      return files;
+      return {
+        name: projectData.name || projectName,
+        pages: projectData.pages || [],
+        currentPage: projectData.currentPage || 'home',
+        autoSaveSettings: projectData.autoSaveSettings || { enabled: true, interval: 15 },
+        timestamp: new Date().toISOString()
+      };
     } catch (error) {
-      console.error('Error generating Next.js project:', error);
-      throw new Error('Failed to generate project structure: ' + error.message);
+      console.error('Error getting project data:', error);
+      throw error;
     }
   };
 
   /**
-   * Generate App Router page component
+   * Get list of components used in the current project
    */
-  const generateAppRouterPage = (routeName, routeInfo) => {
-    const relativePath = routeInfo.path === '/' ? './components/CraftRenderer' : '../components/CraftRenderer';
-    const dataPath = routeInfo.path === '/' ? './data/' + routeName + '.json' : '../data/' + routeName + '.json';
-    
-    return `import CraftRenderer from '${relativePath}';
-import pageData from '${dataPath}';
-
-export const metadata = {
-  title: '${routeInfo.displayName} - ${projectName}',
-  description: 'Generated with Glowww - ${routeInfo.displayName}',
-};
-
-export default function ${routeInfo.displayName.replace(/[^a-zA-Z0-9]/g, '')}Page() {
-  return (
-    <main>
-      <CraftRenderer json={pageData.serializedData} enabled={false} />
-    </main>
-  );
-}`;
-  };
-
-  /**
-   * Copy actual user components instead of generating templates
-   */
-  const generateUserComponents = async (files) => {
+  const getUsedComponents = () => {
     try {
-      // List of user components to copy
-      const userComponents = [
-        'Text', 'Paragraph', 'Button', 'Image', 'Link', 'Video', 
-        'Input', 'TextArea', 'Box', 'FlexBox', 'GridBox', 'Carousel'
-      ];
-
-      const advancedComponents = ['Form', 'ShopFlexBox'];
-
-      // Copy basic user components
-      userComponents.forEach(componentName => {
-        const componentContent = generateReadOnlyComponent(componentName);
-        files[`app/components/${componentName}.jsx`] = componentContent;
+      const serializedData = query.serialize();
+      const usedComponents = new Set();
+      
+      // Always include essential components
+      usedComponents.add('Root');
+      usedComponents.add('Element');
+      
+      // Extract components from serialized data
+      Object.values(serializedData).forEach(node => {
+        if (node.type && node.type.resolvedName) {
+          usedComponents.add(node.type.resolvedName);
+        }
       });
-
-      // Copy advanced user components
-      advancedComponents.forEach(componentName => {
-        const componentContent = generateReadOnlyComponent(componentName, true);
-        files[`app/components/${componentName}.jsx`] = componentContent;
-      });
-
-      // Generate index file
-      const allComponents = [...userComponents, ...advancedComponents];
-      const exportStatements = allComponents.map(name => `export { ${name} } from './${name}';`).join('\n');
-
-      files['app/components/index.js'] = `// Auto-generated component exports
-${exportStatements}
-
-// Component resolver for Craft.js
-export const componentResolver = {
-${allComponents.map(name => `  ${name}`).join(',\n')}
-};`;
-
+      
+      return Array.from(usedComponents);
     } catch (error) {
-      console.error('Error copying user components:', error);
-      // Fallback to basic components if copy fails
-      generateBasicComponents(files);
+      console.warn('Error extracting components, using defaults:', error);
+      return ['Root', 'Element', 'Text', 'Button', 'Box', 'FlexBox'];
     }
   };
 
   /**
-   * Generate a read-only version of a component (strips editor functionality)
+   * Call the export API to generate and download the project
    */
-  const generateReadOnlyComponent = (componentName, isAdvanced = false) => {
-    // This is a simplified version - in production you'd want to actually
-    // read the component files and strip editor-specific code
-    const basicComponents = {
-      Text: `'use client';
-import React from 'react';
-
-export const Text = ({ 
-  text = "Text",
-  fontSize = "16px",
-  fontWeight = "normal",
-  color = "#000000",
-  textAlign = "left",
-  margin = "5px 0",
-  padding = "10px",
-  ...props 
-}) => {
-  return (
-    <span 
-      style={{ 
-        fontSize,
-        fontWeight,
-        color,
-        textAlign,
-        margin,
-        padding,
-        display: "block",
-        ...props 
-      }}
-    >
-      {text}
-    </span>
-  );
-};
-
-Text.craft = {
-  displayName: 'Text',
-  props: {
-    text: 'Text',
-    fontSize: '16px',
-    fontWeight: 'normal',
-    color: '#000000'
-  }
-};`,
-
-      Paragraph: `'use client';
-import React from 'react';
-
-export const Paragraph = ({ 
-  content = 'Paragraph text goes here...',
-  text,
-  fontSize = "16px",
-  color = "#000000",
-  textAlign = "left",
-  margin = "10px 0",
-  padding = "10px",
-  ...props 
-}) => {
-  const textContent = content || text || 'Paragraph text goes here...';
-  
-  if (typeof textContent === 'string' && textContent.includes('<')) {
-    return (
-      <div 
-        style={{ 
-          fontSize,
-          color,
-          textAlign,
-          margin,
-          padding,
-          ...props 
-        }}
-        dangerouslySetInnerHTML={{ __html: textContent }}
-      />
-    );
-  }
-  
-  return (
-    <p 
-      style={{ 
-        fontSize,
-        color,
-        textAlign,
-        margin,
-        padding,
-        ...props 
-      }}
-    >
-      {textContent}
-    </p>
-  );
-};
-
-Paragraph.craft = {
-  displayName: 'Paragraph',
-  props: {
-    content: 'Paragraph text goes here...'
-  }
-};`,
-
-      Button: `'use client';
-import React from 'react';
-
-export const Button = ({ 
-  text = "Button",
-  children,
-  backgroundColor = "#007bff",
-  color = "#ffffff",
-  padding = "12px 24px",
-  borderRadius = "4px",
-  border = "none",
-  fontSize = "16px",
-  cursor = "pointer",
-  onClick,
-  ...props 
-}) => {
-  return (
-    <button 
-      onClick={onClick}
-      style={{ 
-        backgroundColor,
-        color,
-        padding,
-        borderRadius,
-        border,
-        fontSize,
-        cursor,
-        ...props 
-      }}
-    >
-      {text || children || 'Button'}
-    </button>
-  );
-};
-
-Button.craft = {
-  displayName: 'Button',
-  props: {
-    text: 'Button',
-    backgroundColor: '#007bff'
-  }
-};`,
-
-      Image: `'use client';
-import React from 'react';
-
-export const Image = ({ 
-  src = 'https://via.placeholder.com/300x200',
-  alt = 'Image',
-  width,
-  height,
-  objectFit = 'cover',
-  ...props 
-}) => {
-  return (
-    <img 
-      src={src}
-      alt={alt}
-      style={{ 
-        width: width ? width + 'px' : undefined,
-        height: height ? height + 'px' : undefined,
-        objectFit,
-        ...props 
-      }}
-    />
-  );
-};
-
-Image.craft = {
-  displayName: 'Image',
-  props: {
-    src: 'https://via.placeholder.com/300x200',
-    alt: 'Image'
-  }
-};`,
-
-      Link: `'use client';
-import React from 'react';
-
-export const Link = ({ 
-  text = 'Link',
-  href = '#',
-  target = '_self',
-  color = '#007bff',
-  textDecoration = 'underline',
-  ...props 
-}) => {
-  return (
-    <a 
-      href={href}
-      target={target}
-      style={{ 
-        color,
-        textDecoration,
-        ...props 
-      }}
-    >
-      {text}
-    </a>
-  );
-};
-
-Link.craft = {
-  displayName: 'Link',
-  props: {
-    text: 'Link',
-    href: '#'
-  }
-};`,
-
-      Video: `'use client';
-import React from 'react';
-
-export const Video = ({ 
-  src = 'https://www.w3schools.com/html/mov_bbb.mp4',
-  width,
-  height,
-  controls = true,
-  autoPlay = false,
-  muted = false,
-  loop = false,
-  ...props 
-}) => {
-  return (
-    <video 
-      src={src}
-      controls={controls}
-      autoPlay={autoPlay}
-      muted={muted}
-      loop={loop}
-      style={{ 
-        width: width ? width + 'px' : undefined,
-        height: height ? height + 'px' : undefined,
-        ...props 
-      }}
-    />
-  );
-};
-
-Video.craft = {
-  displayName: 'Video',
-  props: {
-    src: 'https://www.w3schools.com/html/mov_bbb.mp4',
-    controls: true
-  }
-};`,
-
-      Input: `'use client';
-import React from 'react';
-
-export const Input = ({ 
-  type = 'text',
-  placeholder = 'Enter text...',
-  value,
-  onChange,
-  width,
-  padding = '8px 12px',
-  border = '1px solid #ccc',
-  borderRadius = '4px',
-  fontSize,
-  ...props 
-}) => {
-  return (
-    <input 
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      style={{ 
-        width: width ? width + 'px' : undefined,
-        padding,
-        border,
-        borderRadius,
-        fontSize: fontSize ? fontSize + 'px' : undefined,
-        ...props 
-      }}
-    />
-  );
-};
-
-Input.craft = {
-  displayName: 'Input',
-  props: {
-    type: 'text',
-    placeholder: 'Enter text...'
-  }
-};`,
-
-      TextArea: `'use client';
-import React from 'react';
-
-export const TextArea = ({ 
-  placeholder = 'Enter text...',
-  value,
-  onChange,
-  rows = 4,
-  cols,
-  width,
-  height,
-  padding = '8px 12px',
-  border = '1px solid #ccc',
-  borderRadius = '4px',
-  fontSize,
-  resize = 'vertical',
-  ...props 
-}) => {
-  return (
-    <textarea 
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      rows={rows}
-      cols={cols}
-      style={{ 
-        width: width ? width + 'px' : undefined,
-        height: height ? height + 'px' : undefined,
-        padding,
-        border,
-        borderRadius,
-        fontSize: fontSize ? fontSize + 'px' : undefined,
-        resize,
-        ...props 
-      }}
-    />
-  );
-};
-
-TextArea.craft = {
-  displayName: 'TextArea',
-  props: {
-    placeholder: 'Enter text...',
-    rows: 4
-  }
-};`,
-
-      Box: `'use client';
-import React from 'react';
-
-export const Box = ({ 
-  children,
-  backgroundColor = "transparent",
-  padding = "16px",
-  margin = "0",
-  borderRadius = "0",
-  border = "none",
-  width = "auto",
-  height = "auto",
-  ...props 
-}) => {
-  return (
-    <div 
-      style={{ 
-        backgroundColor,
-        padding,
-        margin,
-        borderRadius,
-        border,
-        width,
-        height,
-        ...props 
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-Box.craft = {
-  displayName: 'Box',
-  props: {
-    backgroundColor: 'transparent'
-  }
-};`,
-
-      FlexBox: `'use client';
-import React from 'react';
-
-export const FlexBox = ({ 
-  children,
-  flexDirection = 'row',
-  justifyContent = 'flex-start',
-  alignItems = 'stretch',
-  gap,
-  ...props 
-}) => {
-  return (
-    <div 
-      style={{ 
-        display: 'flex',
-        flexDirection,
-        justifyContent,
-        alignItems,
-        gap: gap ? gap + 'px' : undefined,
-        ...props 
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-FlexBox.craft = {
-  displayName: 'FlexBox',
-  props: {
-    flexDirection: 'row'
-  }
-};`,
-
-      GridBox: `'use client';
-import React from 'react';
-
-export const GridBox = ({ 
-  children,
-  gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))',
-  gap,
-  ...props 
-}) => {
-  return (
-    <div 
-      style={{ 
-        display: 'grid',
-        gridTemplateColumns,
-        gap: gap ? gap + 'px' : undefined,
-        ...props 
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-GridBox.craft = {
-  displayName: 'GridBox',
-  props: {
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'
-  }
-};`,
-
-      Carousel: `'use client';
-import React from 'react';
-
-export const Carousel = ({ 
-  children,
-  ...props 
-}) => {
-  return (
-    <div 
-      className="carousel-container" 
-      style={{ 
-        display: 'flex',
-        overflowX: 'auto',
-        scrollBehavior: 'smooth',
-        ...props 
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-Carousel.craft = {
-  displayName: 'Carousel',
-  props: {}
-};`
-    };
-
-    const advancedComponents = {
-      Form: `'use client';
-import React from 'react';
-
-export const Form = ({ 
-  children,
-  onSubmit,
-  ...props 
-}) => {
-  return (
-    <form 
-      style={props} 
-      onSubmit={onSubmit}
-    >
-      {children}
-    </form>
-  );
-};
-
-Form.craft = {
-  displayName: 'Form',
-  props: {}
-};`,
-
-      ShopFlexBox: `'use client';
-import React from 'react';
-
-export const ShopFlexBox = ({ 
-  children,
-  ...props 
-}) => {
-  return (
-    <div 
-      className="shop-container" 
-      style={{ 
-        display: 'flex',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        padding: '16px',
-        background: '#f9fafb',
-        ...props 
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-ShopFlexBox.craft = {
-  displayName: 'ShopFlexBox',
-  props: {}
-};`
-    };
-
-    if (isAdvanced) {
-      return advancedComponents[componentName] || generateGenericComponent(componentName);
-    }
-
-    return basicComponents[componentName] || generateGenericComponent(componentName);
-  };
-
-  /**
-   * Generate a generic component fallback
-   */
-  const generateGenericComponent = (componentName) => {
-    return `'use client';
-import React from 'react';
-
-export const ${componentName} = ({ 
-  children,
-  ...props 
-}) => {
-  return (
-    <div {...props}>
-      {children || '${componentName}'}
-    </div>
-  );
-};
-
-${componentName}.craft = {
-  displayName: '${componentName}',
-  props: {}
-};`;
-  };
-
-  /**
-   * Fallback basic component generation
-   */
-  const generateBasicComponents = (files) => {
-    const components = ['Text', 'Button', 'Box', 'FlexBox', 'GridBox'];
-    
-    components.forEach(componentName => {
-      files[`app/components/${componentName}.jsx`] = generateGenericComponent(componentName);
-    });
-
-    files['app/components/index.js'] = `// Basic component exports
-${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
-  };
-
-  /**
-   * Create and download the Next.js project as a ZIP file
-   */
-  const downloadNextJSProject = async (files) => {
+  const callExportAPI = async () => {
     try {
       setIsExporting(true);
       
-      const zip = new JSZip();
+      // Prepare export data
+      const projectData = getCurrentProjectData();
+      const componentList = getUsedComponents();
       
-      // Add all files to the ZIP
-      Object.entries(files).forEach(([filePath, content]) => {
-        zip.file(filePath, content);
+      console.log('📦 Starting export via API...', {
+        projectName,
+        pagesCount: projectData.pages.length,
+        componentsCount: componentList.length
       });
       
-      // Generate ZIP file
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      // Call the export API
+      const response = await fetch('/api/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectName: projectName.trim(),
+          projectData,
+          componentList,
+          exportType: 'complete'
+        }),
+      });
       
-      // Download the ZIP file
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Export failed');
+      }
+      
+      // Get the ZIP blob
+      const zipBlob = await response.blob();
+      
+      // Create download link
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${projectName}-export.zip`;
+      a.download = `${projectName}-complete-export.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      message.success('Next.js project exported successfully!');
+      message.success('Project exported successfully! 🎉');
       setExportModalVisible(false);
+      
     } catch (error) {
       console.error('Export error:', error);
-      message.error('Failed to export project: ' + error.message);
+      message.error(`Export failed: ${error.message}`);
     } finally {
       setIsExporting(false);
     }
@@ -1021,18 +159,17 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
    * Handle the export process
    */
   const handleExport = async () => {
-    try {
-      const files = generateNextJSProject();
-      await downloadNextJSProject(files);
-    } catch (error) {
-      message.error('Export failed: ' + error.message);
-      setIsExporting(false);
+    if (!projectName.trim()) {
+      message.error('Please enter a project name');
+      return;
     }
+    
+    await callExportAPI();
   };
 
   return (
     <>
-      <Tooltip title="Export as Next.js App">
+      <Tooltip title="Export Complete Project">
         <Button
           icon={<ExportOutlined />}
           size="small"
@@ -1046,7 +183,7 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
         title={
           <Space>
             <CodeOutlined />
-            <span>Export Next.js Application</span>
+            <span>Export Complete Project</span>
           </Space>
         }
         open={exportModalVisible}
@@ -1064,17 +201,18 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
             loading={isExporting}
             onClick={handleExport}
             icon={<DownloadOutlined />}
+            className="bg-purple-600 hover:bg-purple-700"
           >
-            {isExporting ? 'Exporting...' : 'Export Project'}
+            {isExporting ? 'Exporting...' : 'Export Complete Project'}
           </Button>
         ]}
-        width={600}
-        destroyOnHidden
+        width={700}
+        destroyOnClose
       >
         <div style={{ marginBottom: '24px' }}>
           <Typography.Paragraph>
-            Export your Craft.js project as a standalone Next.js application using the App Router.
-            The exported project will be ready to deploy and includes all your components in read-only mode.
+            Export your complete project as a standalone application. This creates a 1:1 copy of your project 
+            with a data folder containing your saved project, and a clean [[...slug]] page based on the Preview template (without the header section).
           </Typography.Paragraph>
         </div>
 
@@ -1082,7 +220,7 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
           <div>
             <Text strong>Project Name</Text>
             <Input
-              placeholder="my-next-app"
+              placeholder="my-exported-project"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               style={{ marginTop: '8px' }}
@@ -1098,7 +236,7 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
                   <div key={page.key} style={{ marginBottom: '4px', fontSize: '12px' }}>
                     <Text>{page.title}</Text> 
                     <Text type="secondary" style={{ marginLeft: '8px' }}>
-                      {page.folderPath ? `app/${page.folderPath}/page.js` : 'app/page.js'}
+                      {page.folderPath ? `/${page.folderPath}` : '/'}
                     </Text>
                   </div>
                 ))
@@ -1116,11 +254,24 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
           }}>
             <Space direction="vertical" size="small">
               <Text strong>📦 Export will include:</Text>
-              <Text>• Next.js 15.3.2 App Router structure</Text>
-              <Text>• All your Craft.js components (read-only)</Text>
-              <Text>• Tailwind CSS configuration</Text>
-              <Text>• Production-ready configuration</Text>
-              <Text>• Static export optimization</Text>
+              <Text>• Complete project structure (1:1 copy via server-side file operations)</Text>
+              <Text>• All Components and public assets (actual file copying)</Text>
+              <Text>• Data folder with your saved project (replaces localStorage)</Text>
+              <Text>• Clean [[...slug]] page based on Preview template</Text>
+              <Text>• Production-ready Next.js configuration</Text>
+              <Text strong style={{ color: '#dc3545' }}>✗ Excludes: Editor folder, Preview folder, git files</Text>
+            </Space>
+          </div>
+
+          <div style={{ 
+            background: '#e8f4fd', 
+            padding: '12px', 
+            borderRadius: '6px',
+            border: '1px solid #91caff'
+          }}>
+            <Space direction="vertical" size="small">
+              <Text strong style={{ color: '#1677ff' }}>ℹ️ Server-Side Export:</Text>
+              <Text style={{ color: '#1677ff' }}>This export uses server-side file operations to copy your entire <code>Components/</code> and <code>public/</code> folders from the original project to the exported project for a complete working copy.</Text>
             </Space>
           </div>
         </Space>

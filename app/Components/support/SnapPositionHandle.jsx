@@ -41,9 +41,9 @@ const SnapPositionHandle = ({
 
   // Get parent container element (immediate parent, not root canvas)
   const getParentContainer = useCallback(() => {
-    if (!dom) return null;
-    
     try {
+      if (!dom || !query) return null;
+      
       // Get the parent element from Craft.js
       const parentElement = dom.parentElement;
       
@@ -65,11 +65,15 @@ const SnapPositionHandle = ({
         current = current.parentElement;
       }
       
-      // Final fallback to root canvas
-      return query.getDropPlaceholder() || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
-    } catch (e) {
-      // Fallback to root canvas
-      return query.getDropPlaceholder() || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
+      // Final fallback to root canvas - safely check query methods
+      const dropPlaceholder = query && typeof query.getDropPlaceholder === 'function' ? query.getDropPlaceholder() : null;
+      const fallbackElement = dropPlaceholder || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
+      
+      return fallbackElement;
+    } catch (error) {
+      console.warn('Error in getParentContainer:', error);
+      // Return safe fallback
+      return document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
     }
   }, [dom, query]);
 
@@ -112,12 +116,13 @@ const SnapPositionHandle = ({
     setIsDragging(true);
 
     // Register all elements for snapping (relative to the same container)
-    const nodes = query.getNodes();
-    Object.entries(nodes).forEach(([id, node]) => {
-      if (id !== nodeId && node && node.dom) {
-        try {
-          const nodeBounds = node.dom.getBoundingClientRect();
-          const computedStyle = window.getComputedStyle(node.dom);
+    const nodes = query && typeof query.getNodes === 'function' ? query.getNodes() : {};
+    if (nodes && typeof nodes === 'object') {
+      Object.entries(nodes).forEach(([id, node]) => {
+        if (id && id !== nodeId && node && node.dom && typeof node.dom.getBoundingClientRect === 'function') {
+          try {
+            const nodeBounds = node.dom.getBoundingClientRect();
+            const computedStyle = window.getComputedStyle(node.dom);
           
           // Get border widths (we exclude borders from visual alignment)
           const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
@@ -139,7 +144,8 @@ const SnapPositionHandle = ({
           console.warn(`Failed to register element ${id} for snapping:`, error);
         }
       }
-    });
+      });
+    }
 
     // Call external drag start handler
     onDragStart?.(e);
@@ -293,25 +299,34 @@ const SnapPositionHandle = ({
 
   // Register current element with snap system
   useEffect(() => {
-    if (dom && nodeId) {
-      const container = getParentContainer();
-      if (container) {
-        const elementRect = dom.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        const relativeBounds = {
-          x: elementRect.left - containerRect.left,
-          y: elementRect.top - containerRect.top,
-          width: elementRect.width,
-          height: elementRect.height
-        };
-        
-        snapGridSystem.registerElement(nodeId, dom, relativeBounds);
+    if (dom && nodeId && typeof dom.getBoundingClientRect === 'function') {
+      const container = getParentContainer && getParentContainer();
+      if (container && dom && typeof dom.getBoundingClientRect === 'function' && typeof container.getBoundingClientRect === 'function') {
+        try {
+          const elementRect = dom.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          if (elementRect && containerRect) {
+            const relativeBounds = {
+              x: elementRect.left - containerRect.left,
+              y: elementRect.top - containerRect.top,
+              width: elementRect.width,
+              height: elementRect.height
+            };
+            snapGridSystem.registerElement(nodeId, dom, relativeBounds);
+          }
+        } catch (error) {
+          console.warn(`Failed to register element ${nodeId} in useEffect:`, error);
+        }
       }
     }
     
     return () => {
       if (nodeId) {
-        snapGridSystem.unregisterElement(nodeId);
+        try {
+          snapGridSystem.unregisterElement(nodeId);
+        } catch (error) {
+          console.warn(`Failed to unregister element ${nodeId}:`, error);
+        }
       }
     };
   }, [dom, nodeId, getParentContainer]);

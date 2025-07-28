@@ -48,6 +48,7 @@ export const Image = ({
   // Effects
   boxShadow = "none",
   opacity = 1,
+  filter = "none",
   
   // Image Specific
   objectFit = "cover",
@@ -350,8 +351,9 @@ export const Image = ({
     borderStyle,
     borderColor,
     borderRadius: processValue(borderRadius, 'borderRadius'),
-    boxShadow,
+    boxShadow: boxShadow !== "none" ? boxShadow : undefined,
     opacity,
+    filter: filter !== "none" ? filter : undefined,
     objectFit,
     objectPosition,
   };

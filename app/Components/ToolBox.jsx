@@ -1,7 +1,7 @@
 'use client';
 
 import { Element, useEditor } from "@craftjs/core";
-import { Button as ButtonAD, Typography, Drawer, Space } from "antd";
+import { Button as ButtonAD, Typography, Drawer, Space, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { Box } from "./user/Box";
 import { FlexBox } from "./user/FlexBox";
@@ -27,7 +27,13 @@ import {
   InteractionOutlined,
   ShopOutlined,
   RightOutlined,
-  CloseOutlined
+  CloseOutlined,
+  BgColorsOutlined,
+  BlockOutlined,
+  TableOutlined,
+  DragOutlined,
+  SelectOutlined,
+  ToolOutlined
 } from "@ant-design/icons";
 import { Text } from "./user/Text";
 import { Button } from "./user/Button";
@@ -60,55 +66,55 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const carouselRef = useRef(null);
   const navBarRef = useRef(null);
 
-  // Component categories
+  // Component categories organized like Figma
   const sections = [
     {
       id: 'layout',
-      title: 'Layout',
-      icon: <BuildOutlined />,
+      title: 'Frames & Layout',
+      icon: <BlockOutlined />,
       description: 'Structure components',
       components: [
         {
           ref: boxRef,
-          name: 'Box',
-          icon: <LayoutOutlined />,
-          description: 'Basic container',
+          name: 'Frame',
+          icon: <BlockOutlined />,
+          description: 'Basic container frame',
           element: <Element is={Box} canvas />
         },
         {
           ref: flexBoxRef,
-          name: 'Flex Box',
+          name: 'Flex',
           icon: <AppstoreOutlined />,
-          description: 'Flexible layout',
+          description: 'Flexible layout container',
           element: <Element is={FlexBox} display="flex" flexDirection="row" canvas />
         },
         {
           ref: gridBoxRef,
-          name: 'Grid Box',
-          icon: <BorderlessTableOutlined />,
-          description: 'Grid layout',
+          name: 'Grid',
+          icon: <TableOutlined />,
+          description: 'Grid layout container',
           element: <Element is={GridBox} display="grid" gridTemplateColumns="repeat(3, 1fr)" canvas />
         }
       ]
     },
     {
       id: 'content',
-      title: 'Content',
-      icon: <FileTextOutlined />,
-      description: 'Text and content',
+      title: 'Text',
+      icon: <FontColorsOutlined />,
+      description: 'Text components',
       components: [
         {
           ref: textRef,
           name: 'Text',
           icon: <FontColorsOutlined />,
-          description: 'Simple text',
+          description: 'Single line text',
           element: <Element is={Text} />
         },
         {
           ref: paragraphRef,
           name: 'Paragraph',
           icon: <EditOutlined />,
-          description: 'Rich text paragraph',
+          description: 'Multi-line text block',
           element: <Element is={Paragraph} />
         },
        
@@ -117,7 +123,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
     {
       id: 'media',
       title: 'Media',
-      icon: <CameraOutlined />,
+      icon: <PictureOutlined />,
       description: 'Images and videos',
       components: [
         {
@@ -137,8 +143,8 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         {
           ref: carouselRef,
           name: 'Carousel',
-          icon: <PictureOutlined />,
-          description: 'Image carousel',
+          icon: <BgColorsOutlined />,
+          description: 'Image carousel slider',
           element: <Element is={Carousel} />
         },
       ]
@@ -151,7 +157,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
       components: [
         {
           ref: navBarRef,
-          name: 'Nav Bar',
+          name: 'Navbar',
           icon: <MenuOutlined />,
           description: 'Navigation bar with pages',
           element: <Element is={NavBar} canvas />
@@ -167,9 +173,9 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         {
           ref: buttonRef,
           name: 'Button',
-          icon: <MenuOutlined />,
+          icon: <InteractionOutlined />,
           description: 'Clickable button',
-          element: <Element is={Button} text="Click Me" canvas />
+          element: <Element is={Button} text="Button" canvas />
         },
         {
           ref: linkRef,
@@ -188,7 +194,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
       components: [
         {
           ref: formInputRef,
-          name: 'Form Input',
+          name: 'Input',
           icon: <FormOutlined />,
           description: 'Input field',
           element: <Element is={FormInput} />
@@ -196,7 +202,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         {
           ref: formRef,
           name: 'Form',
-          icon: <FormOutlined />,
+          icon: <FileTextOutlined />,
           description: 'Form container',
           element: <Element is={Form} />
         }
@@ -210,7 +216,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
       components: [
         {
           ref: shopFlexBoxRef,
-          name: 'Shop Display',
+          name: 'Product',
           icon: <ShoppingTwoTone />,
           description: 'Product showcase',
           element: <Element is={ShopFlexBox} />
@@ -253,46 +259,49 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
   const renderDrawerContent = (section) => {
     return (
-      <div className="h-full  flex flex-col">
-        {/* Compact Header */}
-        <div className="border-b pb-2 mb-3 flex-shrink-0">
-          <div className="flex items-center justify-between mb-1">
-            <div className="text-lg text-gray-600">
-              {section.icon}
-            </div>
+      <div className="h-full flex flex-col">
+        {/* Minimal Header like Figma */}
+        <div className="border-b border-gray-100 pb-3 mb-4 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <Typography.Text className="text-sm font-medium text-gray-700">
+              {section.title}
+            </Typography.Text>
             <ButtonAD
               type="text"
               size="small"
               icon={<CloseOutlined />}
               onClick={closeDrawer}
-              className="text-gray-400 hover:text-gray-600 !p-1 !min-w-0 !w-6 !h-6"
+              className="text-gray-400 hover:text-gray-600 !p-1 !min-w-0 !w-5 !h-5 flex items-center justify-center"
+              style={{ fontSize: '10px' }}
             />
           </div>
-          <Typography.Text className="text-xs font-medium block truncate">
-            {section.title}
-          </Typography.Text>
         </div>
         
-        {/* Components - Single Column */}
-        <div className="flex-1  overflow-y-auto">
-          <div className="space-y-2">
+        {/* Components Grid - Figma style wider layout */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-4 gap-3">
             {section.components.map((component, index) => (
-              <div
+              <Tooltip 
                 key={`${section.id}-${index}`}
-                ref={component.ref}
-                className="p-2 border border-gray-200 rounded hover:border-blue-400 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing group"
-                style={{ userSelect: 'none' }}
                 title={component.description}
+                placement="top"
+                mouseEnterDelay={0.5}
               >
-                <div className="flex flex-col items-center text-center space-y-1">
-                  <div className="text-lg text-gray-600 group-hover:text-blue-500 transition-colors">
-                    {component.icon}
-                  </div>
-                  <div className="text-xs text-gray-800 font-medium truncate w-full">
-                    {component.name}
+                <div
+                  ref={component.ref}
+                  className="aspect-square p-3 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-all cursor-grab active:cursor-grabbing group bg-white"
+                  style={{ userSelect: 'none' }}
+                >
+                  <div className="flex flex-col items-center justify-center h-full space-y-2">
+                    <div className="text-xl text-gray-600 group-hover:text-blue-500 transition-colors">
+                      {component.icon}
+                    </div>
+                    <div className="text-xs text-gray-700 font-medium text-center leading-tight">
+                      {component.name}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Tooltip>
             ))}
           </div>
         </div>
@@ -301,124 +310,121 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   };
 
   return (
-    <div className="h-full flex flex-col relative" ref={toolboxRef}>
-      {!activeDrawer && (<div  className="p-4 relative border ">
-        <div className="flex flex-col gap-12">
-          
-          
-          <div className="space-y-2 flex   flex-col gap-4 ">
-            {sections.map((section) => (
-              <ButtonAD
-                key={section.id}
-                type={activeDrawer === section.id ? "primary" : "text"}
-                className={`w-full block  p-3  text-left transition-all rounded-lg  ${
-                  activeDrawer === section.id 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                }`} 
-                onClick={() => activeDrawer === section.id ? closeDrawer() : openDrawer(section.id)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="text-lg text-gray-600">
+    <div className="relative" ref={toolboxRef}>
+      {/* Figma-style bottom center toolbar */}
+      {!activeDrawer && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
+            <div className="flex items-center gap-1">
+              {sections.map((section) => (
+                <Tooltip
+                  key={section.id}
+                  title={section.title}
+                  placement="top"
+                  mouseEnterDelay={0.5}
+                >
+                  <ButtonAD
+                    type={activeDrawer === section.id ? "primary" : "text"}
+                    className={`w-12 h-12 p-0 flex items-center justify-center transition-all rounded-xl border ${
+                      activeDrawer === section.id 
+                        ? 'border-blue-500 bg-blue-500 shadow-sm' 
+                        : 'border-transparent hover:border-gray-300 hover:bg-gray-50'
+                    }`} 
+                    onClick={() => activeDrawer === section.id ? closeDrawer() : openDrawer(section.id)}
+                  >
+                    <div className={`text-lg ${
+                      activeDrawer === section.id ? 'text-white' : 'text-gray-600'
+                    }`}>
                       {section.icon}
                     </div>
-                    <div>
-                      <div className="font-medium text-sm text-gray-800">
-                        {section.title}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {section.components.length} component{section.components.length !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  </div>
-                  <RightOutlined 
-                    className={`text-xs text-gray-400 transition-transform ${
-                      activeDrawer === section.id ? 'rotate-90' : ''
-                    }`} 
-                  />
-                </div>
-              </ButtonAD>
-            ))}
+                  </ButtonAD>
+                </Tooltip>
+              ))}
+            </div>
           </div>
         </div>
-
-       
-      </div>)}
+      )}
 
        {/* Quick Section Switcher (when drawer is open) */}
         {activeDrawer && (
-          <div 
-            className="absolute top-0 left-0 ml-2 bg-white border border-gray-200 rounded-lg shadow-lg p-1 "
-            style={{ width: '50px' }}
-          >
-            <div className="flex flex-col space-y-1">
-              {sections.map((section) => (
-                <ButtonAD
-                  key={section.id}
-                  type={activeDrawer === section.id ? "primary" : "text"}
-                  size="small"
-                  className="w-full h-8 p-1 flex items-center justify-center !min-w-0"
-                  onClick={() => switchDrawer(section.id)}
-                  title={section.title}
-                >
-                  <div className="text-sm">
-                    {section.icon}
-                  </div>
-                </ButtonAD>
-              ))}
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
+              <div className="flex items-center gap-1">
+                {sections.map((section) => (
+                  <Tooltip
+                    key={section.id}
+                    title={section.title}
+                    placement="top"
+                    mouseEnterDelay={0.3}
+                  >
+                    <ButtonAD
+                      type={activeDrawer === section.id ? "primary" : "text"}
+                      size="small"
+                      className={`w-10 h-10 p-0 flex items-center justify-center !min-w-0 rounded-xl transition-all ${
+                        activeDrawer === section.id 
+                          ? 'bg-blue-500 border-blue-500' 
+                          : 'hover:bg-gray-50'
+                      }`}
+                      onClick={() => switchDrawer(section.id)}
+                    >
+                      <div className={`text-sm ${
+                        activeDrawer === section.id ? 'text-white' : 'text-gray-600'
+                      }`}>
+                        {section.icon}
+                      </div>
+                    </ButtonAD>
+                  </Tooltip>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-      {/* Compact 100px Drawer */}
+      {/* Enhanced Drawer - Figma-like bottom positioned */}
       <Drawer
         title={false}
-        placement="left"
+        placement="bottom"
         open={!!activeDrawer}
         onClose={closeDrawer}
-        className="component-drawer"
-        
+        className="figma-component-drawer"
         mask={false}
         maskClosable={true}
-        
         style={{
           position: 'fixed',
-          top: '',
-          left: '',
-          height: '50vh',
-          width: '100px',
-          transform: 'none',
-          zIndex: 9,
+          bottom: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          height: '300px',
+          width: '400px',
+          zIndex: 40,
         }}
         styles={{
           header: { display: 'none' },
-          bodyStyle:{ 
-          padding: '12px',
-          height: '100%',
-        },
-          wrapper: {
-            position: 'fixed',
-            left: '50px',
-            top: '5rem',
-            height: 'calc(50vh)',
-            width: '100px', // Fixed to 100px
-            transform: 'none',
-            zIndex: 9,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-          },
           body: {
             height: '100%',
-            padding: '12px', // Reduced padding
-            zIndex: 9
+            padding: '16px',
+            backgroundColor: '#fafafa',
+            borderRadius: '12px'
+          },
+          wrapper: {
+            position: 'fixed',
+            bottom: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            height: '300px',
+            width: '400px',
+            zIndex: 40,
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)'
           },
           content: {
-            zIndex: 9
+            zIndex: 40,
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb'
           }
         }}
         getContainer={false}
         destroyOnHidden={false}
-        zIndex={9}
+        zIndex={40}
       >
         {activeDrawer && renderDrawerContent(sections.find(s => s.id === activeDrawer))}
       </Drawer>

@@ -55,6 +55,7 @@ export const Paragraph = ({
   // Effects
   boxShadow = "none",
   opacity = 1,
+  filter = "none",
   
   // Editor Settings
   editorHeight = 300,
@@ -313,8 +314,9 @@ export const Paragraph = ({
     borderColor,
     borderRadius: processValue(borderRadius, 'borderRadius'),
     backgroundColor,
-    boxShadow,
+    boxShadow: boxShadow !== "none" ? boxShadow : undefined,
     opacity,
+    filter: filter !== "none" ? filter : undefined,
   };
 
   // Remove undefined values

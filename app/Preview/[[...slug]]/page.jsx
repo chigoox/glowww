@@ -24,6 +24,10 @@ import { Root } from '../../Components/Root';
 // Import save operations hook to load auto-saved projects
 import useSaveOperations from '../../Components/support/useSaveOperations';
 
+// Import context providers needed for preview
+import { MultiSelectProvider } from '../../Components/support/MultiSelectContext';
+import { PagesProvider } from '../../Components/PagesContext';
+
 /**
  * Preview Page Component
  * 
@@ -383,46 +387,53 @@ export default function PreviewPage() {
       {/* Page Content */}
       <div className="w-full overflow-auto">
         <div className="w-full max-w-none">
-          <Editor
-            resolver={{
-              Box,
-              FlexBox,
-              Text,
-              GridBox,
-              Image,
-              Button,
-              Link,
-              Paragraph,
-              Video,
-              ShopFlexBox,
-              ShopImage,
-              ShopText,
-              FormInput,
-              Form,
-              FormInputDropArea,
-              Carousel,
-              NavBar,
-              NavItem,
-              Root,
-              Element
-            }}
-            enabled={false} // Disable editing in preview mode
-          >
-            <Frame data={currentPage.serializedData} className="w-full">
-              <Element 
-                is={Root} 
-                padding={0} 
-                background="#ffffff" 
-                canvas
-                className="w-full border-2"
-                style={{ 
-                  maxWidth: '100%',
-                  minWidth: '100%',
-                  overflow: 'hidden'
-                }}
-              />
-            </Frame>
-          </Editor>
+          <PagesProvider>
+            <Editor
+              resolver={{
+                Box,
+                FlexBox,
+                Text,
+                GridBox,
+                Image,
+                Button,
+                Link,
+                Paragraph,
+                Video,
+                ShopFlexBox,
+                ShopImage,
+                ShopText,
+                FormInput,
+                Form,
+                FormInputDropArea,
+                Carousel,
+                NavBar,
+                NavItem,
+                Root,
+                Element
+              }}
+              enabled={false} // Disable editing in preview mode
+            >
+              <MultiSelectProvider>
+                <Frame data={currentPage.serializedData} className="w-full">
+                  <Element 
+                                      is={Root} 
+                                      padding={0}
+                                      maxWidth='100%'
+                                      minWidth='100%' 
+                                      paddingBottom='0'
+                                      background="#ffffff" 
+                                      canvas
+                                      className="w-full border-2"
+                                      style={{ 
+                                        maxWidth: '100%',
+                                        minWidth: '100%',
+                                        overflow: 'hidden'
+                                      }}
+                                    />
+                </Frame>
+              </MultiSelectProvider>
+            </Editor>
+          </PagesProvider>
         </div>
       </div>
     </div>

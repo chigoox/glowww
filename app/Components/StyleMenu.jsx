@@ -19,6 +19,7 @@ import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Sp
 import { useEditor } from "@craftjs/core";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useMultiSelect } from './support/MultiSelectContext';
+import { FigmaStyleMenu } from './FigmaStyleMenu';
 
 const { TextArea } = Input;
 // Debounce utility
@@ -453,8 +454,19 @@ export function StyleMenu({
   supportedProps = [],
   onClose,
   onDelete,
+  useFigmaStyle = true, // New prop to toggle between styles
 }) {
+  // If Figma style is requested, use the new component
+  if (useFigmaStyle) {
+    return (
+      <FigmaStyleMenu
+        nodeId={nodeId}
+        onClose={onClose}
+      />
+    );
+  }
 
+  // Original StyleMenu implementation continues below...
   // Use useEditor to get selected node and actions
   const { selectedNodes: multiSelectedNodes, isMultiSelecting } = useMultiSelect();
   
@@ -3643,3 +3655,7 @@ if (shouldShow('attributes')) {
     </div>
   );
 }
+
+// Export both styles for choice
+export { FigmaStyleMenu };
+export default StyleMenu;

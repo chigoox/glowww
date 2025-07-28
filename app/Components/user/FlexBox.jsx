@@ -159,6 +159,7 @@ placeContent,
   boxShadow = "none",
   transform = "none",
   opacity = 1,
+  filter = "none",
   
   // Basic Properties
   src,
@@ -714,6 +715,7 @@ placeContent,
     boxShadow: boxShadow !== "none" ? boxShadow : undefined,
     transform: transform !== "none" ? transform : undefined,
     opacity,
+    filter: filter !== "none" ? filter : undefined,
   };
 
 
