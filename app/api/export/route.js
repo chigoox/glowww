@@ -217,7 +217,32 @@ const nextConfig = {};
 export default nextConfig;`);
     console.log('⚠ Used fallback next.config.mjs');
   }
+
+
+
+  // gitignore - copy existing or use fallback
+    const gitignorePath = path.join(process.cwd(), '.gitignore');
+    if (fs.existsSync(gitignorePath)) {
+        const existingGitignore = fs.readFileSync(gitignorePath, 'utf8');
+        zip.file('.gitignore', existingGitignore);
+        console.log('✓ Copied existing .gitignore');
+    } else {
+      zip.file(
+        ".gitignore",
+        `# Node modules
+        node_modules/
+        # Build output
+        .next/  
+        # Logs
+        logs/
+        # Environment variables
+        .env
+        `
+      );
+    }
   
+
+
   // PostCSS config - copy existing or use fallback
   const postcssConfigPath = path.join(process.cwd(), 'postcss.config.mjs');
   if (fs.existsSync(postcssConfigPath)) {

@@ -2,14 +2,16 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { signInWithEmail, signInWithUsername, signInWithGoogle } from '../../../../lib/auth';
+import { createUser, signInWithGoogle } from '../../../../lib/auth';
 import { useRouter } from 'next/navigation';
-import { VideoBackground } from '../../../../components/VideoBackground';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [formData, setFormData] = useState({
-    emailOrUsername: '',
-    password: ''
+    fullName: '',
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,36 +25,35 @@ export default function LoginPage() {
     setError(''); // Clear error when user types
   };
 
-  const isEmail = (str) => {
-    return str.includes('@');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
+    // Validation
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.username.length < 3) {
+      setError('Username must be at least 3 characters');
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (isEmail(formData.emailOrUsername)) {
-        // Sign in with email
-        await signInWithEmail(formData.emailOrUsername, formData.password);
-      } else {
-        // Sign in with username
-        await signInWithUsername(formData.emailOrUsername, formData.password);
-      }
+      await createUser(formData.email, formData.password, formData.username, formData.fullName);
       router.push('/Editor'); // Redirect to main app
     } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        setError('No account found with this email/username');
-      } else if (error.code === 'auth/wrong-password') {
-        setError('Incorrect password');
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Invalid email format');
-      } else if (error.message === 'Username not found') {
-        setError('Username not found');
-      } else {
-        setError(error.message);
-      }
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -72,21 +73,35 @@ export default function LoginPage() {
   };
 
   return (
-    <VideoBackground 
-      videoSrc="/videos/auth-background.mp4" // Add your video file here
-      poster="/images/auth-poster.jpg" // Add your poster image here
-      overlay={true}
-      overlayOpacity={0.4}
-      className="min-h-screen flex items-center justify-center"
-    >
-      <div className="w-full max-w-md mx-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm">
+    <div className="min-h-screen relative flex items-center justify-center">
+      {/* Video Background Template - Add your video here */}
+      <div className="absolute inset-0 overflow-hidden">
+        {/* Replace this div with video element */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+          {/* Video will go here:
+          <video 
+            autoPlay 
+            muted 
+            loop 
+            className="absolute inset-0 w-full h-full object-cover"
+          >
+            <source src="/path-to-your-video.mp4" type="video/mp4" />
+          </video>
+          */}
+        </div>
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-black bg-opacity-40"></div>
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 w-full max-w-md mx-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
           {/* Logo */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
               Glow
             </h1>
-            <p className="text-gray-600 mt-2">Welcome back</p>
+            <p className="text-gray-600 mt-2">Create your account</p>
           </div>
 
           {/* Error Message */}
@@ -96,20 +111,50 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Login Form */}
+          {/* Registration Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email or Username
+                Full Name
               </label>
               <input
                 type="text"
-                name="emailOrUsername"
-                value={formData.emailOrUsername}
+                name="fullName"
+                value={formData.fullName}
                 onChange={handleChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Enter your email or username"
+                placeholder="Enter your full name"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Choose a username"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Enter your email"
               />
             </div>
 
@@ -124,25 +169,23 @@ export default function LoginPage() {
                 onChange={handleChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Enter your password"
+                placeholder="Create a password"
               />
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-600">Remember me</span>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
               </label>
-              <Link
-                href="/(website)/(Auth)/ForgotPassword"
-                className="text-sm text-purple-600 hover:text-purple-500"
-              >
-                Forgot password?
-              </Link>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Confirm your password"
+              />
             </div>
 
             <button
@@ -150,7 +193,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
-              {loading ? 'Signing In...' : 'Sign In'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 
@@ -176,25 +219,15 @@ export default function LoginPage() {
             Continue with Google
           </button>
 
-          {/* Sign Up Link */}
+          {/* Sign In Link */}
           <p className="mt-6 text-center text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Link href="/(website)/(Auth)/Register.jsx" className="text-purple-600 hover:text-purple-500 font-medium">
-              Sign up
+            Already have an account?{' '}
+            <Link href="/(website)/(Auth)/Login" className="text-purple-600 hover:text-purple-500 font-medium">
+              Sign in
             </Link>
           </p>
         </div>
-
-        {/* Feature highlights */}
-        <div className="mt-8 text-center text-white">
-          <p className="text-sm opacity-90 mb-4">Join thousands of creators building amazing websites</p>
-          <div className="flex justify-center space-x-6 text-xs opacity-75">
-            <span>🚀 No-code builder</span>
-            <span>💰 $1 lifetime</span>
-            <span>🛒 E-commerce ready</span>
-          </div>
-        </div>
       </div>
-    </VideoBackground>
+    </div>
   );
 }

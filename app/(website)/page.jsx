@@ -101,13 +101,13 @@ function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6">
-              Build & Sell Online
+              Build Any Website
               <span className="block bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
                 Without Code
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-              Create stunning e-commerce websites with our visual editor. From product catalogs to payment processing - everything you need to start selling online.
+              Create stunning websites with our visual editor. From portfolios and blogs to e-commerce stores and business sites - build anything you can imagine.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link href="/Editor">
@@ -148,7 +148,7 @@ function HomePage() {
               Everything You Need to Create
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Powerful features that make website building simple, fast, and enjoyable.
+              Powerful features for any type of website - from personal portfolios to enterprise solutions.
             </p>
           </div>
 
@@ -196,12 +196,12 @@ function HomePage() {
             <div className="bg-gradient-to-br from-orange-50 to-white p-8 rounded-2xl border border-orange-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-6">
                 <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9.5a2.5 2.5 0 00-2.5-2.5H15" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Designer Templates</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Professional Templates</h3>
               <p className="text-gray-600">
-                Start with professionally designed templates or build from scratch. Hundreds of layouts for every industry.
+                Start with beautiful templates for any industry - portfolios, blogs, business sites, landing pages, and online stores.
               </p>
             </div>
 
@@ -227,61 +227,101 @@ function HomePage() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-3">E-commerce Ready</h3>
               <p className="text-gray-600">
-                Built-in shopping cart, payment processing, inventory management, and order tracking. Everything you need to sell online.
+                Need to sell online? Built-in shopping cart, payment processing, and inventory management make e-commerce simple.
               </p>
             </div>
           </div>
 
-          {/* E-commerce Features Grid */}
+          {/* Website Types Grid */}
           <div className="mt-20">
             <div className="text-center mb-16">
               <h3 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">
-                E-commerce Made Simple
+                Perfect for Any Website Type
               </h3>
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Everything you need to start selling online, from products to payments.
+                Whatever you're building, Glow has the tools and features you need.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="text-center p-6 bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100">
-                <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M8 11v2a4 4 0 008 0v-2M8 11h8" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Product Catalog</h4>
-                <p className="text-sm text-gray-600">Unlimited products with variants, images, and descriptions</p>
-              </div>
-
               <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100">
                 <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Secure Payments</h4>
-                <p className="text-sm text-gray-600">Accept all major credit cards and digital wallets</p>
+                <h4 className="font-semibold text-gray-900 mb-2">Portfolios</h4>
+                <p className="text-sm text-gray-600">Showcase your work with stunning galleries and layouts</p>
+              </div>
+
+              <div className="text-center p-6 bg-gradient-to-br from-green-50 to-white rounded-xl border border-green-100">
+                <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Blogs</h4>
+                <p className="text-sm text-gray-600">Create engaging content sites with rich text and media</p>
               </div>
 
               <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-100">
                 <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Analytics Dashboard</h4>
-                <p className="text-sm text-gray-600">Track sales, customers, and performance metrics</p>
+                <h4 className="font-semibold text-gray-900 mb-2">Business Sites</h4>
+                <p className="text-sm text-gray-600">Professional websites for companies and services</p>
               </div>
 
               <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-white rounded-xl border border-orange-100">
                 <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.293 2.293A1 1 0 005 16h1.586m0 0L7 13m0 0l-2.293 2.293A1 1 0 005 16h1.586m0 0v4a2 2 0 002 2h2a2 2 0 002-2v-4m-6 0h6" />
                   </svg>
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Inventory Management</h4>
-                <p className="text-sm text-gray-600">Real-time stock tracking and low inventory alerts</p>
+                <h4 className="font-semibold text-gray-900 mb-2">Online Stores</h4>
+                <p className="text-sm text-gray-600">Full e-commerce with payments and inventory management</p>
+              </div>
+
+              <div className="text-center p-6 bg-gradient-to-br from-pink-50 to-white rounded-xl border border-pink-100">
+                <div className="w-10 h-10 bg-pink-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Landing Pages</h4>
+                <p className="text-sm text-gray-600">High-converting pages for marketing campaigns</p>
+              </div>
+
+              <div className="text-center p-6 bg-gradient-to-br from-cyan-50 to-white rounded-xl border border-cyan-100">
+                <div className="w-10 h-10 bg-cyan-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Documentation</h4>
+                <p className="text-sm text-gray-600">Knowledge bases and help centers</p>
+              </div>
+
+              <div className="text-center p-6 bg-gradient-to-br from-yellow-50 to-white rounded-xl border border-yellow-100">
+                <div className="w-10 h-10 bg-yellow-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Event Sites</h4>
+                <p className="text-sm text-gray-600">Conferences, weddings, and event management</p>
+              </div>
+
+              <div className="text-center p-6 bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100">
+                <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Non-Profit</h4>
+                <p className="text-sm text-gray-600">Fundraising and community organization sites</p>
               </div>
             </div>
           </div>
@@ -328,13 +368,13 @@ function HomePage() {
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Full e-commerce suite</span>
+                    <span>Any website type</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Secure payment processing</span>
+                    <span>E-commerce capabilities</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
@@ -389,10 +429,10 @@ function HomePage() {
       <section className="py-20 bg-gradient-to-r from-purple-600 to-blue-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-            Start Your E-commerce Journey Today
+            Start Building Your Dream Website Today
           </h2>
           <p className="text-xl text-purple-100 mb-4">
-            Join thousands of entrepreneurs who are building profitable online stores with Glow.
+            Join thousands of creators building amazing websites with Glow.
           </p>
           <p className="text-2xl font-bold text-white mb-8">
             🎉 Special Launch Price: Only $1 for Lifetime Access! 🎉
@@ -404,7 +444,7 @@ function HomePage() {
               </button>
             </Link>
             <button className="border-2 border-white text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-white hover:text-purple-600 transition-all duration-200">
-              View Live Demos
+              View Website Examples
             </button>
           </div>
         </div>
@@ -419,7 +459,7 @@ function HomePage() {
                 Glow
               </span>
               <p className="mt-4 text-gray-400">
-                The visual website builder that empowers everyone to create stunning websites without code.
+                The visual website builder that empowers everyone to create any type of website without code.
               </p>
             </div>
             <div>
