@@ -2,9 +2,11 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '../../contexts/AuthContext';
 
 function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, userData, loading } = useAuth();
 
   return (
     <div className="min-h-screen bg-white">
@@ -41,14 +43,42 @@ function HomePage() {
 
             {/* CTA Buttons */}
             <div className="hidden md:flex items-center space-x-4">
-              <button className="text-gray-700 hover:text-purple-600 px-4 py-2 text-sm font-medium">
-                Sign In
-              </button>
-              <Link href="/Editor">
-                <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg">
-                  Start Building
-                </button>
-              </Link>
+              {!loading && (
+                <>
+                  {user ? (
+                    // User is logged in
+                    <div className="flex items-center space-x-4">
+                      <Link href={`/${userData?.username || user.uid}/Dashboard`}>
+                        <button className="text-gray-700 hover:text-purple-600 px-4 py-2 text-sm font-medium">
+                          Dashboard
+                        </button>
+                      </Link>
+                      <Link href="/Editor">
+                        <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg">
+                          Start Building
+                        </button>
+                      </Link>
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <span>Welcome, {userData?.fullName || user?.displayName || 'User'}!</span>
+                      </div>
+                    </div>
+                  ) : (
+                    // User is not logged in
+                    <>
+                      <Link href="/Login">
+                        <button className="text-gray-700 hover:text-purple-600 px-4 py-2 text-sm font-medium">
+                          Sign In
+                        </button>
+                      </Link>
+                      <Link href="/Signup">
+                        <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg">
+                          Start Building
+                        </button>
+                      </Link>
+                    </>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -82,14 +112,42 @@ function HomePage() {
                 About
               </a>
               <div className="pt-4 pb-3 border-t border-gray-200">
-                <button className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium w-full text-left">
-                  Sign In
-                </button>
-                <Link href="/Editor">
-                  <button className="mt-2 w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-lg text-base font-medium">
-                    Start Building
-                  </button>
-                </Link>
+                {!loading && (
+                  <>
+                    {user ? (
+                      // User is logged in
+                      <>
+                        <div className="px-3 py-2 text-sm text-gray-600">
+                          Welcome, {userData?.fullName || user?.displayName || 'User'}!
+                        </div>
+                        <Link href={`/${userData?.username || user.uid}/Dashboard`}>
+                          <button className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium w-full text-left">
+                            Dashboard
+                          </button>
+                        </Link>
+                        <Link href="/Editor">
+                          <button className="mt-2 w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-lg text-base font-medium">
+                            Start Building
+                          </button>
+                        </Link>
+                      </>
+                    ) : (
+                      // User is not logged in
+                      <>
+                        <Link href="/Login">
+                          <button className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium w-full text-left">
+                            Sign In
+                          </button>
+                        </Link>
+                        <Link href="/Signup">
+                          <button className="mt-2 w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-lg text-base font-medium">
+                            Start Building
+                          </button>
+                        </Link>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -110,11 +168,23 @@ function HomePage() {
               Create stunning websites with our visual editor. From portfolios and blogs to e-commerce stores and business sites - build anything you can imagine.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/Editor">
-                <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1">
-                  Start Building Free
-                </button>
-              </Link>
+              {!loading && (
+                <>
+                  {user ? (
+                    <Link href="/Editor">
+                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1">
+                        Continue Building
+                      </button>
+                    </Link>
+                  ) : (
+                    <Link href="/Signup">
+                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1">
+                        Start Building Free
+                      </button>
+                    </Link>
+                  )}
+                </>
+              )}
               <button className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-xl text-lg font-semibold hover:border-purple-300 hover:text-purple-600 transition-all duration-200">
                 Watch Demo
               </button>
@@ -411,11 +481,23 @@ function HomePage() {
                 </div>
               </div>
               
-              <Link href="/Editor">
-                <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 w-full md:w-auto">
-                  Get Lifetime Access - $1
-                </button>
-              </Link>
+              {!loading && (
+                <>
+                  {user ? (
+                    <Link href="/Editor">
+                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 w-full md:w-auto">
+                        Continue Building
+                      </button>
+                    </Link>
+                  ) : (
+                    <Link href="/Signup">
+                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 w-full md:w-auto">
+                        Get Lifetime Access - $1
+                      </button>
+                    </Link>
+                  )}
+                </>
+              )}
               
               <p className="text-sm text-gray-500 mt-4">
                 💳 Secure payment • 🔒 30-day money back guarantee • 🚀 Instant access
@@ -438,11 +520,23 @@ function HomePage() {
             🎉 Special Launch Price: Only $1 for Lifetime Access! 🎉
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/Editor">
-              <button className="bg-white text-purple-600 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-50 transition-all duration-200 shadow-lg">
-                Get Started - $1 Lifetime
-              </button>
-            </Link>
+            {!loading && (
+              <>
+                {user ? (
+                  <Link href="/Editor">
+                    <button className="bg-white text-purple-600 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-50 transition-all duration-200 shadow-lg">
+                      Continue Building
+                    </button>
+                  </Link>
+                ) : (
+                  <Link href="/Signup">
+                    <button className="bg-white text-purple-600 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-50 transition-all duration-200 shadow-lg">
+                      Get Started - $1 Lifetime
+                    </button>
+                  </Link>
+                )}
+              </>
+            )}
             <button className="border-2 border-white text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-white hover:text-purple-600 transition-all duration-200">
               View Website Examples
             </button>

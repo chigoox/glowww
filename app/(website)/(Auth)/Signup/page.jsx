@@ -10,6 +10,7 @@ export default function RegisterPage() {
     fullName: '',
     username: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: ''
   });
@@ -50,7 +51,7 @@ export default function RegisterPage() {
     }
 
     try {
-      await createUser(formData.email, formData.password, formData.username, formData.fullName);
+      await createUser(formData.email, formData.password, formData.username, formData.fullName, formData.phone);
       router.push('/Editor'); // Redirect to main app
     } catch (error) {
       setError(error.message);
@@ -155,6 +156,22 @@ export default function RegisterPage() {
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Enter your email"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                pattern="[0-9]{10,15}"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Enter your phone number"
               />
             </div>
 
