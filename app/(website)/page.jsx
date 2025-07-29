@@ -48,7 +48,7 @@ function HomePage() {
                   {user ? (
                     // User is logged in
                     <div className="flex items-center space-x-4">
-                      <Link href={`/${userData?.username || user.uid}/Dashboard`}>
+                      <Link href="/dashboard">
                         <button className="text-gray-700 hover:text-purple-600 px-4 py-2 text-sm font-medium">
                           Dashboard
                         </button>
@@ -120,7 +120,7 @@ function HomePage() {
                         <div className="px-3 py-2 text-sm text-gray-600">
                           Welcome, {userData?.fullName || user?.displayName || 'User'}!
                         </div>
-                        <Link href={`/${userData?.username || user.uid}/Dashboard`}>
+                        <Link href="/dashboard">
                           <button className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium w-full text-left">
                             Dashboard
                           </button>

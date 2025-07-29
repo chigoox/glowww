@@ -75,7 +75,7 @@ service cloud.firestore {
 ## 8. Test Authentication
 
 1. Start your development server: `npm run dev`
-2. Navigate to `/Login` or `/Register.jsx` 
+2. Navigate to `/Login` or `/Signup` 
 3. Test registration with email/password
 4. Test Google sign-in
 5. Test username login

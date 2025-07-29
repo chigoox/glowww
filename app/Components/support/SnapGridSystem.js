@@ -382,10 +382,10 @@ class SnapGridSystem {
       .filter(([id]) => id !== draggedElementId)
       .map(([, info]) => info);
 
-    console.log('🔧 Other elements for distance calc:', otherElements.map(el => el ? ({
+    console.log('🔧 Other elements for distance calc:', otherElements.map(el => ({
       id: el.id,
       bounds: el.bounds
-    }) : null).filter(Boolean));
+    })));
 
     const TOUCHING_THRESHOLD = 3; // Consider elements as "touching" if closer than 3px
 

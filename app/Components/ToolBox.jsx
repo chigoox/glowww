@@ -380,7 +380,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           </div>
         )}
 
-      {/* Enhanced Drawer - Figma-like bottom positioned */}
+      {/* Enhanced Drawer - Full height like Figma */}
       <Drawer
         title={false}
         placement="bottom"
@@ -394,7 +394,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           bottom: '80px',
           left: '50%',
           transform: 'translateX(-50%)',
-          height: '300px',
+          height: 'calc(100vh - 100px)',
           width: '400px',
           zIndex: 40,
         }}
@@ -411,7 +411,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
             bottom: '80px',
             left: '50%',
             transform: 'translateX(-50%)',
-            height: '300px',
+            height: 'calc(100vh - 100px)',
             width: '400px',
             zIndex: 40,
             boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)'

@@ -40,7 +40,7 @@ export default function LoginPage() {
         // Sign in with username
         await signInWithUsername(formData.emailOrUsername, formData.password);
       }
-      router.push('/Editor'); // Redirect to main app
+      router.push('/dashboard'); // Redirect to dashboard to manage sites
     } catch (error) {
       if (error.code === 'auth/user-not-found') {
         setError('No account found with this email/username');
@@ -63,7 +63,7 @@ export default function LoginPage() {
     setError('');
     try {
       await signInWithGoogle();
-      router.push('/Editor');
+      router.push('/dashboard'); // Redirect to dashboard for site management
     } catch (error) {
       setError(error.message);
     } finally {
@@ -73,8 +73,7 @@ export default function LoginPage() {
 
   return (
     <VideoBackground 
-      videoSrc="/videos/auth-background.mp4" // Add your video file here
-      poster="/images/auth-poster.jpg" // Add your poster image here
+      // Remove video and poster since files don't exist
       overlay={true}
       overlayOpacity={0.4}
       className="min-h-screen flex items-center justify-center"
@@ -179,7 +178,7 @@ export default function LoginPage() {
           {/* Sign Up Link */}
           <p className="mt-6 text-center text-sm text-gray-600">
             Don't have an account?{' '}
-            <Link href="/(website)/(Auth)/Register.jsx" className="text-purple-600 hover:text-purple-500 font-medium">
+            <Link href="/Signup" className="text-purple-600 hover:text-purple-500 font-medium">
               Sign up
             </Link>
           </p>

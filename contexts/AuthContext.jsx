@@ -27,6 +27,15 @@ export const AuthProvider = ({ children }) => {
         // Get additional user data from Firestore
         const additionalUserData = await getUserData(firebaseUser.uid);
         setUserData(additionalUserData);
+        
+        // Enhance user object with userData for easier access
+        const enhancedUser = {
+          ...firebaseUser,
+          username: additionalUserData?.username,
+          fullName: additionalUserData?.fullName,
+          subscription: additionalUserData?.subscription || { plan: 'free', status: 'active' }
+        };
+        setUser(enhancedUser);
       } else {
         setUser(null);
         setUserData(null);

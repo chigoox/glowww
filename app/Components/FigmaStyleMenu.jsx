@@ -994,11 +994,7 @@ export const FigmaStyleMenu = ({
       borderRadius: 8,
       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
       fontSize: 12,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      height: '100%',
-      border: 'none     ',
-      overflow: 'scroll',
-      padding: '0px 0px 90px 0px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       {/* Header */}
       <div style={{
@@ -1021,7 +1017,7 @@ export const FigmaStyleMenu = ({
         )}
       </div>
 
-      <div style={{ padding: 12,  }}>
+      <div style={{ padding: 12 }}>
         {/* Basic Properties Section */}
         <Section icon={<BorderOutlined />} title="Basic Properties" defaultCollapsed={false}>
           <Row>
@@ -2082,138 +2078,6 @@ export const FigmaStyleMenu = ({
               Set display to 'grid' to access grid properties
             </div>
           )}
-        </Section>
-
-        {/* Grid Item Section */}
-        <Section icon={<MenuOutlined />} title="Grid Item" defaultCollapsed>
-          <Row>
-            <Label>Column Span</Label>
-            <Select
-              value={props.gridColumn || 'auto'}
-              onChange={(value) => debouncedUpdate('gridColumn', value)}
-              size="small"
-              style={{ flex: 1 }}
-              options={[
-                { value: 'auto', label: 'Auto' },
-                { value: 'span 1', label: 'Span 1' },
-                { value: 'span 2', label: 'Span 2' },
-                { value: 'span 3', label: 'Span 3' },
-                { value: 'span 4', label: 'Span 4' },
-                { value: 'span 5', label: 'Span 5' },
-                { value: 'span 6', label: 'Span 6' },
-                { value: '1 / -1', label: 'Full Width' }
-              ]}
-            />
-          </Row>
-          <Row>
-            <Label>Row Span</Label>
-            <Select
-              value={props.gridRow || 'auto'}
-              onChange={(value) => debouncedUpdate('gridRow', value)}
-              size="small"
-              style={{ flex: 1 }}
-              options={[
-                { value: 'auto', label: 'Auto' },
-                { value: 'span 1', label: 'Span 1' },
-                { value: 'span 2', label: 'Span 2' },
-                { value: 'span 3', label: 'Span 3' },
-                { value: 'span 4', label: 'Span 4' },
-                { value: 'span 5', label: 'Span 5' },
-                { value: 'span 6', label: 'Span 6' },
-                { value: '1 / -1', label: 'Full Height' }
-              ]}
-            />
-          </Row>
-          <Row>
-            <Label>Column Start</Label>
-            <InputNumber
-              value={props.gridColumnStart ? parseInt(props.gridColumnStart) : undefined}
-              onChange={(value) => debouncedUpdate('gridColumnStart', value ? value.toString() : '')}
-              size="small"
-              style={{ flex: 1 }}
-              min={1}
-              max={12}
-              placeholder="Auto"
-            />
-          </Row>
-          <Row>
-            <Label>Column End</Label>
-            <InputNumber
-              value={props.gridColumnEnd ? parseInt(props.gridColumnEnd) : undefined}
-              onChange={(value) => debouncedUpdate('gridColumnEnd', value ? value.toString() : '')}
-              size="small"
-              style={{ flex: 1 }}
-              min={1}
-              max={12}
-              placeholder="Auto"
-            />
-          </Row>
-          <Row>
-            <Label>Row Start</Label>
-            <InputNumber
-              value={props.gridRowStart ? parseInt(props.gridRowStart) : undefined}
-              onChange={(value) => debouncedUpdate('gridRowStart', value ? value.toString() : '')}
-              size="small"
-              style={{ flex: 1 }}
-              min={1}
-              max={12}
-              placeholder="Auto"
-            />
-          </Row>
-          <Row>
-            <Label>Row End</Label>
-            <InputNumber
-              value={props.gridRowEnd ? parseInt(props.gridRowEnd) : undefined}
-              onChange={(value) => debouncedUpdate('gridRowEnd', value ? value.toString() : '')}
-              size="small"
-              style={{ flex: 1 }}
-              min={1}
-              max={12}
-              placeholder="Auto"
-            />
-          </Row>
-          <Row>
-            <Label>Grid Area</Label>
-            <Input
-              value={props.gridArea || ''}
-              onChange={(e) => debouncedUpdate('gridArea', e.target.value)}
-              size="small"
-              style={{ flex: 1 }}
-              placeholder="e.g. header, 1 / 1 / 2 / 3"
-            />
-          </Row>
-          <Row>
-            <Label>Justify Self</Label>
-            <Select
-              value={props.justifySelf || 'auto'}
-              onChange={(value) => debouncedUpdate('justifySelf', value)}
-              size="small"
-              style={{ flex: 1 }}
-              options={[
-                { value: 'auto', label: 'Auto' },
-                { value: 'stretch', label: 'Stretch' },
-                { value: 'start', label: 'Start' },
-                { value: 'center', label: 'Center' },
-                { value: 'end', label: 'End' }
-              ]}
-            />
-          </Row>
-          <Row>
-            <Label>Align Self</Label>
-            <Select
-              value={props.alignSelf || 'auto'}
-              onChange={(value) => debouncedUpdate('alignSelf', value)}
-              size="small"
-              style={{ flex: 1 }}
-              options={[
-                { value: 'auto', label: 'Auto' },
-                { value: 'stretch', label: 'Stretch' },
-                { value: 'start', label: 'Start' },
-                { value: 'center', label: 'Center' },
-                { value: 'end', label: 'End' }
-              ]}
-            />
-          </Row>
         </Section>
 
         {/* Table Styling Section */}

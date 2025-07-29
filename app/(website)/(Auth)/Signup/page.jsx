@@ -50,9 +50,24 @@ export default function RegisterPage() {
       return;
     }
 
+    // Check for valid username format (URL-safe)
+    if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
+      setError('Username can only contain letters, numbers, underscores, and hyphens');
+      setLoading(false);
+      return;
+    }
+
+    // Check for reserved usernames
+    const reservedUsernames = ['admin', 'api', 'www', 'mail', 'ftp', 'localhost', 'dashboard', 'editor', 'preview', 'u'];
+    if (reservedUsernames.includes(formData.username.toLowerCase())) {
+      setError('This username is reserved. Please choose another one.');
+      setLoading(false);
+      return;
+    }
+
     try {
       await createUser(formData.email, formData.password, formData.username, formData.fullName, formData.phone);
-      router.push('/Editor'); // Redirect to main app
+      router.push('/dashboard'); // Redirect to dashboard to manage sites
     } catch (error) {
       setError(error.message);
     } finally {
@@ -65,7 +80,7 @@ export default function RegisterPage() {
     setError('');
     try {
       await signInWithGoogle();
-      router.push('/Editor');
+      router.push('/dashboard'); // Redirect to dashboard for site management
     } catch (error) {
       setError(error.message);
     } finally {
@@ -102,7 +117,10 @@ export default function RegisterPage() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
               Glow
             </h1>
-            <p className="text-gray-600 mt-2">Create your account</p>
+            <p className="text-gray-600 mt-2">Create your account and start building websites</p>
+            <div className="mt-3 inline-flex items-center px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">
+              🎉 Your first website is FREE!
+            </div>
           </div>
 
           {/* Error Message */}
@@ -139,9 +157,14 @@ export default function RegisterPage() {
                 value={formData.username}
                 onChange={handleChange}
                 required
+                minLength={3}
+                pattern="[a-zA-Z0-9_-]+"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="Choose a username"
+                placeholder="Choose a unique username"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Your sites will be available at: glow.com/u/yourusername/sitename
+              </p>
             </div>
 
             <div>
@@ -210,7 +233,7 @@ export default function RegisterPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? 'Creating Account...' : 'Create Account & Get Free Website'}
             </button>
           </form>
 
@@ -239,7 +262,7 @@ export default function RegisterPage() {
           {/* Sign In Link */}
           <p className="mt-6 text-center text-sm text-gray-600">
             Already have an account?{' '}
-            <Link href="/(website)/(Auth)/Login" className="text-purple-600 hover:text-purple-500 font-medium">
+            <Link href="/Login" className="text-purple-600 hover:text-purple-500 font-medium">
               Sign in
             </Link>
           </p>
