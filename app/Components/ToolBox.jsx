@@ -259,51 +259,37 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
   const renderDrawerContent = (section) => {
     return (
-      <div className="h-full flex flex-col">
-        {/* Minimal Header like Figma */}
-        <div className="border-b border-gray-100 pb-3 mb-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <Typography.Text className="text-sm font-medium text-gray-700">
-              {section.title}
-            </Typography.Text>
-            <ButtonAD
-              type="text"
-              size="small"
-              icon={<CloseOutlined />}
-              onClick={closeDrawer}
-              className="text-gray-400 hover:text-gray-600 !p-1 !min-w-0 !w-5 !h-5 flex items-center justify-center"
-              style={{ fontSize: '10px' }}
-            />
-          </div>
-        </div>
+      <div className="flex items-center gap-2">
+        {/* Components in horizontal layout like toolbar */}
+        {section.components.map((component, index) => (
+          <Tooltip 
+            key={`${section.id}-${index}`}
+            title={component.description}
+            placement="top"
+            mouseEnterDelay={0.5}
+          >
+            <div
+              ref={component.ref}
+              className="w-12 h-12 p-0 border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all cursor-grab active:cursor-grabbing group bg-white flex items-center justify-center"
+              style={{ userSelect: 'none' }}
+            >
+              <div className="text-lg text-gray-600 group-hover:text-gray-800 transition-colors">
+                {component.icon}
+              </div>
+            </div>
+          </Tooltip>
+        ))}
         
-        {/* Components Grid - Figma style wider layout */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-4 gap-3">
-            {section.components.map((component, index) => (
-              <Tooltip 
-                key={`${section.id}-${index}`}
-                title={component.description}
-                placement="top"
-                mouseEnterDelay={0.5}
-              >
-                <div
-                  ref={component.ref}
-                  className="aspect-square p-3 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-all cursor-grab active:cursor-grabbing group bg-white"
-                  style={{ userSelect: 'none' }}
-                >
-                  <div className="flex flex-col items-center justify-center h-full space-y-2">
-                    <div className="text-xl text-gray-600 group-hover:text-blue-500 transition-colors">
-                      {component.icon}
-                    </div>
-                    <div className="text-xs text-gray-700 font-medium text-center leading-tight">
-                      {component.name}
-                    </div>
-                  </div>
-                </div>
-              </Tooltip>
-            ))}
-          </div>
+        {/* Close button */}
+        <div className="ml-2 pl-2 border-l border-gray-200">
+          <ButtonAD
+            type="text"
+            size="small"
+            icon={<CloseOutlined />}
+            onClick={closeDrawer}
+            className="text-gray-400 hover:text-gray-600 !p-0 !min-w-0 !w-8 !h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+            style={{ fontSize: '12px' }}
+          />
         </div>
       </div>
     );
@@ -380,7 +366,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           </div>
         )}
 
-      {/* Enhanced Drawer - Full height like Figma */}
+      {/* Enhanced Drawer - Same height as toolbar, width to fit content */}
       <Drawer
         title={false}
         placement="bottom"
@@ -391,35 +377,39 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         maskClosable={true}
         style={{
           position: 'fixed',
-          bottom: '80px',
+          bottom: '2rem',
           left: '50%',
           transform: 'translateX(-50%)',
-          height: 'calc(100vh - 100px)',
-          width: '400px',
+          height: 'auto',
+          width: 'auto',
           zIndex: 40,
         }}
         styles={{
           header: { display: 'none' },
           body: {
-            height: '100%',
-            padding: '16px',
-            backgroundColor: '#fafafa',
-            borderRadius: '12px'
+            height: '64px',
+            padding: '8px 16px',
+            backgroundColor: '#ffffff',
+            borderRadius: '32px',
+            border: '1px solid #e5e7eb',
+            display: 'flex',
+            alignItems: 'center'
           },
           wrapper: {
             position: 'fixed',
-            bottom: '80px',
+            bottom: '2rem',
             left: '50%',
             transform: 'translateX(-50%)',
-            height: 'calc(100vh - 100px)',
-            width: '400px',
+            height: 'auto',
+            width: 'auto',
             zIndex: 40,
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)'
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
           },
           content: {
             zIndex: 40,
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb'
+            borderRadius: '32px',
+            border: 'none',
+            backgroundColor: 'transparent'
           }
         }}
         getContainer={false}

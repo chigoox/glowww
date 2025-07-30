@@ -988,7 +988,9 @@ export const FigmaStyleMenu = ({
 
   return (
     <div style={{
-      width: 260,
+      width: '100%',
+      minWidth: 260,
+      maxWidth: 320,
       backgroundColor: '#fff',
       border: '1px solid #e0e0e0',
       borderRadius: 8,

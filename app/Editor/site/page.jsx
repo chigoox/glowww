@@ -536,7 +536,9 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
 
           {/* Right Sidebar - Style Menu */}
           {enabled && (
-            <div className="w-80 bg-white border-l border-gray-200 shadow-sm min-w-48 flex-shrink-0">
+            <div className={`bg-white border-l border-gray-200 shadow-sm flex-shrink-0 ${
+              useFigmaStyle ? 'w-80 min-w-80' : 'w-auto min-w-96'
+            }`}>
               <div className="h-full overflow-y-auto">
                 <StyleMenu useFigmaStyle={useFigmaStyle} />
               </div>
