@@ -614,6 +614,29 @@ placeContent,
           canvasHeight={RootRef.current?.offsetHeight || 800}
         />
       )}
+      
+      {/* Empty State Drop Zone Indicator - Only show when no children and in edit mode */}
+      {!hideEditorUI && (!children || (React.Children.count(children) === 0)) && (
+        <div 
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%)',
+            border: '3px dashed rgba(99, 102, 241, 0.4)',
+            borderRadius: '12px',
+            minHeight: '580px',
+            margin: '10px'
+          }}
+        >
+          <div className="text-center text-gray-600 p-8">
+            <div className="text-8xl mb-6">🎨</div>
+            <div className="text-2xl font-bold mb-3 text-gray-800">Ready to Build!</div>
+            <div className="text-lg mb-4 text-gray-700">Drag components from the toolbox to start creating your page</div>
+            <div className="text-sm text-gray-500 bg-white/80 rounded-lg px-4 py-2 inline-block">
+              This empty canvas is ready for your first component
+            </div>
+          </div>
+        </div>
+      )}
      
       {children}
       
@@ -645,7 +668,8 @@ Root.craft = {
     
     // Layout & Position
     width: "auto",
-    height: "auto",
+    height: "600px",
+    minHeight: "600px",
     maxWidth: '100vh',
     display: "block",
     position: "relative",
@@ -663,7 +687,7 @@ Root.craft = {
     
     // Spacing
     margin: "none",
-    padding: 0,
+    padding: 20,
     
     // Border
     border: "none",

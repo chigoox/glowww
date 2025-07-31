@@ -83,6 +83,11 @@ const SitePageSelector = ({ siteId, currentPageId, onPageChange }) => {
       // Reload pages to include the new page
       await loadPages();
       
+      // Clear the parent's page cache to ensure fresh loading
+      if (window.refreshPageCache) {
+        window.refreshPageCache();
+      }
+      
       message.success(`Page "${newPageName}" created successfully`);
       setNewPageModalVisible(false);
       setNewPageName('');
