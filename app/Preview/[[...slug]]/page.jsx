@@ -5,28 +5,28 @@ import { useParams } from 'next/navigation';
 import { Editor, Element, Frame } from "@craftjs/core";
 
 // Import all user components for rendering
-import { Box } from '../Components/user/Box';
-import { FlexBox } from '../Components/user/FlexBox';
-import { Text } from '../Components/user/Text';
-import { GridBox } from '../Components/user/GridBox';
-import { Image } from '../Components/user/Image';
-import { Button } from '../Components/user/Button';
-import { Link } from '../Components/user/Link';
-import { Paragraph } from '../Components/user/Paragraph';
-import { Video } from '../Components/user/Video';
-import { ShopFlexBox, ShopImage, ShopText } from '../Components/user/Advanced/ShopFlexBox';
-import { FormInput } from '../Components/user/Input';
-import { Form, FormInputDropArea } from '../Components/user/Advanced/Form';
-import { Carousel } from '../Components/user/Carousel';
-import { NavBar, NavItem } from '../Components/user/Nav/NavBar';
-import { Root } from '../Components/Root';
+import { Box } from '../../Components/user/Box';
+import { FlexBox } from '../../Components/user/FlexBox';
+import { Text } from '../../Components/user/Text';
+import { GridBox } from '../../Components/user/GridBox';
+import { Image } from '../../Components/user/Image';
+import { Button } from '../../Components/user/Button';
+import { Link } from '../../Components/user/Link';
+import { Paragraph } from '../../Components/user/Paragraph';
+import { Video } from '../../Components/user/Video';
+import { ShopFlexBox, ShopImage, ShopText } from '../../Components/user/Advanced/ShopFlexBox';
+import { FormInput } from '../../Components/user/Input';
+import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
+import { Carousel } from '../../Components/user/Carousel';
+import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
+import { Root } from '../../Components/Root';
 
 // Import save operations hook to load auto-saved projects
-import useSaveOperations from '../Components/support/useSaveOperations';
+import useSaveOperations from '../../Components/support/useSaveOperations';
 
 // Import context providers needed for preview
-import { MultiSelectProvider } from '../Components/support/MultiSelectContext';
-import { PagesProvider } from '../Components/PagesContext';
+import { MultiSelectProvider } from '../../Components/support/MultiSelectContext';
+import { PagesProvider } from '../../Components/PagesContext';
 
 /**
  * Preview Page Component
