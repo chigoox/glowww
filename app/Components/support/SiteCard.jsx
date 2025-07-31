@@ -60,17 +60,15 @@ const SiteCard = ({
       setThumbnailLoading(true);
       setThumbnailError(false);
       
-      // Try to get cached or generate thumbnail
       const thumbnailData = await getCachedOrGenerateThumbnail(site, username);
       
       if (thumbnailData) {
         setThumbnail(thumbnailData);
       } else {
-        // If no thumbnail data, use placeholder
-        setThumbnail(getThumbnailPlaceholder(site));
+        throw new Error('Failed to generate thumbnail');
       }
     } catch (error) {
-      console.warn('Thumbnail generation failed, using placeholder:', error.message);
+      console.error('Error loading thumbnail:', error);
       setThumbnailError(true);
       setThumbnail(getThumbnailPlaceholder(site));
     } finally {

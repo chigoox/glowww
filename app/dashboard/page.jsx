@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserSites, createSite, deleteSite, updateSite, canCreateSite, getUserPlan } from '../../lib/sites';
+import { getUserSites, createSite, deleteSite, updateSite, canCreateSite } from '../../lib/sites';
 import { signOut } from '../../lib/auth';
 import { PRICING_PLANS, createCheckoutSession } from '../../lib/stripe';
 import { UpgradeBenefits } from '../Components/support/SubscriptionComponents';
@@ -68,14 +68,10 @@ export default function Dashboard() {
   const [processingCreate, setProcessingCreate] = useState(false);
   const [selectedSite, setSelectedSite] = useState(null);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [siteToDelete, setSiteToDelete] = useState(null);
-  const [userPlan, setUserPlan] = useState(null);
 
   // Load user sites on component mount
   useEffect(() => {
     if (user && !authLoading) {
-      console.log('Available pricing plans:', Object.keys(PRICING_PLANS)); // Debug log
       loadUserSites();
     }
   }, [user, authLoading]);
@@ -83,18 +79,8 @@ export default function Dashboard() {
   const loadUserSites = async () => {
     try {
       setLoading(true);
-      console.log('Loading user sites and plan for user:', user.uid); // Debug log
-      
-      const [userSites, userPlanData] = await Promise.all([
-        getUserSites(user.uid),
-        getUserPlan(user.uid)
-      ]);
-      
-      console.log('Loaded user sites:', userSites.length); // Debug log
-      console.log('Loaded user plan data:', userPlanData); // Debug log
-      
+      const userSites = await getUserSites(user.uid);
       setSites(userSites);
-      setUserPlan(userPlanData);
       
       // Check for cached thumbnails
       if (userSites.length > 0) {
@@ -170,31 +156,33 @@ export default function Dashboard() {
   };
 
   const handleDeleteSite = (site) => {
-    console.log('Delete button clicked for site:', site.name); // Debug log
-    setSiteToDelete(site);
-    setShowDeleteModal(true);
-  };
-
-  const confirmDeleteSite = async () => {
-    if (!siteToDelete) return;
-    
-    console.log('Delete confirmed for site:', siteToDelete.name); // Debug log
-    try {
-      await deleteSite(user.uid, siteToDelete.id);
-      message.success(`Site "${siteToDelete.name}" deleted successfully`);
-      loadUserSites();
-      setShowDeleteModal(false);
-      setSiteToDelete(null);
-    } catch (error) {
-      console.error('Error deleting site:', error);
-      message.error(`Failed to delete site: ${error.message}`);
-    }
-  };
-
-  const cancelDeleteSite = () => {
-    console.log('Delete cancelled for site:', siteToDelete?.name); // Debug log
-    setShowDeleteModal(false);
-    setSiteToDelete(null);
+    confirm({
+      title: 'Delete Site',
+      content: (
+        <div>
+          <p>Are you sure you want to delete <strong>"{site.name}"</strong>?</p>
+          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+            ⚠️ This action cannot be undone. All pages and content will be permanently deleted.
+          </p>
+          <p style={{ marginTop: 8 }}>
+            Public URL: <Text code>{`${window.location.origin}/u/${user.username}/${site.name}`}</Text>
+          </p>
+        </div>
+      ),
+      okText: 'Delete Forever',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        try {
+          await deleteSite(user.uid, site.id);
+          message.success(`Site "${site.name}" deleted successfully`);
+          loadUserSites();
+        } catch (error) {
+          console.error('Error deleting site:', error);
+          message.error(`Failed to delete site: ${error.message}`);
+        }
+      }
+    });
   };
 
   const handleTogglePublish = async (site) => {
@@ -212,7 +200,7 @@ export default function Dashboard() {
       if (isPublishing) {
         try {
           message.info('Generating thumbnail for published site...');
-          const { generateSiteThumbnail } = await import('../../../lib/thumbnails');
+          const { generateSiteThumbnail } = await import('../../lib/thumbnails');
           const username = user?.username || user?.displayName || 'user';
           await generateSiteThumbnail(site, username);
           message.success('Thumbnail generated successfully!');
@@ -403,24 +391,6 @@ export default function Dashboard() {
 
   // Get user's current plan info
   const getCurrentPlan = () => {
-    console.log('getCurrentPlan called - userPlan:', userPlan); // Debug log
-    
-    // If we have the user's actual plan from database, use that
-    if (userPlan && userPlan.plan) {
-      const planKey = userPlan.plan;
-      console.log('Plan from Firebase:', planKey, 'Available plans:', Object.keys(PRICING_PLANS)); // Debug log
-      
-      if (PRICING_PLANS[planKey]) {
-        console.log('Using Firebase plan:', planKey); // Debug log
-        return PRICING_PLANS[planKey];
-      } else {
-        console.log('Plan key not found in PRICING_PLANS:', planKey); // Debug log
-      }
-    } else {
-      console.log('No userPlan data available, using fallback'); // Debug log
-    }
-    
-    // Fallback to site count-based logic for display purposes
     const siteCount = sites.length;
     let currentPlan = PRICING_PLANS.free;
     
@@ -429,14 +399,10 @@ export default function Dashboard() {
       currentPlan = PRICING_PLANS.free;
     } else if (siteCount <= 5) {
       currentPlan = PRICING_PLANS.pro;
-    } else if (siteCount <= 25) {
-      currentPlan = PRICING_PLANS.business;
     } else {
-      // If user has more than 25 sites but no plan data, might be admin
       currentPlan = PRICING_PLANS.business;
     }
     
-    console.log('Using fallback plan:', currentPlan.id); // Debug log
     return currentPlan;
   };
 
@@ -515,13 +481,6 @@ export default function Dashboard() {
               >
                 Upgrade Plan
               </Button>
-            </Col>
-          )}
-          {currentPlan.id === 'admin' && (
-            <Col>
-              <Tag color="purple" style={{ fontSize: '12px', padding: '4px 8px' }}>
-                👑 Admin Access
-              </Tag>
             </Col>
           )}
         </Row>
@@ -681,32 +640,6 @@ export default function Dashboard() {
         user={user}
         onSiteUpdated={handleSiteUpdated}
       />
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        title="Delete Site"
-        open={showDeleteModal}
-        onOk={confirmDeleteSite}
-        onCancel={cancelDeleteSite}
-        okText="Delete Forever"
-        okType="danger"
-        cancelText="Cancel"
-        centered
-        zIndex={10001}
-        confirmLoading={false}
-      >
-        <div>
-          <p>Are you sure you want to delete <strong>"{siteToDelete?.name}"</strong>?</p>
-          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-            ⚠️ This action cannot be undone. All pages and content will be permanently deleted.
-          </p>
-          {siteToDelete && (
-            <p style={{ marginTop: 8 }}>
-              Public URL: <Text code>{`${window.location.origin}/u/${user.username}/${siteToDelete.name}`}</Text>
-            </p>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }
