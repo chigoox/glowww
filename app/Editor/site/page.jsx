@@ -47,7 +47,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   const [pageContentCache, setPageContentCache] = useState({}); // Cache page content
   const [isLoadingPage, setIsLoadingPage] = useState(false); // Loading state for page switches
   const [isInitialized, setIsInitialized] = useState(false);
-  
+  console.log(pages)
   // Auto-save functionality
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
@@ -975,7 +975,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                       <span className="text-purple-500">• Switching page...</span>
                     )}
                     {currentPageId !== 'home' && (
-                      <span className="text-purple-600">• Page: {currentPageId}</span>
+                      <></>
                     )}
                   </div>
                 </div>
@@ -1189,7 +1189,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
               openMenuNodeId={openMenuNodeId}
               setOpenMenuNodeId={setOpenMenuNodeId}
             />
-            <div className='border-2 h-full flex-1 min-h-0'>
+            <div className=' h-full flex-1 min-h-0'>
               <EditorLayers />
             </div>
           </div>
