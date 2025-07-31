@@ -68,6 +68,8 @@ export default function Dashboard() {
   const [processingCreate, setProcessingCreate] = useState(false);
   const [selectedSite, setSelectedSite] = useState(null);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [siteToDelete, setSiteToDelete] = useState(null);
 
   // Load user sites on component mount
   useEffect(() => {
@@ -156,33 +158,31 @@ export default function Dashboard() {
   };
 
   const handleDeleteSite = (site) => {
-    confirm({
-      title: 'Delete Site',
-      content: (
-        <div>
-          <p>Are you sure you want to delete <strong>"{site.name}"</strong>?</p>
-          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-            ⚠️ This action cannot be undone. All pages and content will be permanently deleted.
-          </p>
-          <p style={{ marginTop: 8 }}>
-            Public URL: <Text code>{`${window.location.origin}/u/${user.username}/${site.name}`}</Text>
-          </p>
-        </div>
-      ),
-      okText: 'Delete Forever',
-      okType: 'danger',
-      cancelText: 'Cancel',
-      onOk: async () => {
-        try {
-          await deleteSite(user.uid, site.id);
-          message.success(`Site "${site.name}" deleted successfully`);
-          loadUserSites();
-        } catch (error) {
-          console.error('Error deleting site:', error);
-          message.error(`Failed to delete site: ${error.message}`);
-        }
-      }
-    });
+    console.log('Delete button clicked for site:', site.name); // Debug log
+    setSiteToDelete(site);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteSite = async () => {
+    if (!siteToDelete) return;
+    
+    console.log('Delete confirmed for site:', siteToDelete.name); // Debug log
+    try {
+      await deleteSite(user.uid, siteToDelete.id);
+      message.success(`Site "${siteToDelete.name}" deleted successfully`);
+      loadUserSites();
+      setShowDeleteModal(false);
+      setSiteToDelete(null);
+    } catch (error) {
+      console.error('Error deleting site:', error);
+      message.error(`Failed to delete site: ${error.message}`);
+    }
+  };
+
+  const cancelDeleteSite = () => {
+    console.log('Delete cancelled for site:', siteToDelete?.name); // Debug log
+    setShowDeleteModal(false);
+    setSiteToDelete(null);
   };
 
   const handleTogglePublish = async (site) => {
@@ -640,6 +640,32 @@ export default function Dashboard() {
         user={user}
         onSiteUpdated={handleSiteUpdated}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        title="Delete Site"
+        open={showDeleteModal}
+        onOk={confirmDeleteSite}
+        onCancel={cancelDeleteSite}
+        okText="Delete Forever"
+        okType="danger"
+        cancelText="Cancel"
+        centered
+        zIndex={10001}
+        confirmLoading={false}
+      >
+        <div>
+          <p>Are you sure you want to delete <strong>"{siteToDelete?.name}"</strong>?</p>
+          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+            ⚠️ This action cannot be undone. All pages and content will be permanently deleted.
+          </p>
+          {siteToDelete && (
+            <p style={{ marginTop: 8 }}>
+              Public URL: <Text code>{`${window.location.origin}/u/${user.username}/${siteToDelete.name}`}</Text>
+            </p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
