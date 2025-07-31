@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSite, updateSite, getSiteData, getPage, updatePage, getSitePages } from '../../../lib/sites';
@@ -1324,7 +1324,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
 };
 
 // Main Site Editor Component
-export default function SiteEditor() {
+function SiteEditor() {
   const { user, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const siteId = searchParams.get('site');
@@ -1422,5 +1422,23 @@ export default function SiteEditor() {
         <SiteEditorLayout siteId={siteId} siteData={site} siteContent={siteContent} />
       </MultiSelectProvider>
     </Editor>
+  );
+}
+
+// Wrap the SiteEditor component in Suspense boundary
+export default function SiteEditorPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh' 
+      }}>
+        <Spin size="large" />
+      </div>
+    }>
+      <SiteEditor />
+    </Suspense>
   );
 }
