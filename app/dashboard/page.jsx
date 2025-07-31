@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserSites, createSite, deleteSite, updateSite, canCreateSite } from '../../lib/sites';
+import { signOut } from '../../lib/auth';
 import { PRICING_PLANS, createCheckoutSession } from '../../lib/stripe';
 import { UpgradeBenefits } from '../Components/support/SubscriptionComponents';
 import SiteCard from '../Components/support/SiteCard';
@@ -36,7 +37,8 @@ import {
   RocketOutlined,
   SettingOutlined,
   ShareAltOutlined,
-  CopyOutlined
+  CopyOutlined,
+  LogoutOutlined
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
@@ -48,6 +50,19 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      message.success('Logged out successfully');
+      // Redirect will happen automatically via AuthContext
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Logout error:', error);
+      message.error('Failed to logout');
+    }
+  };
   const [upgradeReason, setUpgradeReason] = useState('');
   const [createForm] = Form.useForm();
   const [processingCreate, setProcessingCreate] = useState(false);
@@ -423,9 +438,20 @@ export default function Dashboard() {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <Title level={2}>Welcome back, {user.displayName || user.email}!</Title>
-        <Text type="secondary">Manage your websites and upgrade your plan</Text>
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <Title level={2} style={{ margin: 0 }}>Welcome back, {user.displayName || user.email}!</Title>
+          <Text type="secondary">Manage your websites and upgrade your plan</Text>
+        </div>
+        <Button 
+          icon={<LogoutOutlined />}
+          onClick={handleLogout}
+          type="text"
+          size="large"
+          style={{ color: '#666' }}
+        >
+          Logout
+        </Button>
       </div>
 
       {/* Plan Status Card */}

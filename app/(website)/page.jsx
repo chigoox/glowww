@@ -3,10 +3,21 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
+import { signOut } from '../../lib/auth';
 
 function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, userData, loading } = useAuth();
+
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      // User will be redirected automatically via AuthContext
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -60,6 +71,12 @@ function HomePage() {
                       </Link>
                       <div className="flex items-center space-x-2 text-sm text-gray-600">
                         <span>Welcome, {userData?.fullName || user?.displayName || 'User'}!</span>
+                        <button 
+                          onClick={handleLogout}
+                          className="text-gray-500 hover:text-red-600 px-2 py-1 text-xs underline"
+                        >
+                          Logout
+                        </button>
                       </div>
                     </div>
                   ) : (

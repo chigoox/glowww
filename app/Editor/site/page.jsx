@@ -149,33 +149,17 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
     editorState: state
   }));
 
-  // Debug editor state changes
-  useEffect(() => {
-    console.log('🎛️ V2: Editor state changed:', {
-      enabled,
-      isInitialized,
-      currentPageId,
-      hasActions: !!actions,
-      hasQuery: !!query,
-      canAdd: !!actions?.add,
-      optionsEnabled: enabled
-    });
-  }, [enabled, isInitialized, currentPageId, actions, query]);
-
   // Load pages on component mount
   useEffect(() => {
     const loadPages = async () => {
       if (!user?.uid || !siteId) return;
       
       try {
-        console.log('📄 Loading site pages for:', siteId);
         const sitePages = await getSitePages(user.uid, siteId);
-        console.log('📄 Loaded pages:', sitePages);
         setPages(sitePages || []);
         
         // Create a default home page if no pages exist
         if (!sitePages || sitePages.length === 0) {
-          console.log('📄 No pages found, creating default structure');
           setPages([
             {
               id: 'home',
@@ -229,29 +213,24 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
           try {
             JSON.parse(cachedContent);
             contentToLoad = cachedContent;
-            console.log('📦 Using cached content for page:', targetPageId);
           } catch (parseError) {
-            console.log('🗑️ Cached content invalid, will try Firebase');
+            // Cached content invalid, will try Firebase
           }
         }
         
         // If no valid cache, load from Firebase page document
         if (!contentToLoad) {
           try {
-            console.log('🔥 Loading page from Firebase document:', targetPageId);
             const pageData = await getPage(user.uid, siteId, targetPageId);
             if (pageData?.content) {
               const pageContent = JSON.stringify(pageData.content);
               const parsed = JSON.parse(pageContent);
               if (parsed.ROOT) {
                 contentToLoad = pageContent;
-                console.log('✅ Loaded page content from Firebase for:', targetPageId, 'Size:', pageContent.length);
               }
-            } else {
-              console.log('📝 No page content found in Firebase for:', targetPageId);
             }
           } catch (error) {
-            console.log('❌ Could not load page from Firebase:', error);
+            console.error('Could not load page from Firebase:', error);
           }
         }
         
@@ -312,11 +291,8 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             // Use setTimeout to ensure clearEvents completes before deserializing
             setTimeout(() => {
               try {
-                console.log('Deserializing validated existing content with rendering fix');
-                
                 // Check if this is an empty page that needs starter content
                 const isEmptyPage = (cleanedContent.ROOT?.nodes?.length || 0) === 0;
-                console.log('🔍 Initial: Empty page detection:', isEmptyPage);
                 
                 // Always use normal deserialization - no automatic content addition
                 actions.deserialize(cleanedContent);
@@ -328,12 +304,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                   [targetPageId]: JSON.stringify(cleanedContent)
                 }));
                 
-                if (isEmptyPage) {
-                  console.log('✅ Initial: Empty page loaded (no automatic content added)');
-                } else {
-                  console.log('✅ Initial: Regular content loaded');
-                }
-                
                 // Set current page ID to the loaded page
                 if (currentPageId !== targetPageId) {
                   setCurrentPageId(targetPageId);
@@ -341,7 +311,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 
                 // Set initialized after successful deserialization
                 setIsInitialized(true);
-                console.log('Editor initialization complete');
                 
               } catch (deserializeError) {
                 console.error('Error during content deserialization:', deserializeError);
@@ -351,7 +320,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             }, 100);
           } else {
             // Load enhanced empty state for new pages with better drop zone
-            console.log('Loading enhanced empty state for page:', targetPageId);
             
             setTimeout(() => {
               const enhancedEmptyState = {
@@ -1129,29 +1097,43 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 </Button>
               </Tooltip>
 
-              {/* Auto-save Frequency Dropdown */}
+              {/* Auto-save Settings */}
               <Dropdown
                 menu={{
                   items: [
                     {
-                      key: '1000',
-                      label: 'Auto-save: 1 second',
-                      onClick: () => setAutoSaveFrequency(1000)
+                      key: '1',
+                      label: `Auto-save: Every ${autoSaveFrequency / 1000}s`,
                     },
+                    { type: 'divider' },
                     {
-                      key: '3000',
-                      label: 'Auto-save: 3 seconds',
-                      onClick: () => setAutoSaveFrequency(3000)
-                    },
-                    {
-                      key: '5000',
-                      label: 'Auto-save: 5 seconds',
+                      key: '5',
+                      label: 'Every 5 seconds',
                       onClick: () => setAutoSaveFrequency(5000)
                     },
                     {
-                      key: '10000',
-                      label: 'Auto-save: 10 seconds',
+                      key: '10',
+                      label: 'Every 10 seconds',
                       onClick: () => setAutoSaveFrequency(10000)
+                    },
+                    {
+                      key: '30',
+                      label: 'Every 30 seconds',
+                      onClick: () => setAutoSaveFrequency(30000)
+                    },
+                    {
+                      key: '60',
+                      label: 'Every minute',
+                      onClick: () => setAutoSaveFrequency(60000)
+                    },
+                    { type: 'divider' },
+                    {
+                      key: 'clear-cache',
+                      label: 'Clear Page Cache',
+                      onClick: () => {
+                        setPageContentCache({});
+                        message.success('Page cache cleared');
+                      }
                     }
                   ]
                 }}
@@ -1160,542 +1142,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
               >
                 <button className="text-xs px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors">
                   ⚙️ {autoSaveFrequency / 1000}s
-                </button>
-              </Dropdown>
-
-              {/* Debug Cache Button */}
-              <Dropdown
-                menu={{
-                  items: [
-                    {
-                      key: 'deep-debug-page-state',
-                      label: '🔬 Deep Debug Page State',
-                      onClick: () => {
-                        console.log('=== DEEP PAGE STATE DEBUG V4 ===');
-                        console.log('Current Page ID:', currentPageId);
-                        console.log('Is Initialized:', isInitialized);
-                        console.log('Is Loading Page:', isLoadingPage);
-                        console.log('Enabled:', enabled);
-                        
-                        // Check editor state
-                        try {
-                          const currentEditorState = query.serialize();
-                          console.log('Current Editor State:', {
-                            length: currentEditorState?.length || 0,
-                            hasRoot: currentEditorState?.includes('ROOT') || false,
-                            preview: currentEditorState?.substring(0, 200) + '...',
-                            isEmpty: currentEditorState === '{}' || !currentEditorState
-                          });
-                        } catch (error) {
-                          console.log('Could not serialize current editor state:', error);
-                        }
-                        
-                        // Check current page data
-                        console.log('Current Page Data:', {
-                          exists: !!currentPageData,
-                          length: currentPageData?.length || 0,
-                          hasRoot: currentPageData?.includes('ROOT') || false,
-                          preview: currentPageData?.substring(0, 200) + '...'
-                        });
-                        
-                        // Check cache
-                        const cacheKeys = Object.keys(pageContentCache);
-                        console.log('Cache Status:', {
-                          totalPages: cacheKeys.length,
-                          pages: cacheKeys,
-                          currentPageCached: !!pageContentCache[currentPageId],
-                          currentPageCacheSize: pageContentCache[currentPageId]?.length || 0
-                        });
-                        
-                        // Check if Frame component has content
-                        console.log('Frame Component Analysis:');
-                        console.log('- Is Initialized:', isInitialized);
-                        console.log('- Is Loading Page:', isLoadingPage);
-                        console.log('- Should Render Frame:', isInitialized && !isLoadingPage);
-                        
-                        message.info('Deep debug info logged to console');
-                      }
-                    },
-                    {
-                      key: 'debug-page-loading',
-                      label: '📄 Debug Page Loading',
-                      onClick: async () => {
-                        console.log('=== PAGE LOADING DEBUG ===');
-                        try {
-                          console.log('Testing page load for:', currentPageId);
-                          const pageData = await getPage(user.uid, siteId, currentPageId);
-                          console.log('Page data from Firebase:', pageData);
-                          
-                          if (pageData?.content) {
-                            console.log('Page content found:', {
-                              hasRoot: !!pageData.content.ROOT,
-                              rootType: pageData.content.ROOT?.type?.resolvedName,
-                              nodeCount: pageData.content.ROOT?.nodes?.length || 0,
-                              fullContent: pageData.content
-                            });
-                          } else {
-                            console.log('No content found for page:', currentPageId);
-                          }
-                          
-                          message.info('Debug info logged to console');
-                        } catch (error) {
-                          console.error('Error during page loading debug:', error);
-                          message.error('Debug failed: ' + error.message);
-                        }
-                      }
-                    },
-                    {
-                      key: 'debug-all-pages-content',
-                      label: '🔍 Debug All Pages Content',
-                      onClick: async () => {
-                        console.log('=== ALL PAGES CONTENT DEBUG ===');
-                        console.log('Current page:', currentPageId);
-                        console.log('Available pages:', pages.map(p => ({ id: p.id, name: p.name })));
-                        
-                        for (const page of pages) {
-                          console.log(`\n--- Checking page: ${page.id} (${page.name}) ---`);
-                          
-                          try {
-                            // Check Firebase content
-                            const pageData = await getPage(user.uid, siteId, page.id);
-                            
-                            if (pageData?.content) {
-                              const content = pageData.content;
-                              console.log(`Firebase content for ${page.id}:`, {
-                                hasRoot: !!content.ROOT,
-                                rootType: content.ROOT?.type?.resolvedName,
-                                nodeCount: content.ROOT?.nodes?.length || 0,
-                                hasVisualContent: (content.ROOT?.nodes?.length || 0) > 0,
-                                contentSize: JSON.stringify(content).length,
-                                nodeIds: content.ROOT?.nodes || []
-                              });
-                              
-                              // Check if nodes actually exist
-                              if (content.ROOT?.nodes?.length > 0) {
-                                content.ROOT.nodes.forEach((nodeId, index) => {
-                                  const node = content[nodeId];
-                                  console.log(`  Node ${index + 1} (${nodeId}):`, {
-                                    type: node?.type?.resolvedName,
-                                    hasContent: !!node,
-                                    hasChildren: (node?.nodes?.length || 0) > 0
-                                  });
-                                });
-                              } else {
-                                console.log(`  ⚠️ Page ${page.id} has ROOT but no visual nodes`);
-                              }
-                            } else {
-                              console.log(`  ❌ No content found in Firebase for ${page.id}`);
-                            }
-                            
-                            // Check cache
-                            const cachedContent = pageContentCache[page.id];
-                            if (cachedContent) {
-                              try {
-                                const parsed = JSON.parse(cachedContent);
-                                console.log(`Cache content for ${page.id}:`, {
-                                  hasRoot: !!parsed.ROOT,
-                                  nodeCount: parsed.ROOT?.nodes?.length || 0,
-                                  isCurrentPage: page.id === currentPageId
-                                });
-                              } catch (parseError) {
-                                console.log(`  ❌ Cache content invalid for ${page.id}`);
-                              }
-                            } else {
-                              console.log(`  📝 No cached content for ${page.id}`);
-                            }
-                          } catch (error) {
-                            console.error(`Error checking page ${page.id}:`, error);
-                          }
-                        }
-                        
-                        // Also check current editor state
-                        if (query) {
-                          try {
-                            const currentEditorContent = query.serialize();
-                            const parsed = JSON.parse(currentEditorContent);
-                            console.log('\n--- Current Editor State ---');
-                            console.log('Editor content:', {
-                              hasRoot: !!parsed.ROOT,
-                              nodeCount: parsed.ROOT?.nodes?.length || 0,
-                              hasVisualContent: (parsed.ROOT?.nodes?.length || 0) > 0,
-                              currentPageId: currentPageId
-                            });
-                          } catch (error) {
-                            console.error('Error reading current editor state:', error);
-                          }
-                        }
-                        
-                        message.info('All pages content debug completed - check console');
-                      }
-                    },
-                    {
-                      key: 'clear-cache',
-                      label: 'Clear Page Cache',
-                      onClick: () => {
-                        setPageContentCache({});
-                        message.success('Page cache cleared');
-                        console.log('Page cache manually cleared');
-                      }
-                    },
-                    {
-                      key: 'validate-cache',
-                      label: 'Validate & Clean Cache',
-                      onClick: () => {
-                        validateAndCleanCache();
-                        message.success('Cache validated and cleaned');
-                      }
-                    },
-                    {
-                      key: 'fix-current-page-rendering',
-                      label: '🔧 Fix Current Page Rendering',
-                      onClick: async () => {
-                        console.log('=== FIXING CURRENT PAGE RENDERING ===');
-                        console.log('Current page ID:', currentPageId);
-                        
-                        try {
-                          // Get current editor state
-                          const currentContent = query.serialize();
-                          console.log('Current editor content:', {
-                            length: currentContent?.length || 0,
-                            hasRoot: currentContent?.includes('ROOT') || false,
-                            content: currentContent
-                          });
-                          
-                          // Parse the content to see structure
-                          const parsed = JSON.parse(currentContent);
-                          console.log('Parsed content structure:', {
-                            hasRoot: !!parsed.ROOT,
-                            rootType: parsed.ROOT?.type?.resolvedName,
-                            nodeCount: parsed.ROOT?.nodes?.length || 0,
-                            nodes: parsed.ROOT?.nodes || [],
-                            allKeys: Object.keys(parsed)
-                          });
-                          
-                          // Check if there are nodes that should be visible
-                          const rootNodes = parsed.ROOT?.nodes || [];
-                          if (rootNodes.length > 0) {
-                            console.log('Found nodes that should be visible:');
-                            rootNodes.forEach((nodeId, index) => {
-                              const node = parsed[nodeId];
-                              console.log(`  Node ${index + 1} (${nodeId}):`, {
-                                type: node?.type?.resolvedName,
-                                hasContent: !!node,
-                                props: node?.props,
-                                isCanvas: node?.isCanvas
-                              });
-                            });
-                            
-                            // Try to force re-render by clearing and reloading
-                            console.log('Attempting to fix rendering by reloading content...');
-                            
-                            actions.clearEvents();
-                            
-                            setTimeout(() => {
-                              console.log('Re-applying content to editor...');
-                              const cleanedContent = validateAndCleanContent(parsed);
-                              actions.deserialize(cleanedContent);
-                              setCurrentPageData(JSON.stringify(cleanedContent));
-                              
-                              message.success('Page rendering refreshed!');
-                            }, 100);
-                            
-                          } else {
-                            console.log('No visual nodes found in current page');
-                            
-                            // Add a simple test element to make the page visible
-                            const testContent = {
-                              "ROOT": {
-                                "type": { "resolvedName": "Root" },
-                                "isCanvas": true,
-                                "props": { "canvas": true },
-                                "displayName": "Root",
-                                "custom": {},
-                                "parent": null,
-                                "nodes": ["testElement"],
-                                "linkedNodes": {}
-                              },
-                              "testElement": {
-                                "type": { "resolvedName": "Text" },
-                                "isCanvas": false,
-                                "props": {
-                                  "text": `Test content for ${currentPageId}`,
-                                  "fontSize": "16",
-                                  "color": "#333333"
-                                },
-                                "displayName": "Text",
-                                "custom": {},
-                                "parent": "ROOT",
-                                "nodes": [],
-                                "linkedNodes": {}
-                              }
-                            };
-                            
-                            console.log('Adding test content to empty page...');
-                            actions.clearEvents();
-                            
-                            setTimeout(() => {
-                              actions.deserialize(testContent);
-                              setCurrentPageData(JSON.stringify(testContent));
-                              setPageContentCache(prev => ({
-                                ...prev,
-                                [currentPageId]: JSON.stringify(testContent)
-                              }));
-                              
-                              message.success('Added test content to page!');
-                            }, 100);
-                          }
-                          
-                        } catch (error) {
-                          console.error('Error fixing page rendering:', error);
-                          message.error('Failed to fix page rendering: ' + error.message);
-                        }
-                      }
-                    },
-                    {
-                      key: 'test-add-content-to-pages',
-                      label: '✏️ Test Add Content To Empty Pages',
-                      onClick: async () => {
-                        console.log('=== TESTING CONTENT ADDITION TO PAGES ===');
-                        
-                        // Find pages that appear to have no content
-                        const emptyPages = [];
-                        for (const page of pages) {
-                          if (page.id === currentPageId) continue; // Skip current page
-                          
-                          try {
-                            const pageData = await getPage(user.uid, siteId, page.id);
-                            const hasContent = pageData?.content?.ROOT?.nodes?.length > 0;
-                            
-                            if (!hasContent) {
-                              emptyPages.push(page);
-                            }
-                          } catch (error) {
-                            console.error(`Error checking page ${page.id}:`, error);
-                          }
-                        }
-                        
-                        console.log('Empty pages found:', emptyPages.map(p => p.id));
-                        
-                        if (emptyPages.length > 0) {
-                          const testPage = emptyPages[0];
-                          console.log(`Adding test content to page: ${testPage.id}`);
-                          
-                          // Create simple test content
-                          const testContent = {
-                            "ROOT": {
-                              "type": { "resolvedName": "Root" },
-                              "isCanvas": true,
-                              "props": { "canvas": true },
-                              "displayName": "Root",
-                              "custom": {},
-                              "parent": null,
-                              "nodes": ["testNode1"],
-                              "linkedNodes": {}
-                            },
-                            "testNode1": {
-                              "type": { "resolvedName": "Text" },
-                              "isCanvas": false,
-                              "props": {
-                                "text": `Test content for ${testPage.name} page`,
-                                "fontSize": "16",
-                                "color": "#333333"
-                              },
-                              "displayName": "Text",
-                              "custom": {},
-                              "parent": "ROOT",
-                              "nodes": [],
-                              "linkedNodes": {}
-                            }
-                          };
-                          
-                          try {
-                            // Save test content to Firebase
-                            await updatePage(user.uid, siteId, testPage.id, {
-                              content: testContent,
-                              lastModified: new Date()
-                            });
-                            
-                            console.log(`✅ Test content saved to ${testPage.id}`);
-                            message.success(`Test content added to "${testPage.name}" page`);
-                            
-                            // Clear cache to force reload
-                            setPageContentCache(prev => {
-                              const newCache = { ...prev };
-                              delete newCache[testPage.id];
-                              return newCache;
-                            });
-                            
-                          } catch (error) {
-                            console.error('Error saving test content:', error);
-                            message.error('Failed to save test content');
-                          }
-                        } else {
-                          console.log('No empty pages found to add content to');
-                          message.info('No empty pages found');
-                        }
-                      }
-                    },
-                    {
-                      key: 'debug-new-page-rendering',
-                      label: '🆕 Debug New Page Rendering',
-                      onClick: async () => {
-                        console.log('=== NEW PAGE RENDERING DEBUG ===');
-                        console.log('Current page ID:', currentPageId);
-                        console.log('Editor initialized:', isInitialized);
-                        console.log('Page loading:', isLoadingPage);
-                        
-                        try {
-                          // Check current editor content
-                          const currentContent = query.serialize();
-                          console.log('Current editor content:', {
-                            length: currentContent?.length || 0,
-                            hasRoot: currentContent?.includes('ROOT') || false,
-                            isEmpty: currentContent === '{}' || !currentContent
-                          });
-                          
-                          if (currentContent) {
-                            const parsed = JSON.parse(currentContent);
-                            console.log('Parsed content analysis:', {
-                              hasRoot: !!parsed.ROOT,
-                              rootType: parsed.ROOT?.type?.resolvedName,
-                              rootNodes: parsed.ROOT?.nodes || [],
-                              nodeCount: parsed.ROOT?.nodes?.length || 0,
-                              totalKeys: Object.keys(parsed).length
-                            });
-                            
-                            // Check if this looks like a new page
-                            const isNewPage = parsed.ROOT?.nodes?.length === 0;
-                            console.log('Is this a new/empty page?', isNewPage);
-                            
-                            if (isNewPage) {
-                              console.log('🔧 Attempting to fix new page rendering...');
-                              
-                              // Create a simple test element for new pages
-                              const newPageContent = {
-                                "ROOT": {
-                                  "type": { "resolvedName": "Root" },
-                                  "isCanvas": true,
-                                  "props": { "canvas": true },
-                                  "displayName": "Root",
-                                  "custom": {},
-                                  "parent": null,
-                                  "nodes": ["welcomeText"],
-                                  "linkedNodes": {}
-                                },
-                                "welcomeText": {
-                                  "type": { "resolvedName": "Text" },
-                                  "isCanvas": false,
-                                  "props": {
-                                    "text": `Welcome to ${currentPageId}! You can now add components to this page.`,
-                                    "fontSize": "18",
-                                    "color": "#666666",
-                                    "textAlign": "center",
-                                    "padding": [20, 20, 20, 20]
-                                  },
-                                  "displayName": "Text",
-                                  "custom": {},
-                                  "parent": "ROOT",
-                                  "nodes": [],
-                                  "linkedNodes": {}
-                                }
-                              };
-                              
-                              // Apply the new content with rendering fix
-                              actions.clearEvents();
-                              
-                              setTimeout(() => {
-                                try {
-                                  actions.deserialize(newPageContent);
-                                  setCurrentPageData(JSON.stringify(newPageContent));
-                                  setPageContentCache(prev => ({
-                                    ...prev,
-                                    [currentPageId]: JSON.stringify(newPageContent)
-                                  }));
-                                  
-                                  console.log('✅ New page content applied successfully');
-                                  message.success('New page rendering fixed! You can now add components.');
-                                  
-                                } catch (applyError) {
-                                  console.error('❌ Failed to apply new page content:', applyError);
-                                  message.error('Failed to fix new page rendering');
-                                }
-                              }, 100);
-                            } else {
-                              console.log('Page has content, trying regular rendering fix...');
-                              // Use the regular rendering fix for pages with content
-                              actions.clearEvents();
-                              
-                              setTimeout(() => {
-                                const cleanedContent = validateAndCleanContent(parsed);
-                                actions.deserialize(cleanedContent);
-                                setCurrentPageData(JSON.stringify(cleanedContent));
-                                message.success('Page rendering refreshed!');
-                              }, 100);
-                            }
-                          } else {
-                            console.log('No content found, creating initial content...');
-                            // Handle completely empty state
-                            const initialContent = {
-                              "ROOT": {
-                                "type": { "resolvedName": "Root" },
-                                "isCanvas": true,
-                                "props": { "canvas": true },
-                                "displayName": "Root",
-                                "custom": {},
-                                "parent": null,
-                                "nodes": [],
-                                "linkedNodes": {}
-                              }
-                            };
-                            
-                            actions.clearEvents();
-                            setTimeout(() => {
-                              actions.deserialize(initialContent);
-                              setCurrentPageData(JSON.stringify(initialContent));
-                              message.success('Empty page initialized!');
-                            }, 100);
-                          }
-                          
-                        } catch (error) {
-                          console.error('Error in new page rendering debug:', error);
-                          message.error('Debug failed: ' + error.message);
-                        }
-                      }
-                    },
-                    {
-                      key: 'test-new-page-creation',
-                      label: '🆕 Test New Page Creation',
-                      onClick: async () => {
-                        console.log('=== TESTING NEW PAGE CREATION FLOW ===');
-                        
-                        // Simulate creating a new page
-                        const testPageId = 'test-page-' + Date.now();
-                        console.log('Creating test page:', testPageId);
-                        
-                        try {
-                          // Test the page switching logic with a non-existent page
-                          console.log('Cache before test:', Object.keys(pageContentCache));
-                          console.log('Current page:', currentPageId);
-                          console.log('Editor state:', { isInitialized, isLoadingPage });
-                          
-                          // Try switching to the non-existent page
-                          console.log('Testing switch to non-existent page...');
-                          await handlePageChange(testPageId);
-                          
-                          message.info('Test completed - check console for results');
-                        } catch (error) {
-                          console.error('New page creation test failed:', error);
-                          message.error('Test failed: ' + error.message);
-                        }
-                      }
-                    },
-                  ]
-                }}
-                placement="bottomRight"
-                trigger={['click']}
-              >
-                <button className="text-xs px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors">
-                  🐛 Debug
                 </button>
               </Dropdown>
               
@@ -1734,13 +1180,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         {/* Left Sidebar - Toolbox */}
         {(() => {
           const shouldShowToolbox = enabled && isInitialized;
-          console.log('🧰 V2: Toolbox render check:', {
-            enabled,
-            isInitialized,
-            shouldShowToolbox,
-            currentPageId,
-            hasActions: !!actions
-          });
           return shouldShowToolbox;
         })() && (
           <div className={`${activeDrawer ? 'w-64' : 'w-64'} bg-white border-r border-gray-200 shadow-sm flex-shrink-0 h-full flex flex-col`}>
