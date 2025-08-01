@@ -55,12 +55,7 @@ const ContextMenu = ({
       : targetNodeId ? [targetNodeId] : [];
   }, [isMultiSelecting, selectedNodes, targetNodeId]);
   
-  console.log('🎯 ContextMenu nodes:', { 
-    targetNodeId, 
-    selectedNodes: Array.from(selectedNodes), 
-    isMultiSelecting, 
-    operationNodes 
-  });
+ 
   
   // All available components - using displayName for consistency
   const allComponents = [
@@ -173,7 +168,6 @@ const ContextMenu = ({
           // For multi-selection, you could check if all nodes have the same value
           // and show "Mixed" or average values if they differ
           if (operationNodes.length > 1) {
-            console.log('🎨 Multi-node properties:', nodeProperties);
           }
           
           setStyleValues(prev => ({
@@ -287,30 +281,22 @@ const ContextMenu = ({
                 // Check if the node has been set up to accept children via CraftJS rules
                 const canAcceptChildren = hasCanvasProp || isKnownContainer;
                 
-                console.log(`🔍 Checking node ${currentId} (${currentNode.data.displayName}):`, {
-                  hasCanvasProp,
-                  isKnownContainer,
-                  canAcceptChildren
-                });
+                
                 
                 if (canAcceptChildren) {
-                  console.log('✅ Found suitable parent for component:', currentNode.data.displayName);
                   return currentId;
                 }
                 
                 currentId = currentNode.data.parent;
               } else {
-                console.warn('⚠️ Node or node data is null for:', currentId);
                 break;
               }
             } catch (error) {
-              console.warn('⚠️ Error checking node:', currentId, error);
               break;
             }
           }
           
           // Last resort: use ROOT
-          console.log('🔄 Using ROOT as fallback for component');
           return 'ROOT';
         };
 
@@ -346,7 +332,6 @@ const ContextMenu = ({
         actions.addNodeTree(nodeTree, parentId);
         
         // Note: Recent components tracking is now handled automatically by useRecentComponents hook
-        console.log('✅ Successfully added component:', componentName, 'with props:', componentProps);
       } catch (error) {
         console.error('❌ Error adding component:', error);
       }
@@ -453,7 +438,6 @@ const ContextMenu = ({
             timestamp: Date.now()
           };
           localStorage.setItem('craft-clipboard', JSON.stringify(clipboardData));
-          console.log('✂️ Cut complete node tree with children to clipboard');
           actions.delete(targetNodeId);
         }
       } catch (error) {
@@ -475,7 +459,6 @@ const ContextMenu = ({
             timestamp: Date.now()
           };
           localStorage.setItem('craft-clipboard', JSON.stringify(clipboardData));
-          console.log('📋 Copied complete node tree with children to clipboard');
         }
       } catch (error) {
         console.error('Error copying node:', error);
@@ -491,7 +474,6 @@ const ContextMenu = ({
         
         if (clipboardData) {
           const parsed = JSON.parse(clipboardData);
-          console.log('📌 Pasting node tree from clipboard');
           
           if (parsed.nodeTree) {
             // Clone the tree with new IDs
@@ -515,7 +497,6 @@ const ContextMenu = ({
                                               currentNode.data.displayName === 'GridBox';
                       
                       if (canAcceptChildren) {
-                        console.log('✅ Found suitable parent:', currentNode.data.displayName);
                         return currentId;
                       }
                       
@@ -530,7 +511,6 @@ const ContextMenu = ({
                 }
                 
                 // Last resort: use ROOT
-                console.log('🔄 Using ROOT as fallback');
                 return 'ROOT';
               };
 
@@ -543,13 +523,11 @@ const ContextMenu = ({
               setTimeout(() => {
                 actions.deserialize(query.serialize());
                 actions.selectNode(clonedTree.rootNodeId);
-                console.log('✅ Successfully pasted node tree with all children');
               }, 100);
               
               // If it was a cut operation, clean up clipboard
               if (parsed.type === 'cut') {
                 localStorage.removeItem('craft-clipboard');
-                console.log('🗑️ Cleared clipboard after cut operation');
               }
             } else {
               console.error('❌ Failed to clone node tree');
@@ -594,7 +572,6 @@ const ContextMenu = ({
                 setTimeout(() => {
                   actions.deserialize(query.serialize());
                   actions.selectNode(clonedTree.rootNodeId);
-                  console.log('✅ Successfully duplicated node tree with all children');
                 }, 100);
               } else {
                 console.error('❌ Failed to clone node tree for duplication');
@@ -620,12 +597,10 @@ const ContextMenu = ({
             const node = query.node(nodeId).get();
             if (node) {
               actions.delete(nodeId);
-              console.log('Deleted node:', node.data.displayName);
             }
           }
         });
         
-        console.log(`🗑️ Deleted ${operationNodes.length} nodes`);
       } catch (error) {
         console.error('Error deleting nodes:', error);
       }

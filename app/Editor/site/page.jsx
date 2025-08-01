@@ -5,7 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getSite, updateSite, getSiteData, getPage, updatePage, getSitePages } from '../../../lib/sites';
 import { Spin, message, Button, Space, Typography, Alert, Switch, Dropdown, Tooltip } from 'antd';
-import { EyeOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined, HistoryOutlined } from '@ant-design/icons';
+import { EyeOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined, HistoryOutlined, EditOutlined, 
+         SaveOutlined, SettingOutlined, ImportOutlined, ExportOutlined, BgColorsOutlined, HeatMapOutlined,
+         BoxPlotOutlined, MenuOutlined, EyeInvisibleOutlined, GlobalOutlined, ClockCircleOutlined, 
+         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined } from '@ant-design/icons';
 
 // Import existing editor components
 import { Toolbox } from '../../Components/ToolBox';
@@ -30,7 +33,10 @@ import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
 import { Root } from '../../Components/Root';
 import { MultiSelectProvider } from '../../Components/support/MultiSelectContext';
 import SnapGridControls from '../../Components/support/SnapGridControls';
-import SitePageSelector from '../../Components/support/SitePageSelector';
+import PageManager2 from '../../Components/support/PageManager2';
+import PageLoadModal from '../../Components/support/PageLoadModal';
+import { exportPageToGlow } from '../../../lib/pageExportImport';
+import pako from 'pako';
 
 const { Title, Text: AntText } = Typography;
 
@@ -42,16 +48,180 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
   const [activeDrawer, setActiveDrawer] = useState(null);
   const [useFigmaStyle, setUseFigmaStyle] = useState(true);
+  const [isLeftPanelMinimized, setIsLeftPanelMinimized] = useState(false);
+  const [isRightPanelMinimized, setIsRightPanelMinimized] = useState(false);
   const [currentPageId, setCurrentPageId] = useState(null); // Track current page - start with null
   const [currentPageData, setCurrentPageData] = useState(null); // Store current page content
   const [pageContentCache, setPageContentCache] = useState({}); // Cache page content
   const [isLoadingPage, setIsLoadingPage] = useState(false); // Loading state for page switches
   const [isInitialized, setIsInitialized] = useState(false);
+  const [loadModalVisible, setLoadModalVisible] = useState(false); // Page load modal state
   console.log(pages)
   // Auto-save functionality
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [autoSaveFrequency, setAutoSaveFrequency] = useState(3000); // 3 seconds default
+  const [lastInitialized, setLastInitialized] = useState(null); // Track when last initialized
+  const [hasLoadedFromFirebase, setHasLoadedFromFirebase] = useState(false); // Track if we've loaded real content
+
+  // Full Photoshop-style history system (like TopBar.jsx)
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const [lastStateSnapshot, setLastStateSnapshot] = useState(null);
+  const [isHistoryInitialized, setIsHistoryInitialized] = useState(false);
+
+  // Helper function to detect what changed between states (from TopBar.jsx)
+  const detectChanges = (previousState, currentState) => {
+    try {
+      if (!previousState || !currentState) return 'State change';
+      
+      const prev = typeof previousState === 'string' ? JSON.parse(previousState) : previousState;
+      const curr = typeof currentState === 'string' ? JSON.parse(currentState) : currentState;
+      
+      // Compare node counts
+      const prevNodes = Object.keys(prev).length;
+      const currNodes = Object.keys(curr).length;
+      
+      if (currNodes > prevNodes) {
+        // Find the new node
+        const newNodeIds = Object.keys(curr).filter(id => !prev[id]);
+        if (newNodeIds.length > 0) {
+          const newNode = curr[newNodeIds[0]];
+          const componentName = newNode.displayName || newNode.type?.resolvedName || 'Component';
+          return `Added ${componentName}`;
+        }
+        return 'Added component';
+      } else if (currNodes < prevNodes) {
+        // Find the deleted node
+        const deletedNodeIds = Object.keys(prev).filter(id => !curr[id]);
+        if (deletedNodeIds.length > 0) {
+          const deletedNode = prev[deletedNodeIds[0]];
+          const componentName = deletedNode.displayName || deletedNode.type?.resolvedName || 'Component';
+          return `Deleted ${componentName}`;
+        }
+        return 'Deleted component';
+      } else {
+        // Check for property changes
+        for (const nodeId in curr) {
+          if (prev[nodeId]) {
+            const prevNode = prev[nodeId];
+            const currNode = curr[nodeId];
+            
+            // Check props changes
+            const prevProps = JSON.stringify(prevNode.props || {});
+            const currProps = JSON.stringify(currNode.props || {});
+            
+            if (prevProps !== currProps) {
+              const componentName = currNode.displayName || currNode.type?.resolvedName || 'Component';
+              
+              // Try to identify specific property changes
+              const prevPropsObj = prevNode.props || {};
+              const currPropsObj = currNode.props || {};
+              
+              const changedProps = [];
+              for (const prop in currPropsObj) {
+                if (JSON.stringify(prevPropsObj[prop]) !== JSON.stringify(currPropsObj[prop])) {
+                  changedProps.push(prop);
+                }
+              }
+              
+              if (changedProps.length > 0) {
+                const propsList = changedProps.slice(0, 2).join(', ');
+                const more = changedProps.length > 2 ? ` +${changedProps.length - 2} more` : '';
+                return `Modified ${componentName} (${propsList}${more})`;
+              }
+              
+              return `Modified ${componentName}`;
+            }
+          }
+        }
+        return 'Layout updated';
+      }
+    } catch (error) {
+      console.warn('Error detecting changes:', error);
+      return 'Made changes';
+    }
+  };
+
+  // Jump to specific history point using Craft.js undo/redo (from TopBar.jsx)
+  const jumpToHistoryPoint = (targetIndex) => {
+    const currentIndex = currentHistoryIndex;
+    const diff = targetIndex - currentIndex;
+    
+    if (diff === 0) return;
+    
+    if (diff > 0) {
+      // Need to redo
+      for (let i = 0; i < diff; i++) {
+        if (query.history.canRedo()) {
+          actions.history.redo();
+        }
+      }
+    } else {
+      // Need to undo
+      for (let i = 0; i < Math.abs(diff); i++) {
+        if (query.history.canUndo()) {
+          actions.history.undo();
+        }
+      }
+    }
+    
+    setCurrentHistoryIndex(targetIndex);
+  };
+
+  // Debug function to test content persistence (accessible via browser console)
+  window.debugContentPersistence = () => {
+    console.log('🔍 Content Persistence Debug Info:');
+    console.log('Current Page ID:', currentPageId);
+    console.log('Is Initialized:', isInitialized);
+    console.log('Has Loaded From Firebase:', hasLoadedFromFirebase);
+    console.log('Last Initialized:', lastInitialized ? new Date(lastInitialized) : 'Never');
+    console.log('Pages Available:', pages.length);
+    console.log('Page Content Cache:', Object.keys(pageContentCache));
+    
+    if (query && currentPageId) {
+      const currentContent = query.serialize();
+      console.log('Current Editor Content Size:', currentContent.length);
+      console.log('Current Editor Content Preview:', currentContent.substring(0, 200) + '...');
+      
+      const cachedContent = pageContentCache[currentPageId];
+      if (cachedContent) {
+        console.log('Cached Content Size:', cachedContent.length);
+        console.log('Content matches cache:', currentContent === cachedContent);
+      } else {
+        console.log('No cached content for current page');
+      }
+    }
+  };
+
+  // Enhanced debug function to force reload content from Firebase
+  window.forceReloadContent = async () => {
+    if (!user?.uid || !siteId || !currentPageId) {
+      console.log('❌ Cannot reload - missing user, site, or page ID');
+      return;
+    }
+    
+    try {
+      console.log('🔄 Force reloading content from Firebase for page:', currentPageId);
+      const pageData = await getPage(user.uid, siteId, currentPageId);
+      console.log('📋 Fresh Firebase data:', pageData);
+      
+      if (pageData?.content && actions) {
+        console.log('🔄 Applying fresh content to editor...');
+        actions.deserialize(pageData.content);
+        setPageContentCache(prev => ({
+          ...prev,
+          [currentPageId]: JSON.stringify(pageData.content)
+        }));
+        setHasLoadedFromFirebase(true); // Mark that we have real content
+        console.log('✅ Content reloaded successfully');
+      } else {
+        console.log('❌ No valid content found in Firebase');
+      }
+    } catch (error) {
+      console.error('❌ Error force reloading content:', error);
+    }
+  };
 
   // Helper function to validate and clean CraftJS content structure
   const validateAndCleanContent = (content) => {
@@ -147,7 +317,10 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
     canRedo: query.history.canRedo(),
     // Monitor the actual state to trigger history updates
     editorState: state
-  }));
+  }), {
+    // Disable editor until we load content
+    enabled: isInitialized && !isLoadingPage
+  });
 
   // Load pages on component mount
   useEffect(() => {
@@ -156,32 +329,27 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       
       try {
         const sitePages = await getSitePages(user.uid, siteId);
+        console.log('📋 Loaded pages from Firebase:', sitePages);
         setPages(sitePages || []);
         
-        // Create a default home page if no pages exist
+        // If we don't have a current page ID set, set it to the home page
+        if (!currentPageId && sitePages?.length > 0) {
+          const homePage = sitePages.find(page => page.isHome || page.name === 'home');
+          const initialPageId = homePage ? homePage.id : sitePages[0]?.id;
+          if (initialPageId) {
+            console.log('🔄 Setting initial currentPageId to:', initialPageId);
+            setCurrentPageId(initialPageId);
+          }
+        }
+        
+        // If no pages exist, the site should already have a home page created
+        // Don't create a fake page here - let the load logic handle it
         if (!sitePages || sitePages.length === 0) {
-          setPages([
-            {
-              id: 'home',
-              name: 'Home',
-              slug: 'home',
-              isHomePage: true,
-              createdAt: new Date()
-            }
-          ]);
+          console.warn('⚠️ No pages found for site. Site may need initialization.');
         }
       } catch (error) {
         console.error('❌ Error loading pages:', error);
-        // Fallback to default page structure
-        setPages([
-          {
-            id: 'home',
-            name: 'Home',
-            slug: 'home',
-            isHomePage: true,
-            createdAt: new Date()
-          }
-        ]);
+        // Don't create fallback pages here - let initialization handle it
       }
     };
 
@@ -194,11 +362,24 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       // Wait for actions to be available and not already initialized
       if (!actions || isInitialized || !user?.uid || !siteId || !pages.length) return;
       
-      // Find the first page (home page) if currentPageId is null
-      const targetPageId = currentPageId || (pages.length > 0 ? pages[0].id : null);
+      // Find the home page from the actual pages loaded from Firebase
+      let targetPageId = currentPageId;
       
       if (!targetPageId) {
-        console.error('No page to load - no pages found');
+        // Look for the home page first
+        const homePage = pages.find(page => page.isHome || page.name === 'home');
+        if (homePage) {
+          targetPageId = homePage.id;
+          console.log('🏠 Found home page:', targetPageId);
+        } else {
+          // If no home page found, use the first page
+          targetPageId = pages[0]?.id;
+          console.log('📄 Using first page as default:', targetPageId);
+        }
+      }
+      
+      if (!targetPageId) {
+        console.error('❌ No page to load - no pages found');
         return;
       }
       
@@ -207,30 +388,36 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       try {
         let contentToLoad = null;
         
-        // Load all pages from Firebase page documents (including home)
-        const cachedContent = pageContentCache[targetPageId];
-        if (cachedContent && cachedContent !== '{}' && cachedContent.includes('ROOT')) {
-          try {
-            JSON.parse(cachedContent);
-            contentToLoad = cachedContent;
-          } catch (parseError) {
-            // Cached content invalid, will try Firebase
+        // Always load fresh content from Firebase on page reload
+        // This ensures saved data isn't overridden by cached content
+        try {
+          console.log('🔄 Loading fresh content from Firebase for:', targetPageId);
+          const pageData = await getPage(user.uid, siteId, targetPageId);
+          console.log('📋 Firebase page data:', pageData);
+          
+          if (pageData?.content && pageData.content.ROOT) {
+            const pageContent = JSON.stringify(pageData.content);
+            contentToLoad = pageContent;
+            setHasLoadedFromFirebase(true); // Mark that we loaded real content
+            console.log('✅ Loaded valid content from Firebase, size:', pageContent.length);
+          } else {
+            console.log('⚠️ Firebase page exists but has no valid content');
+            setHasLoadedFromFirebase(false); // Mark that we didn't get real content
           }
-        }
-        
-        // If no valid cache, load from Firebase page document
-        if (!contentToLoad) {
-          try {
-            const pageData = await getPage(user.uid, siteId, targetPageId);
-            if (pageData?.content) {
-              const pageContent = JSON.stringify(pageData.content);
-              const parsed = JSON.parse(pageContent);
-              if (parsed.ROOT) {
-                contentToLoad = pageContent;
-              }
+        } catch (error) {
+          console.error('❌ Could not load page from Firebase:', error);
+          setHasLoadedFromFirebase(false); // Mark that we didn't get real content
+          
+          // Only check cache as fallback if Firebase fails
+          const cachedContent = pageContentCache[targetPageId];
+          if (cachedContent && cachedContent !== '{}' && cachedContent.includes('ROOT')) {
+            try {
+              JSON.parse(cachedContent);
+              contentToLoad = cachedContent;
+              console.log('📦 Using cached content as fallback for page:', targetPageId);
+            } catch (parseError) {
+              console.log('🗑️ Invalid cached content, will use empty state');
             }
-          } catch (error) {
-            console.error('Could not load page from Firebase:', error);
           }
         }
         
@@ -275,10 +462,12 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
               [targetPageId]: JSON.stringify(fallbackState)
             }));
             setIsInitialized(true);
+            setLastInitialized(Date.now()); // Track when content was loaded
             console.log('Fallback to empty state successful for page:', targetPageId);
           } catch (fallbackError) {
             console.error('Failed to load fallback empty state:', fallbackError);
             setIsInitialized(true); // Set as initialized to prevent infinite loops
+            setLastInitialized(Date.now()); // Track when content was loaded
           }
         };
         
@@ -311,6 +500,10 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 
                 // Set initialized after successful deserialization
                 setIsInitialized(true);
+                setLastInitialized(Date.now()); // Track when content was loaded
+                
+                // History will be automatically initialized by the new system
+                console.log('Page loaded successfully, history will auto-initialize');
                 
               } catch (deserializeError) {
                 console.error('Error during content deserialization:', deserializeError);
@@ -320,6 +513,15 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             }, 100);
           } else {
             // Load enhanced empty state for new pages with better drop zone
+            // Check if this page should have content (check page metadata)
+            const shouldHaveContent = pages.find(p => p.id === targetPageId)?.content;
+            if (shouldHaveContent) {
+              console.log('⚠️ Page should have content but none was loaded - using empty state but blocking saves');
+              setHasLoadedFromFirebase(false); // Block saves until real content is loaded
+            } else {
+              console.log('📄 New page detected - empty state is expected, allowing saves');
+              setHasLoadedFromFirebase(true); // Allow saves for truly new pages
+            }
             
             setTimeout(() => {
               const enhancedEmptyState = {
@@ -332,7 +534,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                     "background": "#ffffff",
                     "position": "relative",
                     "width": "100%",
-                    "padding": 20,
+                    "padding": 0,
                     "display": "block"
                   },
                   "custom": {},
@@ -359,6 +561,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 
                 // Set initialized after successful deserialization
                 setIsInitialized(true);
+                setLastInitialized(Date.now()); // Track when content was loaded
                 console.log('Editor initialization complete with empty state (no automatic content)');
                 
               } catch (error) {
@@ -419,13 +622,21 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
 
   // Auto-save functionality with change detection
   const autoSave = useCallback(async () => {
-    if (!query || !isInitialized || isLoadingPage || isSaving) {
+    if (!query || !isInitialized || isLoadingPage || isSaving || !currentPageId) {
       console.log('📝 Auto-save skipped:', { 
         hasQuery: !!query, 
         isInitialized, 
         isLoadingPage, 
-        isSaving 
+        isSaving,
+        hasCurrentPageId: !!currentPageId
       });
+      return;
+    }
+
+    // CRITICAL: Don't save unless we've loaded real content from Firebase first
+    // This prevents overriding saved data with empty content on page load
+    if (!hasLoadedFromFirebase) {
+      console.log('📝 Auto-save blocked: Haven\'t loaded real content from Firebase yet');
       return;
     }
 
@@ -469,6 +680,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             
           } catch (error) {
             console.error('❌ Auto-save failed:', error);
+            message.error('Failed to save page: ' + error.message);
           }
         })();
 
@@ -489,6 +701,20 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   // Auto-save effect with change detection and debouncing
   useEffect(() => {
     if (!isInitialized || isLoadingPage || !query) return;
+    
+    // Prevent auto-save for the first 5 seconds after initialization
+    // This ensures loaded content isn't immediately overridden
+    const timeSinceInit = lastInitialized ? Date.now() - lastInitialized : Infinity;
+    if (timeSinceInit < 5000) {
+      console.log('⏳ Auto-save paused - content recently loaded from Firebase');
+      return;
+    }
+
+    // CRITICAL: Don't auto-save unless we've loaded real content from Firebase
+    if (!hasLoadedFromFirebase) {
+      console.log('⏳ Auto-save blocked - waiting for real content from Firebase');
+      return;
+    }
 
     // Only trigger auto-save if content actually changed
     const timeoutId = setTimeout(() => {
@@ -498,6 +724,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         
         // Only auto-save if content is different from cache
         if (currentContent && currentContent !== cachedContent && currentContent !== '{}') {
+          console.log('🔄 Content changed, triggering auto-save');
           autoSave();
         }
       } catch (error) {
@@ -506,7 +733,105 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
     }, autoSaveFrequency);
 
     return () => clearTimeout(timeoutId);
-  }, [editorState, autoSaveFrequency, isInitialized, isLoadingPage]); // Removed query and cache dependencies
+  }, [editorState, autoSaveFrequency, isInitialized, isLoadingPage, lastInitialized, hasLoadedFromFirebase]); // Added hasLoadedFromFirebase dependency
+
+  // Listen to state changes to build history entries (from TopBar.jsx)
+  useEffect(() => {
+    const updateHistory = () => {
+      try {
+        if (!query) return;
+        
+        const currentState = query.serialize();
+        const timestamp = new Date().toLocaleTimeString();
+        
+        // Initialize history if not done yet
+        if (!isHistoryInitialized) {
+          const initialEntry = {
+            id: 0,
+            description: 'Initial state',
+            timestamp: timestamp,
+            state: currentState
+          };
+          setHistoryEntries([initialEntry]);
+          setCurrentHistoryIndex(0);
+          setLastStateSnapshot(currentState);
+          setIsHistoryInitialized(true);
+          console.log('History initialized');
+          return;
+        }
+
+        // Check if state actually changed
+        if (lastStateSnapshot && lastStateSnapshot !== currentState) {
+          const changeDescription = detectChanges(lastStateSnapshot, currentState);
+          
+          // Add new entry
+          const newEntry = {
+            id: Date.now(), // Use timestamp for unique ID
+            description: changeDescription,
+            timestamp: timestamp,
+            state: currentState
+          };
+          
+          setHistoryEntries(prev => [...prev, newEntry]);
+          setCurrentHistoryIndex(prev => prev + 1);
+          setLastStateSnapshot(currentState);
+          
+          console.log('History entry added:', changeDescription);
+        }
+      } catch (error) {
+        console.warn('Could not update history:', error);
+      }
+    };
+
+    // Only track history after initialization
+    if (!isInitialized || isLoadingPage) return;
+    
+    // Don't track changes during initialization
+    const timeSinceInit = lastInitialized ? Date.now() - lastInitialized : Infinity;
+    if (timeSinceInit < 2000) return;
+
+    // Throttle updates to avoid excessive entries
+    const timeoutId = setTimeout(updateHistory, 300);
+    return () => clearTimeout(timeoutId);
+  }, [editorState, isHistoryInitialized, isInitialized, isLoadingPage, lastInitialized, lastStateSnapshot, detectChanges, query]);
+
+  // Sync history index with undo/redo state (from TopBar.jsx)
+  useEffect(() => {
+    if (isHistoryInitialized && historyEntries.length > 0 && query) {
+      const currentState = query.serialize();
+      
+      // Find matching state in history
+      const matchingIndex = historyEntries.findIndex(entry => entry.state === currentState);
+      if (matchingIndex !== -1 && matchingIndex !== currentHistoryIndex) {
+        setCurrentHistoryIndex(matchingIndex);
+        console.log(`History index synced to: ${matchingIndex}`);
+      }
+    }
+  }, [canUndo, canRedo, isHistoryInitialized, historyEntries, currentHistoryIndex, query]);
+
+  // Keyboard shortcuts for undo/redo (from TopBar.jsx)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Undo: Ctrl+Z (Windows/Linux) or Cmd+Z (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo) {
+          handleUndo();
+        }
+      }
+      // Redo: Ctrl+Y (Windows/Linux) or Cmd+Shift+Z (Mac) or Ctrl+Shift+Z
+      else if (((e.ctrlKey || e.metaKey) && e.key === 'y') || 
+               ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        if (canRedo) {
+          handleRedo();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [canUndo, canRedo]);
 
   // Handle undo/redo using CraftJS built-in history
   const handleUndo = () => {
@@ -521,22 +846,54 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
     }
   };
 
-  // Simple dropdown menu for undo/redo actions
+  // Create sophisticated history dropdown menu (from TopBar.jsx)
   const historyDropdownMenu = {
-    items: [
-      {
-        key: 'undo',
-        label: 'Undo',
-        disabled: !canUndo,
-        onClick: handleUndo
-      },
-      {
-        key: 'redo', 
-        label: 'Redo',
-        disabled: !canRedo,
-        onClick: handleRedo
-      }
-    ]
+    items: historyEntries.slice().reverse().map((entry, reverseIndex) => {
+      const actualIndex = historyEntries.length - 1 - reverseIndex;
+      const isCurrent = actualIndex === currentHistoryIndex;
+      const isPast = actualIndex < currentHistoryIndex;
+      const isFuture = actualIndex > currentHistoryIndex;
+      
+      return {
+        key: entry.id.toString(),
+        label: (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            minWidth: '250px',
+            backgroundColor: isCurrent ? '#e6f7ff' : 'transparent',
+            padding: '6px 12px',
+            borderRadius: '4px',
+            borderLeft: isCurrent ? '3px solid #1890ff' : '3px solid transparent',
+            opacity: isFuture ? 0.6 : 1
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: isCurrent ? 'bold' : 'normal',
+                color: isCurrent ? '#1890ff' : isPast ? '#333' : '#666',
+                fontSize: '13px'
+              }}>
+                {entry.description}
+              </div>
+              <div style={{ 
+                fontSize: '11px', 
+                color: '#999',
+                marginTop: '2px'
+              }}>
+                {entry.timestamp}
+              </div>
+            </div>
+            <div style={{ marginLeft: '8px' }}>
+              {isCurrent && <span style={{ color: '#1890ff', fontSize: '12px' }}>●</span>}
+              {isPast && <span style={{ color: '#52c41a', fontSize: '12px' }}>✓</span>}
+              {isFuture && <span style={{ color: '#faad14', fontSize: '12px' }}>○</span>}
+            </div>
+          </div>
+        ),
+        onClick: () => jumpToHistoryPoint(actualIndex),
+      };
+    }),
   };
 
   // Safety timeout to prevent permanent loading state
@@ -574,6 +931,165 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   };
 
   // Publish/Unpublish function
+  // Compression utilities (matching PageManager approach)
+  const compressData = (jsonString) => {
+    try {
+      const compressed = pako.deflate(jsonString);
+      return btoa(String.fromCharCode.apply(null, compressed));
+    } catch (error) {
+      console.error('Compression error:', error);
+      throw new Error('Failed to compress data');
+    }
+  };
+
+  const decompressData = (compressedString) => {
+    try {
+      const binaryString = atob(compressedString);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const decompressed = pako.inflate(bytes, { to: 'string' });
+      return decompressed;
+    } catch (error) {
+      console.error('Decompression error:', error);
+      throw new Error('Failed to decompress data - invalid format');
+    }
+  };
+
+  // Handle loading page data from external source (matching PageManager logic)
+  const handleLoadPageData = async (inputData) => {
+    if (!actions || !isInitialized || isLoadingPage) {
+      message.error('Editor not ready for loading');
+      return;
+    }
+
+    try {
+      setIsLoadingPage(true);
+      
+      if (!inputData.trim()) {
+        message.error('Please provide page data');
+        return;
+      }
+      
+      let pageDataToLoad;
+      
+      try {
+        // Try to decompress first (for .glow files or compressed data from PageManager)
+        pageDataToLoad = decompressData(inputData.trim());
+        console.log('Successfully decompressed page data');
+      } catch (decompressError) {
+        // If decompression fails, try to use as raw JSON
+        try {
+          JSON.parse(inputData.trim()); // Validate JSON
+          pageDataToLoad = inputData.trim();
+          console.log('Using raw JSON data');
+        } catch (jsonError) {
+          throw new Error('Invalid format. Please provide a valid .glow file or serialized JSON data.');
+        }
+      }
+      
+      // Load the page data with proper CraftJS readiness check (matching PageManager approach)
+      const deserializeWithDelay = () => {
+        try {
+          // Check if query is available and ready
+          if (!query || !actions) {
+            console.warn('CraftJS not ready for page load, retrying...');
+            setTimeout(deserializeWithDelay, 100);
+            return;
+          }
+          
+          // Clear current editor state first
+          actions.clearEvents();
+          
+          setTimeout(() => {
+            try {
+              actions.deserialize(pageDataToLoad);
+              console.log('Page data loaded successfully using PageManager approach');
+              
+              // Update cache for current page
+              setPageContentCache(prev => ({
+                ...prev,
+                [currentPageId]: pageDataToLoad
+              }));
+              
+              setCurrentPageData(pageDataToLoad);
+              message.success('Page loaded successfully!');
+              
+            } catch (deserializeError) {
+              console.error('Failed to deserialize loaded page data:', deserializeError);
+              message.error('Failed to load page data: ' + deserializeError.message);
+            } finally {
+              setIsLoadingPage(false);
+            }
+          }, 100);
+          
+        } catch (error) {
+          console.error('Error in deserializeWithDelay:', error);
+          message.error('Failed to load page: ' + error.message);
+          setIsLoadingPage(false);
+        }
+      };
+      
+      setTimeout(deserializeWithDelay, 100);
+      
+    } catch (error) {
+      console.error('Error in handleLoadPageData:', error);
+      message.error('Failed to load page: ' + error.message);
+      setIsLoadingPage(false);
+    }
+  };
+
+  // Handle exporting current page (matching PageManager compression approach)
+  const handleExportPage = async () => {
+    try {
+      if (!query || !currentPageId) {
+        message.error('No page to export');
+        return;
+      }
+      
+      const currentContent = query.serialize();
+      if (!currentContent || currentContent === '{}') {
+        message.error('No content to export');
+        return;
+      }
+      
+      // Validate the content has ROOT
+      const parsed = JSON.parse(currentContent);
+      if (!parsed.ROOT) {
+        message.error('Invalid page structure');
+        return;
+      }
+      
+      // Compress the data using PageManager approach
+      const compressedData = compressData(currentContent);
+      
+      // Create the file blob with compressed data
+      const blob = new Blob([compressedData], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = url;
+      const pageName = pages.find(p => p.id === currentPageId)?.name || currentPageId;
+      link.download = `${pageName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.glow`;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Cleanup
+      URL.revokeObjectURL(url);
+      
+      message.success(`Page "${pageName}" exported as compressed .glow file!`);
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      message.error('Failed to export page: ' + error.message);
+    }
+  };
+
   const handleTogglePublish = async () => {
     try {
       const newPublishState = !site.isPublished;
@@ -603,12 +1119,15 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       console.log('🚫 V4: Page change skipped -', { 
         sameId: newPageId === currentPageId, 
         noActions: !actions, 
-        loading: isLoadingPage 
+        loading: isLoadingPage,
+        newPageId,
+        currentPageId
       });
       return;
     }
     
     console.log('🔄 V4: Starting page change from', currentPageId, 'to', newPageId);
+    console.log('🔍 V4: Available pages:', pages.map(p => ({ id: p.id, name: p.name, isHome: p.isHome })));
     
     try {
       setIsLoadingPage(true);
@@ -664,10 +1183,20 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       // Load from Firebase if no cache
       if (!contentToLoad) {
         try {
+          console.log('🔄 V4: Loading page content from Firebase for ID:', newPageId);
           const pageData = await getPage(user.uid, siteId, newPageId);
+          console.log('📋 V4: Firebase page data received:', { 
+            pageId: newPageId, 
+            hasContent: !!pageData?.content, 
+            contentKeys: pageData?.content ? Object.keys(pageData.content) : [],
+            hasRoot: !!pageData?.content?.ROOT 
+          });
+          
           if (pageData?.content?.ROOT) {
             contentToLoad = JSON.stringify(pageData.content);
-            console.log('� V4: Loaded from Firebase');
+            console.log('✅ V4: Loaded from Firebase');
+          } else {
+            console.warn('⚠️ V4: Page data exists but no valid content structure');
           }
         } catch (firebaseError) {
           console.error('❌ V4: Firebase error:', firebaseError);
@@ -676,26 +1205,49 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       
       // Use empty state if nothing found
       if (!contentToLoad) {
+        // Find the page info to create a distinctive empty state
+        const currentPage = pages.find(p => p.id === newPageId);
+        const pageName = currentPage?.name || 'Unknown Page';
+        const isHomePage = currentPage?.isHome || false;
+        
+        console.log('📝 V4: Creating distinctive empty state for:', { newPageId, pageName, isHomePage });
+        
         contentToLoad = JSON.stringify({
           "ROOT": {
             "type": { "resolvedName": "Root" },
-            "nodes": [],
+            "nodes": ["welcomeText"],
             "props": { 
               "canvas": true,
               "minHeight": "600px",
               "background": "#ffffff",
               "position": "relative",
               "width": "100%",
-              "padding": 20,
+              "padding": 0,
               "display": "block"
             },
             "custom": {},
             "parent": null,
             "displayName": "Root",
             "isCanvas": true
+          },
+          "welcomeText": {
+            "type": { "resolvedName": "Text" },
+            "isCanvas": false,
+            "props": {
+              "text": `${isHomePage ? '🏠 Welcome to your Home Page!' : `📄 This is the "${pageName}" page`}\n\nStart building by dragging components from the toolbox on the left.`,
+              "fontSize": "18",
+              "color": "#666666",
+              "textAlign": "center",
+              "padding": [40, 20, 40, 20]
+            },
+            "displayName": "Text",
+            "custom": {},
+            "parent": "ROOT",
+            "nodes": [],
+            "linkedNodes": {}
           }
         });
-        console.log('� V4: Using empty state');
+        console.log('📝 V4: Using distinctive empty state for page:', pageName);
       }
       
       // 5. Apply content to editor with rendering fix
@@ -781,24 +1333,46 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       } catch (applyError) {
         console.error('❌ V4: Apply error:', applyError);
         
-        // Emergency fallback with enhanced drop zone (no automatic content)
+        // Emergency fallback with distinctive content for this page
+        const currentPage = pages.find(p => p.id === newPageId);
+        const pageName = currentPage?.name || 'Unknown Page';
+        
         const enhancedEmptyState = {
           "ROOT": {
             "type": { "resolvedName": "Root" },
-            "nodes": [],
+            "nodes": ["emergencyText"],
             "props": { 
               "canvas": true,
               "minHeight": "600px",
               "background": "#ffffff",
               "position": "relative",
               "width": "100%",
-              "padding": 20,
+              "padding": 0,
               "display": "block"
             },
             "custom": {},
             "parent": null,
             "displayName": "Root",
             "isCanvas": true
+          },
+          "emergencyText": {
+            "type": { "resolvedName": "Text" },
+            "isCanvas": false,
+            "props": {
+              "text": `⚠️ Emergency Recovery Mode\n\nPage: "${pageName}"\n\nContent could not be loaded properly, but you can start building here.`,
+              "fontSize": "16",
+              "color": "#856404",
+              "textAlign": "center",
+              "padding": [40, 20, 40, 20],
+              "backgroundColor": "#fff3cd",
+              "border": "1px solid #ffeeba",
+              "borderRadius": "8px"
+            },
+            "displayName": "Text",
+            "custom": {},
+            "parent": "ROOT",
+            "nodes": [],
+            "linkedNodes": {}
           }
         };
         
@@ -846,6 +1420,77 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   useEffect(() => {
     if (window) {
       window.refreshPageCache = refreshPageCache;
+      
+      // Debug function to check Firebase page loading
+      window.debugPageLoading = async () => {
+        console.log('🔍 DEBUG: Page Loading Analysis');
+        console.log('- Current Page ID:', currentPageId);
+        console.log('- Site ID:', siteId);
+        console.log('- User ID:', user?.uid);
+        console.log('- Pages loaded:', pages.map(p => ({ id: p.id, name: p.name, isHome: p.isHome })));
+        console.log('- Cache keys:', Object.keys(pageContentCache));
+        console.log('- Is initialized:', isInitialized);
+        console.log('- Is loading page:', isLoadingPage);
+        
+        // Test Firebase page loading
+        if (currentPageId && user?.uid && siteId) {
+          try {
+            console.log('🔄 Testing Firebase page load for:', currentPageId);
+            const pageData = await getPage(user.uid, siteId, currentPageId);
+            console.log('📋 Firebase page data:', pageData);
+            console.log('📋 Content exists:', !!pageData?.content);
+            console.log('📋 Content has ROOT:', !!pageData?.content?.ROOT);
+            if (pageData?.content?.ROOT) {
+              console.log('📋 ROOT nodes:', pageData.content.ROOT.nodes?.length || 0);
+            }
+          } catch (error) {
+            console.error('❌ Firebase page load failed:', error);
+          }
+        }
+        
+        // Test current editor state
+        if (query) {
+          try {
+            const currentState = query.serialize();
+            console.log('🎨 Current editor state size:', currentState?.length || 0);
+            const parsed = JSON.parse(currentState);
+            console.log('🎨 Current editor ROOT nodes:', parsed?.ROOT?.nodes?.length || 0);
+          } catch (error) {
+            console.error('❌ Editor state read failed:', error);
+          }
+        }
+      };
+      
+      // Test page saving
+      window.testPageSave = async () => {
+        if (!query || !currentPageId) {
+          console.error('❌ Cannot test save - missing query or page ID');
+          return;
+        }
+        
+        try {
+          const currentContent = query.serialize();
+          const parsed = JSON.parse(currentContent);
+          console.log('💾 Testing page save...');
+          console.log('📊 Content to save:', { 
+            pageId: currentPageId, 
+            hasRoot: !!parsed.ROOT, 
+            nodeCount: Object.keys(parsed).length,
+            rootNodes: parsed.ROOT?.nodes?.length || 0
+          });
+          
+          await updatePage(user.uid, siteId, currentPageId, {
+            content: parsed,
+            lastModified: new Date()
+          });
+          
+          console.log('✅ Test save successful!');
+          message.success('Test save successful!');
+        } catch (error) {
+          console.error('❌ Test save failed:', error);
+          message.error('Test save failed: ' + error.message);
+        }
+      };
       
       // Debug function to test page creation and switching
       window.testPageSwitching = () => {
@@ -931,37 +1576,46 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         delete window.refreshPageCache;
         delete window.testPageSwitching;
         delete window.debugEditorState;
+        delete window.debugPageLoading;
+        delete window.testPageSave;
       }
     };
   }, [refreshPageCache, pages, currentPageId, pageContentCache, isInitialized, isLoadingPage, handlePageChange, actions, query, user?.uid, siteId]);
 
   return (
     <div className="h-screen flex flex-col">
-      {/* Enhanced Single-Line TopBar */}
-      <div className="bg-white border-b border-gray-200 shadow-sm px-4 py-2">
+      {/* Modern Toolbar */}
+      <div className="bg-white border-b border-gray-300 shadow-sm px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Left Section - Navigation & Site Info */}
           <div className="flex items-center space-x-4">
-            <Button 
-              type="text" 
-              icon={<ArrowLeftOutlined />}
-              onClick={() => window.location.href = '/dashboard'}
-              size="small"
-            >
-              Dashboard
-            </Button>
+            <Tooltip title="Back to Dashboard">
+              <Button 
+                type="text" 
+                icon={<ArrowLeftOutlined className="text-lg" />}
+                onClick={() => window.location.href = '/dashboard'}
+                className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 border-none shadow-none h-10 w-10"
+                size="large"
+              />
+            </Tooltip>
             
-            <div className="border-l border-gray-200 pl-4">
+            <div className="border-l border-gray-300 pl-4">
               <div className="flex items-center space-x-3">
                 <div>
-                  <span className="text-sm font-semibold text-gray-800">
+                  <span className="text-lg font-semibold text-gray-900">
                     {site?.name || 'Untitled Site'}
                   </span>
                   <div className="flex items-center space-x-2 text-xs">
                     {site?.isPublished ? (
-                      <span className="text-green-600">● Published</span>
+                      <span className="text-green-400 flex items-center">
+                        <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
+                        Published
+                      </span>
                     ) : (
-                      <span className="text-orange-500">● Draft</span>
+                      <span className="text-orange-400 flex items-center">
+                        <span className="w-2 h-2 bg-orange-400 rounded-full mr-1"></span>
+                        Draft
+                      </span>
                     )}
                     {lastSaved && (
                       <span className="text-gray-500">
@@ -969,13 +1623,16 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                       </span>
                     )}
                     {isSaving && !isLoadingPage && (
-                      <span className="text-blue-500">• Saving...</span>
+                      <span className="text-blue-600 flex items-center">
+                        <span className="w-2 h-2 bg-blue-600 rounded-full mr-1 animate-pulse"></span>
+                        Saving...
+                      </span>
                     )}
                     {isLoadingPage && (
-                      <span className="text-purple-500">• Switching page...</span>
-                    )}
-                    {currentPageId !== 'home' && (
-                      <></>
+                      <span className="text-purple-600 flex items-center">
+                        <span className="w-2 h-2 bg-purple-600 rounded-full mr-1 animate-pulse"></span>
+                        Switching page...
+                      </span>
                     )}
                   </div>
                 </div>
@@ -983,121 +1640,121 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             </div>
           </div>
           
-          {/* Site Page Selector - Non-interfering */} 
-          <div className="bg-gray-50 rounded-lg px-3 py-1.5">
-            <SitePageSelector 
-              siteId={siteId} 
+          {/* Center Section - Page Manager with Tree Structure */}
+          <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+            <PageManager2 
               currentPageId={currentPageId}
               onPageChange={handlePageChange}
+              pages={pages}
+              onPagesUpdate={setPages}
             />
           </div>
           
-          {/* Center Section - Editor Controls */}
-          <div className="flex items-center space-x-3">
-            {/* Enable/Disable Toggle */}
-            <div className="flex items-center space-x-2 bg-gray-50 rounded-lg px-3 py-1.5">
-              <Switch 
-                checked={enabled} 
+          {/* Main Toolbar Section */}
+          <div className="flex items-center space-x-1">
+            {/* Editor/Preview Toggle */}
+            <Tooltip title={enabled ? "Switch to Preview Mode" : "Switch to Editor Mode"}>
+              <Button
+                icon={enabled ? <EditOutlined className="text-lg" /> : <EyeOutlined className="text-lg" />}
                 disabled={!isInitialized}
-                onChange={(value) => {
+                onClick={() => {
                   if (isInitialized) {
                     actions.setOptions(options => {
-                      options.enabled = value;
+                      options.enabled = !enabled;
                     });
                   }
                 }}
-                size="small"
+                className={`h-10 w-10 border-gray-300 ${
+                  enabled 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-500' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                }`}
+                size="large"
               />
-              <span className="text-xs font-medium text-gray-700">
-                {enabled ? 'Editor' : 'Preview'}
-              </span>
-            </div>
+            </Tooltip>
+
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
 
             {/* History Controls */}
-            <div className="flex items-center space-x-1 bg-gray-50 rounded-lg px-2 py-1.5">
-              <Tooltip title={canUndo && isInitialized ? "Undo (Ctrl+Z)" : "Editor not ready"}>
-                <Button
-                  icon={<UndoOutlined />}
-                  size="small"
-                  disabled={!canUndo || !isInitialized}
-                  onClick={handleUndo}
-                  type="text"
-                  className={canUndo && isInitialized ? 'hover:bg-blue-50 hover:text-blue-600' : ''}
-                />
-              </Tooltip>
+            <Tooltip title="Undo (Ctrl+Z)">
+              <Button
+                icon={<UndoOutlined className="text-lg" />}
+                disabled={!canUndo || !isInitialized}
+                onClick={handleUndo}
+                className="h-10 w-10 bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 border-gray-300 disabled:bg-gray-50 disabled:text-gray-400"
+                size="large"
+              />
+            </Tooltip>
 
-              <Tooltip title={canRedo && isInitialized ? "Redo (Ctrl+Y)" : "Editor not ready"}>
-                <Button
-                  icon={<RedoOutlined />}
-                  size="small"
-                  disabled={!canRedo || !isInitialized}
-                  onClick={handleRedo}
-                  type="text"
-                  className={canRedo && isInitialized ? 'hover:bg-green-50 hover:text-green-600' : ''}
-                />
-              </Tooltip>
+            <Tooltip title="Redo (Ctrl+Y)">
+              <Button
+                icon={<RedoOutlined className="text-lg" />}
+                disabled={!canRedo || !isInitialized}
+                onClick={handleRedo}
+                className="h-10 w-10 bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 border-gray-300 disabled:bg-gray-50 disabled:text-gray-400"
+                size="large"
+              />
+            </Tooltip>
 
+            <Tooltip title="Edit History">
               <Dropdown
                 menu={historyDropdownMenu}
                 placement="bottomLeft"
                 trigger={['click']}
                 disabled={!isInitialized}
               >
-                <Tooltip title={isInitialized ? "View edit history" : "Editor not ready"}>
-                  <Button
-                    icon={<HistoryOutlined />}
-                    size="small"
-                    type="text"
-                    disabled={!isInitialized}
-                    className={isInitialized ? "hover:bg-purple-50 hover:text-purple-600" : ""}
-                  />
-                </Tooltip>
+                <Button
+                  icon={<HistoryOutlined className="text-lg" />}
+                  disabled={!isInitialized}
+                  className="h-10 w-10 bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 border-gray-300 disabled:bg-gray-50 disabled:text-gray-400"
+                  size="large"
+                />
               </Dropdown>
-            </div>
+            </Tooltip>
 
-            {/* Snap & Grid Controls */}
-            <div className="bg-gray-50 rounded-lg px-2 py-1.5">
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+            {/* Snap Grid Controls */}
+            <div className="bg-gray-50 rounded-lg px-2 py-1 border border-gray-200">
               <SnapGridControls />
             </div>
 
-            {/* Auto-save & Debug Settings */}
-            <div className="flex items-center space-x-2">
-              {/* Manual Save Button */}
-              <Tooltip title="Save current page manually">
-                <Button
-                  size="small"
-                  type="primary"
-                  disabled={!isInitialized || isLoadingPage || isSaving}
-                  onClick={async () => {
-                    try {
-                      const currentContent = query.serialize();
-                      if (currentContent && currentContent !== '{}' && currentContent.includes('ROOT')) {
-                        const parsed = JSON.parse(currentContent);
-                        if (parsed.ROOT) {
-                          await updatePage(user.uid, siteId, currentPageId, {
-                            content: parsed,
-                            lastModified: new Date()
-                          });
-                          setPageContentCache(prev => ({
-                            ...prev,
-                            [currentPageId]: currentContent
-                          }));
-                          setLastSaved(new Date());
-                          message.success(`Page "${currentPageId}" saved successfully!`);
-                        }
-                      }
-                    } catch (error) {
-                      console.error('Manual save failed:', error);
-                      message.error('Failed to save page');
-                    }
-                  }}
-                  className="text-xs"
-                >
-                  💾 Save
-                </Button>
-              </Tooltip>
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
 
-              {/* Auto-save Settings */}
+            {/* Save & Auto-save */}
+            <Tooltip title="Save Page">
+              <Button
+                icon={<SaveOutlined className="text-lg" />}
+                disabled={!isInitialized || isLoadingPage || isSaving}
+                onClick={async () => {
+                  try {
+                    const currentContent = query.serialize();
+                    if (currentContent && currentContent !== '{}' && currentContent.includes('ROOT')) {
+                      const parsed = JSON.parse(currentContent);
+                      if (parsed.ROOT) {
+                        await updatePage(user.uid, siteId, currentPageId, {
+                          content: parsed,
+                          lastModified: new Date()
+                        });
+                        setPageContentCache(prev => ({
+                          ...prev,
+                          [currentPageId]: currentContent
+                        }));
+                        setLastSaved(new Date());
+                        message.success(`Page "${currentPageId}" saved successfully!`);
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Manual save failed:', error);
+                    message.error('Failed to save page');
+                  }
+                }}
+                className="h-10 w-10 bg-green-600 text-white hover:bg-green-700 border-green-500"
+                size="large"
+              />
+            </Tooltip>
+
+            <Tooltip title="Auto-save Settings">
               <Dropdown
                 menu={{
                   items: [
@@ -1140,64 +1797,83 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 placement="bottomRight"
                 trigger={['click']}
               >
-                <button className="text-xs px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors">
-                  ⚙️ {autoSaveFrequency / 1000}s
-                </button>
+                <Button
+                  icon={<SettingOutlined className="text-lg" />}
+                  className="h-10 w-10 bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 border-gray-300"
+                  size="large"
+                />
               </Dropdown>
-              
-              <button
+            </Tooltip>
+
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+            {/* Import/Export Group */}
+            <Tooltip title="Import Page">
+              <Button
+                icon={<ImportOutlined className="text-lg" />}
+                disabled={!isInitialized || isLoadingPage}
+                onClick={() => setLoadModalVisible(true)}
+                className="h-10 w-10 bg-blue-600 text-white hover:bg-blue-700 border-blue-500"
+                size="large"
+              />
+            </Tooltip>
+
+            <Tooltip title="Export Page">
+              <Button
+                icon={<ExportOutlined className="text-lg" />}
+                disabled={!isInitialized || isLoadingPage}
+                onClick={handleExportPage}
+                className="h-10 w-10 bg-purple-600 text-white hover:bg-purple-700 border-purple-500"
+                size="large"
+              />
+            </Tooltip>
+
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+            <Tooltip title="Toggle Style Menu">
+              <Button
+                icon={useFigmaStyle ? <HeatMapOutlined className="text-lg" /> : <BoxPlotOutlined className="text-lg" />}
                 onClick={() => setUseFigmaStyle(!useFigmaStyle)}
-                className="text-xs px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors"
-                title="Toggle style menu"
-              >
-                {useFigmaStyle ? '🎨' : '📋'}
-              </button>
-            </div>
+                className="h-10 w-10 bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 border-gray-300"
+                size="large"
+              />
+            </Tooltip>
           </div>
 
-          {/* Right Section - Site Actions */}
+          {/* Right Section - Preview & Publish */}
           <div className="flex items-center space-x-2">
-            <Button 
-              icon={<EyeOutlined />}
-              onClick={handlePreview}
-              size="small"
-            >
-              Preview
-            </Button>
-            <Button 
-              type={site?.isPublished ? 'default' : 'primary'}
-              onClick={handleTogglePublish}
-              size="small"
-            >
-              {site?.isPublished ? 'Unpublish' : 'Publish'}
-            </Button>
+            <Tooltip title="Preview Site">
+              <Button 
+                icon={<EyeOutlined className="text-lg" />}
+                onClick={handlePreview}
+                className="h-10 px-4 bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-500"
+                size="large"
+              >
+                Preview
+              </Button>
+            </Tooltip>
+            <Tooltip title={site?.isPublished ? "Unpublish Site" : "Publish Site"}>
+              <Button 
+                icon={site?.isPublished ? <EyeInvisibleOutlined className="text-lg" /> : <GlobalOutlined className="text-lg" />}
+                onClick={handleTogglePublish}
+                className={`h-10 px-4 ${
+                  site?.isPublished 
+                    ? 'bg-orange-600 hover:bg-orange-700 border-orange-500' 
+                    : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-500'
+                } text-white`}
+                size="large"
+              >
+                {site?.isPublished ? 'Unpublish' : 'Publish'}
+              </Button>
+            </Tooltip>
           </div>
         </div>
       </div>
 
       {/* Main Editor Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Toolbox */}
-        {(() => {
-          const shouldShowToolbox = enabled && isInitialized;
-          return shouldShowToolbox;
-        })() && (
-          <div className={`${activeDrawer ? 'w-64' : 'w-64'} bg-white border-r border-gray-200 shadow-sm flex-shrink-0 h-full flex flex-col`}>
-            <Toolbox 
-              activeDrawer={activeDrawer}
-              setActiveDrawer={setActiveDrawer}
-              openMenuNodeId={openMenuNodeId}
-              setOpenMenuNodeId={setOpenMenuNodeId}
-            />
-            <div className=' h-full flex-1 min-h-0'>
-              <EditorLayers />
-            </div>
-          </div>
-        )}
-
-        {/* Main Editor Canvas */}
-        <div className="flex-1 flex">
-          <div className="flex-1 p-4 overflow-auto bg-gray-100 relative">
+      <div className="flex-1 relative overflow-hidden">
+        {/* Full Width Editor Canvas */}
+        <div className="w-full h-full overflow-auto bg-gray-100 relative">
             {/* Loading overlay during page switches */}
             {isLoadingPage && (
               <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50 backdrop-blur-sm">
@@ -1235,11 +1911,11 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
               </div>
             )}
             
-            <div className="w-full max-w-none">
+            <div className="w-full  h-full max-w-none">
               {/* Only render Frame when editor is properly initialized */}
               {isInitialized ? (
                 <Frame 
-                  className="w-full min-h-[600px] pb-8"
+                  className="w-full h-full min-h-[100vh]"
                   data-page-id={currentPageId}
                   data-initialized={isInitialized.toString()}
                   data-loading={isLoadingPage.toString()}
@@ -1262,21 +1938,19 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 >
                   <Element 
                     is={Root} 
-                    padding={20} 
-                    maxWidth='90%'
-                    minWidth='99%'
-                    minHeight='600px'
-                    paddingBottom='2rem'
+                    width="100%"
+                    minWidth="100%"
+                    maxWidth="100%"
+                    minHeight="100vh"
                     background="#ffffff" 
                     position="relative"
-                    width="100%"
                     display="block"
                     canvas
-                    className="min-h-[600px] w-full min-w-[99%] max-w-[90%] pb-8"
+                    className="w-full h-full min-h-[100vh]"
                   />
                 </Frame>
               ) : (
-                <div className="w-full min-h-[600px] bg-white rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                <div className="w-full h-full min-h-[100vh] bg-white flex items-center justify-center">
                   <div className="text-center text-gray-500">
                     <div className="text-lg mb-2">🎨</div>
                     <div>Preparing your canvas...</div>
@@ -1298,27 +1972,119 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             </div>
           </div>
 
-          {/* Right Sidebar - Style Menu */}
-          {(() => {
-            const shouldShowStyleMenu = enabled && isInitialized;
-            console.log('🎨 V2: StyleMenu render check:', {
-              enabled,
-              isInitialized,
-              shouldShowStyleMenu,
-              currentPageId
-            });
-            return shouldShowStyleMenu;
-          })() && (
-            <div className={`bg-white border-l border-gray-200 shadow-sm flex-shrink-0 ${
-              useFigmaStyle ? 'w-80 min-w-80' : 'w-auto min-w-96'
-            }`}>
-              <div className="h-full overflow-y-auto">
-                <StyleMenu useFigmaStyle={useFigmaStyle} />
-              </div>
+        {/* Floating Left Sidebar - Toolbox & Layers */}
+        {(() => {
+          const shouldShowToolbox = enabled && isInitialized;
+          return shouldShowToolbox ;
+        })() && (
+          <div className='absolute flex-shrink-0 z-30 left-4 top-4 bottom-4 w-64 min-h-64 max-h-96'>
+            {!isLeftPanelMinimized && <div className=" bg-white border border-gray-200 shadow-lg rounded-lg max-h-96  flex flex-col">
+            {/* Minimize Button */}
+            <div className="flex justify-between items-center p-2 border-b border-gray-200">
+              <Tooltip title="Minimize Layers Panel">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MinusOutlined />}
+                  onClick={() => setIsLeftPanelMinimized(true)}
+                  className="text-gray-500 hover:text-gray-700"
+                />
+              </Tooltip>
+              <span className="text-sm font-medium text-gray-700 flex items-center">
+                <LayoutOutlined className="mr-2" />
+                Layers
+              </span>
             </div>
-          )}
-        </div>
+
+            
+            <div className="h-full max-h-96 flex-1 min-h-0">
+              <EditorLayers />
+            </div>
+          </div>}
+          <Toolbox 
+              activeDrawer={activeDrawer}
+              setActiveDrawer={setActiveDrawer}
+              openMenuNodeId={openMenuNodeId}
+              setOpenMenuNodeId={setOpenMenuNodeId}
+            />
+          </div>
+        )}
+
+        {/* Floating Right Sidebar - Style Menu */}
+        {(() => {
+          const shouldShowStyleMenu = enabled && isInitialized;
+          console.log('🎨 V2: StyleMenu render check:', {
+            enabled,
+            isInitialized,
+            shouldShowStyleMenu,
+            currentPageId
+          });
+          return shouldShowStyleMenu && !isRightPanelMinimized;
+        })() && (
+          <div className={`absolute right-4 top-4 bottom-4 bg-white border border-gray-200 shadow-lg rounded-lg flex-shrink-0 z-30 ${
+            useFigmaStyle ? 'w-80 min-w-80' : 'w-96 min-w-96'
+          } flex flex-col`}>
+            {/* Minimize Button */}
+            <div className="flex justify-between items-center p-2 border-b border-gray-200">
+              <span className="text-sm font-medium text-gray-700 flex items-center">
+                <FormatPainterOutlined className="mr-2" />
+                Style Properties
+              </span>
+              <Tooltip title="Minimize Panel">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MinusOutlined />}
+                  onClick={() => setIsRightPanelMinimized(true)}
+                  className="text-gray-500 hover:text-gray-700"
+                />
+              </Tooltip>
+            </div>
+            <div className="h-full overflow-y-auto hidescroll flex-1">
+              <StyleMenu useFigmaStyle={useFigmaStyle} />
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Floating Action Buttons for Minimized Panels */}
+      {isLeftPanelMinimized && enabled && isInitialized && (
+        <div className="fixed left-4 z-40" style={{ top: 'calc(4rem + 1rem + 0.5rem)' }}>
+          <Tooltip title="Show Tools & Layers" placement="right">
+            <Button
+              type="primary"
+              shape="circle"
+              size="large"
+              icon={<LayoutOutlined />}
+              onClick={() => setIsLeftPanelMinimized(false)}
+              className="shadow-lg"
+            />
+          </Tooltip>
+        </div>
+      )}
+
+      {isRightPanelMinimized && enabled && isInitialized && (
+        <div className="fixed right-4 z-40" style={{ top: 'calc(4rem + 1rem + 0.5rem)' }}>
+          <Tooltip title="Show Style Properties" placement="left">
+            <Button
+              type="primary"
+              shape="circle"
+              size="large"
+              icon={<FormatPainterOutlined />}
+              onClick={() => setIsRightPanelMinimized(false)}
+              className="shadow-lg"
+            />
+          </Tooltip>
+        </div>
+      )}
+
+      {/* Page Load Modal */}
+      <PageLoadModal
+        visible={loadModalVisible}
+        onCancel={() => setLoadModalVisible(false)}
+        onLoad={handleLoadPageData}
+        mode="load"
+      />
     </div>
   );
 };

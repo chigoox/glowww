@@ -28,17 +28,7 @@ const MultiSelectBoundingBox = () => {
     setIsClient(true);
   }, []);
 
-  console.log('🎯 BoundingBox Debug:', { 
-    selectedNodes: Array.from(selectedNodes), 
-    count: selectedNodes.size,
-    boundingBox 
-  });
 
-  console.log('🎯 Drag Selection Debug:', { 
-    isDragSelecting,
-    dragSelection,
-    hasPortalTarget: isClient && !!document.body
-  });
 
   const [dragState, setDragState] = useState(null);
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
@@ -75,7 +65,7 @@ const MultiSelectBoundingBox = () => {
       y: y
     });
     
-    console.log('🎯 Bounding box context menu opened for', selectedNodes.size, 'elements');
+   
   }, [selectedNodes]);
 
   // Close context menu
@@ -95,7 +85,7 @@ const MultiSelectBoundingBox = () => {
     let currentDeltaX = 0;
     let currentDeltaY = 0;
 
-    console.log('🎯 Drag start:', { startX, startY, boundingBox });
+  
 
     setDragState({ startX, startY });
     setIsDragging(true);
@@ -104,12 +94,6 @@ const MultiSelectBoundingBox = () => {
       currentDeltaX = moveEvent.clientX - startX;
       currentDeltaY = moveEvent.clientY - startY;
       
-      console.log('🖱️ Mouse move:', { 
-        mouseX: moveEvent.clientX, 
-        mouseY: moveEvent.clientY, 
-        deltaX: currentDeltaX, 
-        deltaY: currentDeltaY 
-      });
       
       // Update visual position immediately for smooth feedback
       // We don't use transform here to avoid position conflicts
@@ -120,7 +104,7 @@ const MultiSelectBoundingBox = () => {
     };
 
     const handleMouseUp = () => {
-      console.log('🏁 Drag end, applying movement:', { currentDeltaX, currentDeltaY });
+      
       
       // Apply the actual movement to all selected elements using the final delta
       moveSelection(currentDeltaX, currentDeltaY);
@@ -210,7 +194,7 @@ const MultiSelectBoundingBox = () => {
     };
 
     const handleMouseUp = () => {
-      console.log('📏 Applying final resize:', { finalScaleX, finalScaleY });
+     
       
       // Apply the final resize to all selected elements
       resizeSelection(finalScaleX, finalScaleY);

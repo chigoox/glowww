@@ -223,7 +223,7 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className=" max-h-[45rem] border shadow rounded h-screen flex flex-col bg-white">
       {/* Header */}
       <div className="p-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-2">

@@ -42,14 +42,17 @@ import {
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
-const { confirm } = Modal;
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [siteToDelete, setSiteToDelete] = useState(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [isAnalyticsModalVisible, setIsAnalyticsModalVisible] = useState(false);
+  const [selectedAnalyticsSite, setSelectedAnalyticsSite] = useState(null);
   
   // Logout function
   const handleLogout = async () => {
@@ -155,35 +158,41 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteSite = (site) => {
-    confirm({
-      title: 'Delete Site',
-      content: (
-        <div>
-          <p>Are you sure you want to delete <strong>"{site.name}"</strong>?</p>
-          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-            ⚠️ This action cannot be undone. All pages and content will be permanently deleted.
-          </p>
-          <p style={{ marginTop: 8 }}>
-            Public URL: <Text code>{`${window.location.origin}/u/${user.username}/${site.name}`}</Text>
-          </p>
-        </div>
-      ),
-      okText: 'Delete Forever',
-      okType: 'danger',
-      cancelText: 'Cancel',
-      onOk: async () => {
-        try {
-          await deleteSite(user.uid, site.id);
-          message.success(`Site "${site.name}" deleted successfully`);
-          loadUserSites();
-        } catch (error) {
-          console.error('Error deleting site:', error);
-          message.error(`Failed to delete site: ${error.message}`);
-        }
-      }
-    });
+  const handleDeleteSite = (site, event) => {
+    // Stop event propagation to prevent parent click handlers
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    
+    console.log('🗑️ Delete button clicked for site:', site.name);
+    
+    // Set the site to delete and show the modal
+    setSiteToDelete(site);
+    setIsDeleteModalVisible(true);
   };
+
+  // Confirm and execute site deletion
+  const confirmDeleteSite = async () => {
+    if (!siteToDelete) return;
+    
+    console.log('�️ Confirming deletion of site:', siteToDelete.name);
+    
+    try {
+      await deleteSite(user.uid, siteToDelete.id);
+      message.success(`Site "${siteToDelete.name}" deleted successfully`);
+      loadUserSites();
+    } catch (error) {
+      console.error('Error deleting site:', error);
+      message.error(`Failed to delete site: ${error.message}`);
+    } finally {
+      // Close modal and reset state
+      setIsDeleteModalVisible(false);
+      setSiteToDelete(null);
+    }
+  };
+
+
 
   const handleTogglePublish = async (site) => {
     try {
@@ -276,117 +285,9 @@ export default function Dashboard() {
   };
 
   const handleViewAnalytics = (site) => {
-    // For now, show a comprehensive modal with site information and upcoming analytics
-    Modal.info({
-      title: (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <RocketOutlined style={{ color: '#52c41a' }} />
-          <span>Analytics for "{site.name}"</span>
-        </div>
-      ),
-      content: (
-        <div>
-          {/* Site Overview */}
-          <div style={{ marginBottom: 20 }}>
-            <Title level={5}>Site Overview</Title>
-            <Row gutter={[16, 8]}>
-              <Col span={12}>
-                <Text strong>Status: </Text>
-                <Tag color={site.isPublished ? 'green' : 'orange'}>
-                  {site.isPublished ? 'Published' : 'Draft'}
-                </Tag>
-              </Col>
-              <Col span={12}>
-                <Text strong>Created: </Text>
-                <Text>{new Date(site.createdAt.toDate()).toLocaleDateString()}</Text>
-              </Col>
-              <Col span={24}>
-                <Text strong>Public URL: </Text>
-                <div style={{ marginTop: 4 }}>
-                  <Input 
-                    value={`${window.location.origin}/u/${user.username}/${site.name}`}
-                    readOnly
-                    size="small"
-                    addonAfter={
-                      <Button 
-                        type="link" 
-                        size="small" 
-                        icon={<CopyOutlined />}
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/u/${user.username}/${site.name}`);
-                          message.success('URL copied!');
-                        }}
-                      >
-                        Copy
-                      </Button>
-                    }
-                  />
-                </div>
-              </Col>
-            </Row>
-          </div>
-
-          {/* Quick Actions */}
-          <div style={{ marginBottom: 20 }}>
-            <Title level={5}>Quick Actions</Title>
-            <Space wrap>
-              <Button 
-                type="primary" 
-                icon={<EditOutlined />}
-                onClick={() => {
-                  Modal.destroyAll();
-                  window.location.href = `/Editor/site?site=${site.id}`;
-                }}
-              >
-                Edit Site
-              </Button>
-              <Button 
-                icon={<EyeOutlined />}
-                onClick={() => window.open(`/u/${user.username}/${site.name}`, '_blank')}
-                disabled={!site.isPublished}
-              >
-                View Live
-              </Button>
-              <Button 
-                icon={<ShareAltOutlined />}
-                onClick={() => {
-                  copyPublicUrl(site);
-                  message.success('URL copied to clipboard');
-                }}
-              >
-                Share URL
-              </Button>
-            </Space>
-          </div>
-
-          {/* Coming Soon Analytics */}
-          <Alert
-            message="Advanced Analytics Coming Soon!"
-            description={
-              <div>
-                <p>We're working on comprehensive analytics including:</p>
-                <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                  <li>Page views and unique visitors</li>
-                  <li>Traffic sources and referrers</li>
-                  <li>Geographic visitor data</li>
-                  <li>Performance metrics</li>
-                  <li>Mobile vs desktop usage</li>
-                  <li>Conversion tracking</li>
-                </ul>
-                <p style={{ marginTop: 12 }}>
-                  <Text strong>Stay tuned for these features in upcoming updates!</Text>
-                </p>
-              </div>
-            }
-            type="info"
-            style={{ marginTop: 16 }}
-          />
-        </div>
-      ),
-      width: 600,
-      okText: 'Close',
-      icon: null
-    });
+    // Set the site and show the analytics modal
+    setSelectedAnalyticsSite(site);
+    setIsAnalyticsModalVisible(true);
   };
 
   // Get user's current plan info
@@ -443,15 +344,17 @@ export default function Dashboard() {
           <Title level={2} style={{ margin: 0 }}>Welcome back, {user.displayName || user.email}!</Title>
           <Text type="secondary">Manage your websites and upgrade your plan</Text>
         </div>
-        <Button 
-          icon={<LogoutOutlined />}
-          onClick={handleLogout}
-          type="text"
-          size="large"
-          style={{ color: '#666' }}
-        >
-          Logout
-        </Button>
+        <Space>
+          <Button 
+            icon={<LogoutOutlined />}
+            onClick={handleLogout}
+            type="text"
+            size="large"
+            style={{ color: '#666' }}
+          >
+            Logout
+          </Button>
+        </Space>
       </div>
 
       {/* Plan Status Card */}
@@ -614,6 +517,174 @@ export default function Dashboard() {
             </Col>
           </Row>
         </Form>
+      </Modal>
+
+      {/* Delete Site Confirmation Modal */}
+      <Modal
+        title="Delete Site"
+        open={isDeleteModalVisible}
+        onCancel={() => {
+          setIsDeleteModalVisible(false);
+          setSiteToDelete(null);
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setIsDeleteModalVisible(false);
+            setSiteToDelete(null);
+          }}>
+            Cancel
+          </Button>,
+          <Button 
+            key="delete" 
+            type="primary" 
+            danger
+            onClick={confirmDeleteSite}
+          >
+            Delete Forever
+          </Button>
+        ]}
+        centered
+        width={500}
+      >
+        {siteToDelete && (
+          <div>
+            <p>Are you sure you want to delete <strong>"{siteToDelete.name}"</strong>?</p>
+            <p style={{ color: '#ff4d4f', marginTop: 12 }}>
+              ⚠️ This action cannot be undone. All pages and content will be permanently deleted.
+            </p>
+            <p style={{ marginTop: 12, padding: '8px 12px', backgroundColor: '#f5f5f5', borderRadius: '4px', fontSize: '12px' }}>
+              <strong>Public URL:</strong> <code>{`${window.location.origin}/u/${user.username}/${siteToDelete.name}`}</code>
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Analytics Modal */}
+      <Modal
+        title={
+          selectedAnalyticsSite ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <RocketOutlined style={{ color: '#52c41a' }} />
+              <span>Analytics for "{selectedAnalyticsSite.name}"</span>
+            </div>
+          ) : 'Analytics'
+        }
+        open={isAnalyticsModalVisible}
+        onCancel={() => {
+          setIsAnalyticsModalVisible(false);
+          setSelectedAnalyticsSite(null);
+        }}
+        footer={[
+          <Button key="close" type="primary" onClick={() => {
+            setIsAnalyticsModalVisible(false);
+            setSelectedAnalyticsSite(null);
+          }}>
+            Close
+          </Button>
+        ]}
+        width={600}
+        centered
+      >
+        {selectedAnalyticsSite && (
+          <div>
+            {/* Site Overview */}
+            <div style={{ marginBottom: 20 }}>
+              <Title level={5}>Site Overview</Title>
+              <Row gutter={[16, 8]}>
+                <Col span={12}>
+                  <Text strong>Status: </Text>
+                  <Tag color={selectedAnalyticsSite.isPublished ? 'green' : 'orange'}>
+                    {selectedAnalyticsSite.isPublished ? 'Published' : 'Draft'}
+                  </Tag>
+                </Col>
+                <Col span={12}>
+                  <Text strong>Created: </Text>
+                  <Text>{new Date(selectedAnalyticsSite.createdAt.toDate()).toLocaleDateString()}</Text>
+                </Col>
+                <Col span={24}>
+                  <Text strong>Public URL: </Text>
+                  <div style={{ marginTop: 4 }}>
+                    <Input 
+                      value={`${window.location.origin}/u/${user.username}/${selectedAnalyticsSite.name}`}
+                      readOnly
+                      size="small"
+                      addonAfter={
+                        <Button 
+                          type="link" 
+                          size="small" 
+                          icon={<CopyOutlined />}
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/u/${user.username}/${selectedAnalyticsSite.name}`);
+                            message.success('URL copied!');
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      }
+                    />
+                  </div>
+                </Col>
+              </Row>
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{ marginBottom: 20 }}>
+              <Title level={5}>Quick Actions</Title>
+              <Space wrap>
+                <Button 
+                  type="primary" 
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setIsAnalyticsModalVisible(false);
+                    setSelectedAnalyticsSite(null);
+                    window.location.href = `/Editor/site?site=${selectedAnalyticsSite.id}`;
+                  }}
+                >
+                  Edit Site
+                </Button>
+                <Button 
+                  icon={<EyeOutlined />}
+                  onClick={() => window.open(`/u/${user.username}/${selectedAnalyticsSite.name}`, '_blank')}
+                  disabled={!selectedAnalyticsSite.isPublished}
+                >
+                  View Live
+                </Button>
+                <Button 
+                  icon={<ShareAltOutlined />}
+                  onClick={() => {
+                    copyPublicUrl(selectedAnalyticsSite);
+                    message.success('URL copied to clipboard');
+                  }}
+                >
+                  Share URL
+                </Button>
+              </Space>
+            </div>
+
+            {/* Coming Soon Analytics */}
+            <Alert
+              message="Advanced Analytics Coming Soon!"
+              description={
+                <div>
+                  <p>We're working on comprehensive analytics including:</p>
+                  <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                    <li>Page views and unique visitors</li>
+                    <li>Traffic sources and referrers</li>
+                    <li>Geographic visitor data</li>
+                    <li>Performance metrics</li>
+                    <li>Mobile vs desktop usage</li>
+                    <li>Conversion tracking</li>
+                  </ul>
+                  <p style={{ marginTop: 12 }}>
+                    <Text strong>Stay tuned for these features in upcoming updates!</Text>
+                  </p>
+                </div>
+              }
+              type="info"
+              style={{ marginTop: 16 }}
+            />
+          </div>
+        )}
       </Modal>
 
       {/* Upgrade Modal */}

@@ -27,10 +27,7 @@ import {
   HomeOutlined,
   CaretRightOutlined,
   CaretDownOutlined,
-  ClockCircleOutlined,
-  CodeOutlined,
-  FileOutlined,
-  DownloadOutlined
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import { useEditor } from '@craftjs/core';
 import { useSearchParams } from 'next/navigation';
@@ -48,7 +45,12 @@ const { Option } = Select;
  * - Page navigation and switching
  * - Real-time page updates
  */
-const PageManager2 = () => {
+const PageManager2 = ({ 
+  currentPageId, 
+  onPageChange, 
+  pages: externalPages, 
+  onPagesUpdate 
+}) => {
   const { actions, query } = useEditor();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -62,13 +64,12 @@ const PageManager2 = () => {
   // Modal states
   const [newPageModalVisible, setNewPageModalVisible] = useState(false);
   const [confirmSwitchModalVisible, setConfirmSwitchModalVisible] = useState(false);
-  const [loadPageModalVisible, setLoadPageModalVisible] = useState(false);
   const [pendingPageSwitch, setPendingPageSwitch] = useState(null);
   
   // Page management states
-  const [pages, setPages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [currentPageKey, setCurrentPageKey] = useState('home');
+  const [pages, setPages] = useState(externalPages || []);
+  const [loading, setLoading] = useState(!externalPages?.length);
+  const [currentPageKey, setCurrentPageKey] = useState(currentPageId || 'home');
   const [selectedPageKey, setSelectedPageKey] = useState(null);
   const [expandedKeys, setExpandedKeys] = useState(['home']);
   
@@ -76,7 +77,6 @@ const PageManager2 = () => {
   const [newPageName, setNewPageName] = useState('');
   const [newPageFormData, setNewPageFormData] = useState({ title: '', slug: '', parentKey: '' });
   const [creating, setCreating] = useState(false);
-  const [loadPageInputData, setLoadPageInputData] = useState('');
   
   // Unsaved changes tracking
   const [unsavedChanges, setUnsavedChanges] = useState(false);
@@ -86,20 +86,109 @@ const PageManager2 = () => {
   const currentPageDataRef = useRef(null);
   const homePageCreationAttempts = useRef(0);
 
-  // Load pages from Firebase on component mount
+  // Convert external pages to internal format
+  const convertPagesToInternalFormat = (externalPages) => {
+    if (!externalPages?.length) return [];
+    
+    console.log('🔄 PageManager2: Converting external pages:', externalPages);
+    
+    return externalPages.map(page => {
+      const isHomePage = page.isHome || page.name === 'home' || page.slug === 'home';
+      const converted = {
+        key: isHomePage ? 'home' : (page.slug || page.id),
+        id: page.id,
+        title: page.name || 'Untitled Page',
+        slug: page.slug || page.id,
+        isHome: isHomePage,
+        path: isHomePage ? '/' : (page.path || `/${page.slug || page.id}`),
+        content: null,
+        seoTitle: page.seoTitle || '',
+        seoDescription: page.seoDescription || '',
+        createdAt: page.createdAt,
+        updatedAt: page.updatedAt,
+        parentKey: isHomePage ? null : (page.parentKey || 'home'),
+        hierarchy: page.hierarchy || {
+          parent: isHomePage ? null : (page.parentKey || 'home'),
+          level: isHomePage ? 0 : (page.parentKey === 'home' || !page.parentKey ? 1 : 2),
+          isChild: !isHomePage
+        }
+      };
+      console.log('🔧 PageManager2: Converted page:', { 
+        original: { id: page.id, name: page.name, isHome: page.isHome },
+        converted: { key: converted.key, title: converted.title, isHome: converted.isHome }
+      });
+      return converted;
+    });
+  };
+
+  // Sync with external pages when they change
   useEffect(() => {
-    if (!user?.uid || !siteId) {
-      console.log('PageManager2: Waiting for user or siteId...', { user: !!user, siteId });
-      return;
+    if (externalPages?.length) {
+      console.log('PageManager2: Syncing with external pages:', externalPages.length);
+      const convertedPages = convertPagesToInternalFormat(externalPages);
+      setPages(convertedPages);
+      setLoading(false);
+    }
+  }, [externalPages]);
+
+  // Convert page ID to page key for internal use
+  const convertPageIdToKey = (pageId, pagesArray = pages) => {
+    if (!pageId) return 'home';
+    
+    console.log('🔧 PageManager2: Converting page ID to key:', { pageId, availablePages: pagesArray.map(p => ({ id: p.id, key: p.key })) });
+    
+    // Find the page by ID and return its key
+    const page = pagesArray.find(p => p.id === pageId);
+    if (page) {
+      console.log('🎯 PageManager2: Found page by ID:', { pageId, key: page.key, title: page.title });
+      return page.key;
     }
     
-    // Add a small delay to ensure the editor is ready
-    const timeoutId = setTimeout(() => {
-      loadPagesFromFirebase();
-    }, 200);
+    // If page not found by ID, check if pageId is already a key
+    const pageByKey = pagesArray.find(p => p.key === pageId);
+    if (pageByKey) {
+      console.log('🎯 PageManager2: Found page by key:', { pageId, key: pageId, title: pageByKey.title });
+      return pageId;
+    }
+    
+    console.warn('⚠️ PageManager2: Page not found, defaulting to home:', pageId);
+    // Default to 'home' if no match found
+    return 'home';
+  };
 
-    return () => clearTimeout(timeoutId);
-  }, [user?.uid, siteId]);
+  // Convert page key to page ID for external use
+  const convertPageKeyToId = (pageKey, pagesArray = pages) => {
+    const page = pagesArray.find(p => p.key === pageKey);
+    const result = page ? page.id : pageKey;
+    console.log('🔧 PageManager2: Converting key to ID:', { pageKey, pageId: result });
+    return result;
+  };
+
+  // Sync with external current page ID
+  useEffect(() => {
+    if (currentPageId && pages.length > 0) {
+      const expectedKey = convertPageIdToKey(currentPageId, pages);
+      if (expectedKey !== currentPageKey) {
+        console.log('🔄 PageManager2: Syncing current page from', currentPageKey, 'to', expectedKey, '(ID:', currentPageId, ')');
+        setCurrentPageKey(expectedKey);
+      } else {
+        console.log('✅ PageManager2: Current page already in sync:', { currentPageId, currentPageKey, expectedKey });
+      }
+    } else {
+      console.log('⏳ PageManager2: Waiting for page sync...', { currentPageId, pagesLength: pages.length });
+    }
+  }, [currentPageId, currentPageKey, pages]);
+
+  // Load pages from Firebase on component mount (only if no external pages provided)
+  useEffect(() => {
+    if (!externalPages?.length && user?.uid && siteId) {
+      console.log('PageManager2: No external pages, loading from Firebase...');
+      const timeoutId = setTimeout(() => {
+        loadPagesFromFirebase();
+      }, 200);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [user?.uid, siteId, externalPages?.length]);
 
   // Load pages from Firebase
   const loadPagesFromFirebase = async () => {
@@ -126,28 +215,31 @@ const PageManager2 = () => {
       // Convert Firebase pages to our format with proper hierarchy
       console.log('Raw Firebase pages:', firebasePages); // Debug log
       const convertedPages = firebasePages.map(page => {
-        console.log('Converting page:', page.id, 'isHome:', page.isHome, 'name:', page.name);
+        console.log('Converting page:', page.id, 'isHome:', page.isHome, 'name:', page.name, 'parentKey:', page.parentKey);
+        const isHomePage = page.isHome || page.name === 'home' || page.slug === 'home';
         return {
-          key: page.isHome ? 'home' : (page.slug || page.id), // Ensure home page always has key 'home'
+          key: isHomePage ? 'home' : (page.slug || page.id), // Ensure home page always has key 'home'
           id: page.id,
           title: page.name || 'Untitled Page',
           slug: page.slug || page.id,
-          isHome: page.isHome || false,
-          path: page.isHome ? '/' : (page.path || `/${page.slug || page.id}`),
+          isHome: isHomePage,
+          path: isHomePage ? '/' : (page.path || `/${page.slug || page.id}`),
           content: null, // Load content when needed
           seoTitle: page.seoTitle || '',
           seoDescription: page.seoDescription || '',
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
-          // Include hierarchy information
-          parentKey: page.parentKey || (page.isHome ? null : 'home'),
+          // CRITICAL: Ensure all non-home pages have 'home' as parent
+          parentKey: isHomePage ? null : (page.parentKey || 'home'),
           hierarchy: page.hierarchy || {
-            parent: page.isHome ? null : (page.parentKey || 'home'),
-            level: page.isHome ? 0 : (page.parentKey === 'home' || !page.parentKey ? 1 : 2),
-            isChild: !page.isHome
+            parent: isHomePage ? null : (page.parentKey || 'home'),
+            level: isHomePage ? 0 : (page.parentKey === 'home' || !page.parentKey ? 1 : 2),
+            isChild: !isHomePage
           }
         };
       });
+
+      console.log('🔧 Converted pages with hierarchy:', convertedPages.map(p => ({ key: p.key, title: p.title, parentKey: p.parentKey, isHome: p.isHome })));
 
       // Sort pages: home first, then by hierarchy level, then alphabetically
       convertedPages.sort((a, b) => {
@@ -350,7 +442,19 @@ const PageManager2 = () => {
   const switchToPage = async (pageKey) => {
     if (pageKey === currentPageKey) return;
     
-    console.log('switchToPage called:', { pageKey, unsavedChanges, currentPageKey });
+    console.log('PageManager2: switchToPage called:', { pageKey, currentPageKey });
+    
+    // Use external page change handler if provided
+    if (onPageChange) {
+      console.log('PageManager2: Using external page change handler');
+      const pageId = convertPageKeyToId(pageKey, pages);
+      console.log('PageManager2: Converting key', pageKey, 'to ID', pageId);
+      onPageChange(pageId);
+      return;
+    }
+    
+    // Fallback to internal logic (for backward compatibility)
+    console.log('PageManager2: Using internal page change logic');
     
     // Save current page data before switching
     if (unsavedChanges) {
@@ -424,6 +528,12 @@ const PageManager2 = () => {
       // Reload pages to include the new page
       await loadPagesFromFirebase();
       
+      // Notify parent component if callback provided
+      if (onPagesUpdate) {
+        const updatedPages = await getSitePages(user.uid, siteId);
+        onPagesUpdate(updatedPages);
+      }
+      
       message.success(`Page "${newPageFormData.title}" created successfully`);
       setNewPageModalVisible(false);
       setNewPageFormData({ title: '', slug: '', parentKey: '' });
@@ -433,74 +543,6 @@ const PageManager2 = () => {
       message.error('Failed to create page: ' + error.message);
     } finally {
       setCreating(false);
-    }
-  };
-
-  // Load Page functionality - allows users to copy/paste page data to overwrite current page
-  const loadPageToCurrentPage = async () => {
-    try {
-      if (!loadPageInputData.trim()) {
-        message.error('Please paste the page data or upload a .glow file');
-        return;
-      }
-      
-      let pageDataToLoad;
-      
-      try {
-        // Try to parse as JSON first
-        pageDataToLoad = JSON.parse(loadPageInputData.trim());
-      } catch (jsonError) {
-        // If JSON parsing fails, try to decompress (for .glow files)
-        try {
-          const { decompressData } = await import('../../../lib/sites');
-          pageDataToLoad = JSON.parse(decompressData(loadPageInputData.trim()));
-        } catch (decompressError) {
-          throw new Error('Invalid format. Please provide valid JSON data or a .glow file.');
-        }
-      }
-      
-      // Load the page data to current page with proper CraftJS readiness check
-      const deserializeWithDelay = () => {
-        try {
-          // Check if query is available and ready
-          if (!query || !actions) {
-            console.warn('CraftJS not ready for manual page load, retrying...');
-            setTimeout(deserializeWithDelay, 100);
-            return;
-          }
-          
-          actions.deserialize(JSON.stringify(pageDataToLoad));
-          console.log('Page data loaded to current page successfully');
-          
-          // Mark current page as having unsaved changes
-          setUnsavedChanges(true);
-          
-          message.success('Page loaded to current page successfully! Remember to save your changes.');
-          setLoadPageModalVisible(false);
-          setLoadPageInputData('');
-          
-        } catch (deserializeError) {
-          console.error('Failed to deserialize loaded page data:', deserializeError);
-          message.error('Failed to load page data: ' + deserializeError.message);
-        }
-      };
-      
-      setTimeout(deserializeWithDelay, 100);
-      
-    } catch (error) {
-      message.error('Failed to load page: ' + error.message);
-    }
-  };
-
-  // Handle file upload for Load Page
-  const handlePageFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setLoadPageInputData(e.target.result);
-      };
-      reader.readAsText(file);
     }
   };
 
@@ -532,6 +574,12 @@ const PageManager2 = () => {
       
       // Reload pages
       await loadPagesFromFirebase();
+      
+      // Notify parent component if callback provided
+      if (onPagesUpdate) {
+        const updatedPages = await getSitePages(user.uid, siteId);
+        onPagesUpdate(updatedPages);
+      }
       
       message.success(`Page "${page.title}" deleted`);
     } catch (error) {
@@ -567,172 +615,152 @@ const PageManager2 = () => {
   }, [unsavedChanges, currentPageKey]);
 
   // Convert pages to tree format for display with proper hierarchy
-  const buildTreeNode = (page, children = []) => ({
-    title: (
-      <div className="flex items-center justify-between w-full group">
-        <div className="flex items-center space-x-2">
-          {page.isHome ? <HomeOutlined /> : <FileTextOutlined />}
-          <div className="flex flex-col">
-            <span className={page.key === currentPageKey ? 'font-bold text-blue-600' : ''}>
-              {page.title}
-            </span>
-            <span className="text-xs text-gray-400">
-              {page.path}
-            </span>
+  // Convert flat pages array to tree structure (from PageManager.jsx)
+  const buildPageTree = (pagesList) => {
+    console.log('🌳 Building page tree from pages:', pagesList.map(p => ({ key: p.key, title: p.title, parentKey: p.parentKey, isHome: p.isHome })));
+    
+    const tree = [];
+    const pageMap = {};
+    
+    // Create a map for quick lookup
+    pagesList.forEach(page => {
+      pageMap[page.key] = { ...page, children: [] };
+    });
+    
+    console.log('🗺️ Page map created:', Object.keys(pageMap));
+    
+    // Build the tree
+    pagesList.forEach(page => {
+      if (page.parentKey && pageMap[page.parentKey]) {
+        console.log(`📁 Adding ${page.key} as child of ${page.parentKey}`);
+        pageMap[page.parentKey].children.push(pageMap[page.key]);
+      } else {
+        console.log(`🌲 Adding ${page.key} as root node (parentKey: ${page.parentKey})`);
+        tree.push(pageMap[page.key]);
+      }
+    });
+    
+    console.log('🌳 Final tree structure:', tree);
+    return tree;
+  };
+
+  // Find page in the tree structure (from PageManager.jsx)
+  const findPageInTree = (key, tree) => {
+    for (const page of tree) {
+      if (page.key === key) return page;
+      if (page.children) {
+        const found = findPageInTree(key, page.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Recursive function to build tree node with proper nesting (enhanced from PageManager.jsx)
+  const buildTreeNode = (page) => {
+    console.log(`🔨 Building tree node for: ${page.key} (${page.title}) with ${page.children?.length || 0} children`);
+    if (page.children && page.children.length > 0) {
+      console.log(`  Children: ${page.children.map(c => c.key).join(', ')}`);
+    }
+    
+    const treeNode = {
+      title: (
+        <div className="flex items-center justify-between w-full group hover:bg-gray-50 -mx-2 px-2 py-1 rounded transition-all">
+          <div className="flex items-center space-x-2">
+            {page.isHome ? (
+              <HomeOutlined className="text-blue-600" />
+            ) : (
+              <FileTextOutlined className="text-gray-500" />
+            )}
+            <div className="flex flex-col">
+              <span className={`${
+                page.key === currentPageKey 
+                  ? 'font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded-md' 
+                  : 'text-gray-700 hover:text-gray-900'
+              } transition-all`}>
+                {page.title}
+              </span>
+              <span className="text-xs text-gray-400 mt-0.5">
+                {page.path}
+              </span>
+            </div>
+            {page.key === currentPageKey && unsavedChanges && (
+              <span className="text-orange-500 text-xs flex items-center">
+                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-1 animate-pulse"></span>
+                ●
+              </span>
+            )}
           </div>
-          {page.key === currentPageKey && unsavedChanges && (
-            <span className="text-orange-500 text-xs">●</span>
-          )}
-        </div>
-        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Tooltip title="Add child page">
-            <Button
-              type="text"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={(e) => {
-                e.stopPropagation();
-                setNewPageFormData(prev => ({ ...prev, parentKey: page.key }));
-                setNewPageModalVisible(true);
-              }}
-            />
-          </Tooltip>
-          {!page.isHome && (
-            <Popconfirm
-              title="Delete this page?"
-              description="This action cannot be undone."
-              onConfirm={(e) => {
-                e.stopPropagation();
-                deletePageHandler(page.key);
-              }}
-              okText="Delete"
-              cancelText="Cancel"
-            >
+          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Tooltip title="Add sub-page">
               <Button
                 type="text"
                 size="small"
-                icon={<DeleteOutlined />}
-                onClick={(e) => e.stopPropagation()}
+                icon={<PlusOutlined />}
+                className="text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedPageKey(page.key);
+                  setNewPageFormData(prev => ({ ...prev, parentKey: page.key }));
+                  setNewPageModalVisible(true);
+                }}
               />
-            </Popconfirm>
-          )}
+            </Tooltip>
+            {!page.isHome && (
+              <Popconfirm
+                title="Delete this page?"
+                description="This action cannot be undone."
+                onConfirm={(e) => {
+                  e.stopPropagation();
+                  deletePageHandler(page.key);
+                }}
+                okText="Delete"
+                cancelText="Cancel"
+                okButtonProps={{ danger: true }}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  className="text-gray-400 hover:text-red-600 hover:bg-red-50"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Popconfirm>
+            )}
+          </div>
         </div>
-      </div>
-    ),
-    key: page.key,
-    children: children.length > 0 ? children : undefined
-  });
-
-  // Build hierarchical tree structure
-  const buildHierarchicalTree = () => {
-    const homePage = pages.find(p => p.isHome);
-    if (!homePage) return [];
-
-    // Get all child pages of home
-    const childPages = pages.filter(p => !p.isHome && (p.parentKey === 'home' || p.hierarchy?.parent === 'home'));
-    
-    // Build child nodes recursively
-    const buildChildren = (parentKey) => {
-      return pages
-        .filter(p => p.parentKey === parentKey || p.hierarchy?.parent === parentKey)
-        .map(page => {
-          const grandChildren = buildChildren(page.key);
-          return buildTreeNode(page, grandChildren);
-        });
+      ),
+      key: page.key,
+      isLeaf: !page.children || page.children.length === 0
     };
-
-    const homeChildren = buildChildren('home');
-    return [buildTreeNode(homePage, homeChildren)];
+    
+    // Only add children if they exist and have content
+    if (page.children && page.children.length > 0) {
+      treeNode.children = page.children.map(child => buildTreeNode(child));
+    }
+    
+    console.log(`  Final tree node for ${page.key}:`, { key: treeNode.key, hasChildren: !!treeNode.children, isLeaf: treeNode.isLeaf });
+    
+    return treeNode;
   };
 
   // Page tree data for Ant Design Tree component (memoized for performance)
   const treeData = useMemo(() => {
-    return buildHierarchicalTree();
+    console.log('🔧 Generating tree data from pages:', pages.map(p => ({ key: p.key, title: p.title, parentKey: p.parentKey, isHome: p.isHome })));
+    const tree = buildPageTree(pages).map(page => buildTreeNode(page));
+    console.log('🌳 Final tree data for Ant Design Tree:', tree);
+    console.log('🌳 Tree structure visualization:');
+    const visualizeTree = (nodes, depth = 0) => {
+      nodes.forEach(node => {
+        console.log('  '.repeat(depth) + `- ${node.title} (${node.key})`);
+        if (node.children && node.children.length > 0) {
+          visualizeTree(node.children, depth + 1);
+        }
+      });
+    };
+    visualizeTree(tree);
+    return tree;
   }, [pages, currentPageKey, unsavedChanges]);
-
-  // Output current page's serialized JSON to console
-  const outputCurrentPageJSON = () => {
-    try {
-      const currentData = query.serialize();
-      const currentPage = pages.find(p => p.key === currentPageKey);
-      
-      const pageJSON = {
-        pageInfo: {
-          key: currentPageKey,
-          title: currentPage?.title || 'Unknown',
-          slug: currentPage?.slug || currentPageKey,
-          path: currentPage?.path || '/',
-          isHome: currentPage?.isHome || false,
-          id: currentPage?.id
-        },
-        serializedData: currentData,
-        timestamp: new Date().toISOString()
-      };
-      
-      console.log('=== Current Page JSON ===');
-      console.log(`Page: ${pageJSON.pageInfo.title} (${pageJSON.pageInfo.slug})`);
-      console.log(`Path: ${pageJSON.pageInfo.path}`);
-      console.log(`Firebase ID: ${pageJSON.pageInfo.id}`);
-      console.log('Full Page Data:', pageJSON);
-      console.log('Serialized Data Only:', currentData);
-      console.log('========================');
-      
-      message.success(`Page JSON output to console: ${pageJSON.pageInfo.title}`);
-    } catch (error) {
-      console.error('Failed to output page JSON:', error);
-      message.error('Failed to output page JSON: ' + error.message);
-    }
-  };
-
-  // Download current page's data as a file
-  const downloadCurrentPageData = () => {
-    try {
-      const currentData = query.serialize();
-      const currentPage = pages.find(p => p.key === currentPageKey);
-      
-      const pageJSON = {
-        pageInfo: {
-          key: currentPageKey,
-          title: currentPage?.title || 'Unknown',
-          slug: currentPage?.slug || currentPageKey,
-          path: currentPage?.path || '/',
-          isHome: currentPage?.isHome || false,
-          id: currentPage?.id,
-          exportedAt: new Date().toISOString()
-        },
-        serializedData: currentData,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Create downloadable JSON file
-      const dataStr = JSON.stringify(pageJSON, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      
-      // Create download link
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // Generate filename based on page info
-      const sanitizedTitle = (currentPage?.title || 'page').toLowerCase().replace(/[^a-z0-9]/g, '-');
-      const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      link.download = `${sanitizedTitle}-${timestamp}.glow`;
-      
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Clean up URL object
-      URL.revokeObjectURL(url);
-      
-      message.success(`Downloaded: ${link.download}`);
-      
-    } catch (error) {
-      console.error('Failed to download page data:', error);
-      message.error('Failed to download page data: ' + error.message);
-    }
-  };
 
   // Handle confirm switch modal actions
   const handleSaveAndSwitch = async () => {
@@ -768,44 +796,35 @@ const PageManager2 = () => {
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
-                <FolderOutlined />
-                <Text strong>Pages</Text>
-                <Text type="secondary">({pages.length})</Text>
+                <FolderOutlined className="text-blue-600" />
+                <Text strong className="text-gray-800">Pages</Text>
+                <Text type="secondary" className="text-xs bg-gray-100 px-2 py-1 rounded-full">
+                  {pages.length}
+                </Text>
               </div>
               <div className="flex items-center space-x-2">
-                <Tooltip title="Load page to current page">
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<FileOutlined />}
-                    onClick={() => setLoadPageModalVisible(true)}
-                  />
-                </Tooltip>
-                <Tooltip title="Download page data">
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<DownloadOutlined />}
-                    onClick={downloadCurrentPageData}
-                  />
-                </Tooltip>
-                <Tooltip title="Output page JSON to console">
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<CodeOutlined />}
-                    onClick={outputCurrentPageJSON}
-                  />
-                </Tooltip>
+                {/* Clean UI without action buttons */}
               </div>
             </div>
 
-            {/* Current Page Info */}
-            <div className="mb-3 p-2 bg-blue-50 rounded text-sm">
-              <Text strong>Current: </Text>
-              <Text>{pages.find(p => p.key === currentPageKey)?.title || 'Loading...'}</Text>
-              <div className="font-mono text-xs text-gray-600 mt-1">
-                {pages.find(p => p.key === currentPageKey)?.path || '/'}
+            {/* Current Page Info - Enhanced */}
+            <div className="mb-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg text-sm border border-blue-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Text strong className="text-blue-800">Current: </Text>
+                  <Text className="text-blue-700 font-medium">
+                    {pages.find(p => p.key === currentPageKey)?.title || 'Loading...'}
+                  </Text>
+                  <div className="font-mono text-xs text-blue-600 mt-1">
+                    {pages.find(p => p.key === currentPageKey)?.path || '/'}
+                  </div>
+                </div>
+                {unsavedChanges && (
+                  <div className="flex items-center text-orange-600 text-xs">
+                    <span className="w-2 h-2 bg-orange-500 rounded-full mr-1 animate-pulse"></span>
+                    Unsaved
+                  </div>
+                )}
               </div>
             </div>
 
@@ -817,8 +836,8 @@ const PageManager2 = () => {
               </div>
             ) : (
               <>
-                {/* Page Tree */}
-                <div className="max-h-60 overflow-y-auto">
+                {/* Page Tree with enhanced styling */}
+                <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-lg bg-white">
                   <Tree
                     treeData={treeData}
                     expandedKeys={expandedKeys}
@@ -836,14 +855,15 @@ const PageManager2 = () => {
                       }
                     }}
                     switcherIcon={({ expanded }) => 
-                      expanded ? <CaretDownOutlined /> : <CaretRightOutlined />
+                      expanded ? <CaretDownOutlined className="text-blue-600" /> : <CaretRightOutlined className="text-gray-400" />
                     }
+                    className="p-2"
                   />
                 </div>
 
-                <Divider style={{ margin: '12px 0' }} />
+                <Divider style={{ margin: '16px 0' }} />
 
-                {/* Add New Page */}
+                {/* Add New Page - Enhanced */}
                 <div className="flex items-center justify-between">
                   <Button
                     type="primary"
@@ -852,14 +872,15 @@ const PageManager2 = () => {
                     onClick={() => {
                       setNewPageModalVisible(true);
                     }}
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 border-0 shadow-sm hover:shadow-md transition-all"
                   >
                     Add Page
                   </Button>
                   
                   {lastSaveTime && (
-                    <Text type="secondary" className="text-xs">
-                      <ClockCircleOutlined className="mr-1" />
-                      Saved {lastSaveTime.toLocaleTimeString()}
+                    <Text type="secondary" className="text-xs flex items-center">
+                      <ClockCircleOutlined className="mr-1 text-green-600" />
+                      <span className="text-green-600">Saved {lastSaveTime.toLocaleTimeString()}</span>
                     </Text>
                   )}
                 </div>
@@ -960,70 +981,6 @@ const PageManager2 = () => {
             </div>
           )}
         </Form>
-      </Modal>
-
-      {/* Load Page Modal */}
-      <Modal
-        title="Load Page Data"
-        open={loadPageModalVisible}
-        onCancel={() => {
-          setLoadPageModalVisible(false);
-          setLoadPageInputData('');
-        }}
-        onOk={loadPageToCurrentPage}
-        okText="Load to Current Page"
-        width={800}
-        style={{ zIndex: 1050 }}
-      >
-        <div className="space-y-4">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start space-x-2">
-              <span className="text-yellow-600">⚠️</span>
-              <div>
-                <Text strong className="text-yellow-800">This will overwrite your current page content!</Text>
-                <div className="text-sm text-yellow-700 mt-1">
-                  Make sure to save your current work before loading new page data. This action cannot be undone.
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <Text>Load a page from a .glow file or paste serialized page data:</Text>
-          
-          <div className="flex items-center space-x-2">
-            <input
-              type="file"
-              accept=".glow,.txt,.json"
-              onChange={handlePageFileUpload}
-              style={{ display: 'none' }}
-              id="pageFileUpload"
-            />
-            <Button
-              icon={<FileOutlined />}
-              onClick={() => document.getElementById('pageFileUpload').click()}
-            >
-              Choose File
-            </Button>
-            <Text type="secondary">Supports .glow, .txt, and .json files</Text>
-          </div>
-          
-          <div>
-            <Text strong>Or paste page data directly:</Text>
-            <Input.TextArea
-              value={loadPageInputData}
-              onChange={(e) => setLoadPageInputData(e.target.value)}
-              placeholder="Paste your page data here (JSON format or .glow file content)..."
-              rows={12}
-              style={{ fontFamily: 'monospace', fontSize: '12px' }}
-            />
-          </div>
-          
-          <div className="text-xs text-gray-500">
-            <Text type="secondary">
-              💡 Tip: You can get page data by clicking the code button (📋) in the pages menu to output the current page data to console.
-            </Text>
-          </div>
-        </div>
       </Modal>
 
       {/* Confirm Switch Modal */}

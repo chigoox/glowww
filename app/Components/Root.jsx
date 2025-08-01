@@ -687,7 +687,7 @@ Root.craft = {
     
     // Spacing
     margin: "none",
-    padding: 20,
+    padding: 0,
     
     // Border
     border: "none",

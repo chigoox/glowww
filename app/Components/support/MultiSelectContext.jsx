@@ -118,32 +118,7 @@ export const MultiSelectProvider = ({ children }) => {
       bottom: maxBottom + padding
     };
     
-    console.log('📦 Bounding box calculation details:', {
-      rects: rects.map((r, i) => ({
-        index: i,
-        left: r.left,
-        top: r.top,
-        right: r.right,
-        bottom: r.bottom,
-        width: r.width,
-        height: r.height
-      })),
-      calculations: {
-        minLeft,
-        minTop,
-        maxRight,
-        maxBottom,
-        calculatedWidth: maxRight - minLeft,
-        calculatedHeight: maxBottom - minTop
-      },
-      viewport: {
-        innerWidth: window.innerWidth,
-        innerHeight: window.innerHeight,
-        scrollX: window.scrollX,
-        scrollY: window.scrollY
-      },
-      finalBoundingBox: newBoundingBox
-    });
+    
     
     setBoundingBox(newBoundingBox);
   }, [selectedNodes, query]);
@@ -152,11 +127,11 @@ export const MultiSelectProvider = ({ children }) => {
     const handleClick = (e) => {
       // Skip if we were drag selecting
       if (isDragSelecting) {
-        console.log('🖱️ Skipping click handler during drag selection');
+      
         return;
       }
       
-      console.log('🖱️ Global click detected:', e.target);
+      
       
       // Don't clear selection if Ctrl/Cmd is held (for multi-selection)
       if (e.ctrlKey || e.metaKey) {
@@ -168,25 +143,20 @@ export const MultiSelectProvider = ({ children }) => {
       const clickedBoundingBox = e.target.closest('.multi-select-bounding-box');
       const clickedSelectedElement = e.target.closest('.multi-selected-element');
       
-      console.log('🖱️ Click analysis:', {
-        clickedBoundingBox: !!clickedBoundingBox,
-        clickedSelectedElement: !!clickedSelectedElement,
-        targetClassList: e.target.classList
-      });
+     
       
       // If clicking on bounding box or selected element, don't clear
       if (clickedBoundingBox || clickedSelectedElement) {
-        console.log('🖱️ Clicked on selected element or bounding box, preserving selection');
         return;
       }
       
       // Only clear if clicking in the editor area
       const editorRoot = document.querySelector('[data-editor="true"]');
       if (editorRoot && editorRoot.contains(e.target)) {
-        console.log('🖱️ Clicking outside selection, clearing...');
+        c
         clearSelection();
       } else {
-        console.log('🖱️ Click outside editor area, ignoring');
+      
       }
     };
     
@@ -205,7 +175,7 @@ export const MultiSelectProvider = ({ children }) => {
       // Debounce the bounding box recalculation to avoid excessive updates
       clearTimeout(updateTimeout);
       updateTimeout = setTimeout(() => {
-        console.log('🔄 Element sizes changed, recalculating bounding box...');
+        
         calculateBoundingBox();
       }, 100);
     });
@@ -225,7 +195,7 @@ export const MultiSelectProvider = ({ children }) => {
         // Debounce the bounding box recalculation
         clearTimeout(updateTimeout);
         updateTimeout = setTimeout(() => {
-          console.log('🔄 Element styles changed, recalculating bounding box...');
+          
           calculateBoundingBox();
         }, 100);
       }
@@ -257,21 +227,12 @@ export const MultiSelectProvider = ({ children }) => {
 
   // Drag selection functionality
   useEffect(() => {
-    console.log('🖱️ Setting up drag selection event listeners...');
     
     const handleMouseDown = (e) => {
-      console.log('🖱️ Mouse down event (anywhere):', {
-        button: e.button,
-        target: e.target,
-        tagName: e.target.tagName,
-        className: e.target.className,
-        clientX: e.clientX,
-        clientY: e.clientY
-      });
+      
       
       // Skip if this is a right-click
       if (e.button !== 0) {
-        console.log('🖱️ Not left click, skipping');
         return;
       }
       
@@ -281,10 +242,8 @@ export const MultiSelectProvider = ({ children }) => {
                         document.querySelector('[data-testid="canvas"]') ||
                         document.body; // Fallback to body for now
       
-      console.log('🖱️ Editor root found:', !!editorRoot, 'Type:', editorRoot?.tagName);
       
       if (!editorRoot || !editorRoot.contains(e.target)) {
-        console.log('🖱️ Not in editor area, skipping');
         return;
       }
       
@@ -297,19 +256,10 @@ export const MultiSelectProvider = ({ children }) => {
       const isInput = e.target.tagName === 'INPUT' || e.target.closest('input');
       const isSelect = e.target.tagName === 'SELECT' || e.target.closest('select');
       
-      console.log('🖱️ Mouse down analysis:', {
-        target: e.target.tagName,
-        clickedBoundingBox: !!clickedBoundingBox,
-        clickedSelectedElement: !!clickedSelectedElement,
-        isButton,
-        isInput,
-        isSelect,
-        targetClasses: e.target.className
-      });
+      
       
       // If clicking on specific interactive elements, don't start drag selection
       if (clickedBoundingBox || clickedSelectedElement || isButton || isInput || isSelect) {
-        console.log('🖱️ Clicked on interactive element, not starting drag selection');
         return;
       }
       
@@ -320,7 +270,6 @@ export const MultiSelectProvider = ({ children }) => {
       }
       
       // Prepare for potential drag selection (but don't start yet)
-      console.log('🖱️ ⏰ Preparing for potential drag selection with delay');
       e.preventDefault(); // Prevent text selection
       
       isDragDelayActiveRef.current = true;
@@ -332,7 +281,6 @@ export const MultiSelectProvider = ({ children }) => {
       // Start delay timer for drag selection
       dragDelayTimerRef.current = setTimeout(() => {
         if (isDragDelayActiveRef.current && dragStartRef.current) {
-          console.log('🖱️ ✅ Delay completed, starting drag selection');
           
           setIsDragSelecting(true);
           
@@ -343,7 +291,6 @@ export const MultiSelectProvider = ({ children }) => {
             height: 0
           };
           setDragSelection(initialRect);
-          console.log('🖱️ Set initial drag selection:', initialRect);
           
           // Clear existing selection if needed
           if (shouldClearSelection) {
@@ -358,7 +305,6 @@ export const MultiSelectProvider = ({ children }) => {
     const handleMouseMove = (e) => {
       if (!isDragSelecting || !dragStartRef.current) return;
       
-      console.log('🖱️ Mouse move during drag selection');
       
       const startX = dragStartRef.current.x;
       const startY = dragStartRef.current.y;
@@ -372,7 +318,6 @@ export const MultiSelectProvider = ({ children }) => {
       const height = Math.abs(currentY - startY);
       
       const selectionRect = { left, top, width, height };
-      console.log('🖱️ Selection rect:', selectionRect);
       setDragSelection(selectionRect);
       
       // Only update selection if we've dragged a minimum distance
@@ -394,7 +339,6 @@ export const MultiSelectProvider = ({ children }) => {
             
             if (intersects) {
               selectedInDrag.add(nodeId);
-              console.log('📦 Element in drag selection:', nodeId);
             }
           }
         });
@@ -404,11 +348,9 @@ export const MultiSelectProvider = ({ children }) => {
           if (e.ctrlKey || e.metaKey) {
             const combined = new Set([...prev, ...selectedInDrag]);
             setIsMultiSelecting(combined.size > 0);
-            console.log('🖱️ Combined selection:', Array.from(combined));
             return combined;
           } else {
             setIsMultiSelecting(selectedInDrag.size > 0);
-            console.log('🖱️ Drag selection:', Array.from(selectedInDrag));
             return selectedInDrag;
           }
         });
@@ -420,7 +362,6 @@ export const MultiSelectProvider = ({ children }) => {
       
       // If delay is active, clear it (this was a quick click, not a drag)
       if (isDragDelayActiveRef.current && dragDelayTimerRef.current) {
-        console.log('🖱️ ⏰ Clearing delay timer - quick click detected');
         clearTimeout(dragDelayTimerRef.current);
         dragDelayTimerRef.current = null;
         isDragDelayActiveRef.current = false;
@@ -429,7 +370,6 @@ export const MultiSelectProvider = ({ children }) => {
       
       // If we were actually drag selecting, end it
       if (isDragSelecting) {
-        console.log('🖱️ ✅ Ending drag selection');
         setIsDragSelecting(false);
         setDragSelection(null);
         isDragDelayActiveRef.current = false;
@@ -441,10 +381,8 @@ export const MultiSelectProvider = ({ children }) => {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     
-    console.log('🖱️ Event listeners added');
     
     return () => {
-      console.log('🖱️ Removing event listeners');
       // Clear any pending delay timer
       if (dragDelayTimerRef.current) {
         clearTimeout(dragDelayTimerRef.current);
@@ -460,22 +398,17 @@ export const MultiSelectProvider = ({ children }) => {
 
   // Add node to selection (simple version for direct calls)
   const addToSelection = useCallback((nodeId) => {
-    console.log('🎯 Adding to selection:', nodeId);
     setSelectedNodes(prev => {
-      console.log('🎯 Current selection before add:', Array.from(prev));
       const newSet = new Set(prev);
       newSet.add(nodeId);
       setIsMultiSelecting(newSet.size > 0);
-      console.log('🎯 New selection after add:', Array.from(newSet));
       return newSet;
     });
   }, []);
 
   // Add node to selection with key handling (for internal use)
   const addToSelectionWithKeys = useCallback((nodeId) => {
-    console.log('⌨️ Adding with keys:', nodeId, 'Keys pressed:', Array.from(keysPressed.current));
     setSelectedNodes(prev => {
-      console.log('⌨️ Current selection before:', Array.from(prev));
       const newSet = new Set(prev);
       
       // If Ctrl/Cmd is held, add to selection (check multiple key variations)
