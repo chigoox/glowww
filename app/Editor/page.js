@@ -122,7 +122,7 @@ useEffect(() => {
         {/* Canvas Area */}
           <div className="flex-1 p-4 overflow-auto bg-gray-100">
             <div className="w-full max-w-none">
-              <Frame className="w-full min-h-[600px] pb-8">
+              <Frame className="w-full min-h-[900px] pb-8">
                 <Element 
                   is={Root} 
                   padding={0} 
@@ -131,7 +131,7 @@ useEffect(() => {
                   paddingBottom='2rem'
                   background="#ffffff" 
                   canvas
-                  className="min-h-[600px] w-full min-w-[99%] max-w-[90%] pb-8"
+                  className="min-h-[900px] w-full min-w-[99%] max-w-[90%] pb-8"
                   
                 >
                   {/* Canvas content goes here */}

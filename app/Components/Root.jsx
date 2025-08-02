@@ -668,8 +668,8 @@ Root.craft = {
     
     // Layout & Position
     width: "auto",
-    height: "600px",
-    minHeight: "600px",
+    height: "900px",
+    minHeight: "900px",
     maxWidth: '100vh',
     display: "block",
     position: "relative",

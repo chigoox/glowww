@@ -15,8 +15,8 @@ height: "auto"  // ❌ No height = no drop zone
 ```
 **After**:
 ```javascript
-height: "600px",     // ✅ Always starts with 600px
-minHeight: "600px",  // ✅ Ensures minimum drop zone size
+height: "900px",     // ✅ Always starts with 900px
+minHeight: "900px",  // ✅ Ensures minimum drop zone size
 padding: 20          // ✅ Better drop target area
 ```
 
@@ -26,7 +26,7 @@ padding: 20          // ✅ Better drop target area
 ```javascript
 "props": { 
   "canvas": true,
-  "minHeight": "600px",
+  "minHeight": "900px",
   "background": "#ffffff", 
   "position": "relative",
   "width": "100%",
@@ -49,7 +49,7 @@ padding: 20          // ✅ Better drop target area
 
 1. **Create a new page** via SitePageSelector
 2. **Switch to the new page** - it should show:
-   - ✅ **600px minimum height** (no more invisible ROOT!)
+   - ✅ **900px minimum height** (no more invisible ROOT!)
    - ✅ Beautiful drop zone with gradient background
    - ✅ "Ready to Build!" message with styling
    - ✅ Large, clear drop target area
@@ -63,14 +63,14 @@ padding: 20          // ✅ Better drop target area
 
 ### Files Modified
 - `app/Components/Root.jsx`: 
-  - ✅ Changed default `height: "auto"` → `height: "600px"`
-  - ✅ Added `minHeight: "600px"` for consistency
+  - ✅ Changed default `height: "auto"` → `height: "900px"`
+  - ✅ Added `minHeight: "900px"` for consistency
   - ✅ Added `padding: 20` for better drop area
   - ✅ Enhanced visual drop zone indicator
 - `app/Editor/site/page.jsx`: Enhanced all empty state creation points
 
 ### Expected Behavior
-✅ Empty pages now have proper 600px height drop zones  
+✅ Empty pages now have proper 900px height drop zones  
 ✅ Visual feedback shows exactly where to drop components  
 ✅ Minimum height ensures adequate drop target at all times  
 ✅ All existing functionality preserved  

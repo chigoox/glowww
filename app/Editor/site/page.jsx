@@ -552,7 +552,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                   "nodes": [],
                   "props": { 
                     "canvas": true,
-                    "minHeight": "600px",
+                    "minHeight": "900px",
                     "background": "#ffffff",
                     "position": "relative",
                     "width": "100%",
@@ -1240,7 +1240,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             "nodes": ["welcomeText"],
             "props": { 
               "canvas": true,
-              "minHeight": "600px",
+              "minHeight": "900px",
               "background": "#ffffff",
               "position": "relative",
               "width": "100%",
@@ -1365,7 +1365,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             "nodes": ["emergencyText"],
             "props": { 
               "canvas": true,
-              "minHeight": "600px",
+              "minHeight": "900px",
               "background": "#ffffff",
               "position": "relative",
               "width": "100%",
