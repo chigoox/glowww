@@ -23,7 +23,8 @@ import {
   ExpandOutlined,
   AlignLeftOutlined,
   AlignCenterOutlined,
-  AlignRightOutlined
+  AlignRightOutlined,
+  ColumnWidthOutlined
 } from '@ant-design/icons';
 import { snapGridSystem, GRID_PRESETS } from './SnapGridSystem';
 
@@ -212,6 +213,28 @@ const SnapGridControls = ({ className = '' }) => {
                   onChange={(value) => updateSetting('elementSnapThreshold', value)}
                   size="small"
                 />
+              </div>
+
+              {/* Vertical Guides */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <ColumnWidthOutlined className="text-red-500" />
+                    <Text className="text-sm text-gray-600">Safe Area Guides</Text>
+                  </div>
+                  <Switch
+                    size="small"
+                    checked={settings.verticalGuidesEnabled}
+                    onChange={(checked) => updateSetting('verticalGuidesEnabled', checked)}
+                  />
+                </div>
+                {settings.verticalGuidesEnabled && (
+                  <div className="mt-2">
+                    <Text className="text-xs text-gray-500">
+                      960px centered safe area guides
+                    </Text>
+                  </div>
+                )}
               </div>
             </div>
           )}

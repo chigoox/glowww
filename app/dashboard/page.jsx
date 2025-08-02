@@ -6,6 +6,7 @@ import { getUserSites, createSite, deleteSite, updateSite, canCreateSite } from 
 import { signOut } from '../../lib/auth';
 import { PRICING_PLANS, createCheckoutSession } from '../../lib/stripe';
 import { UpgradeBenefits } from '../Components/support/SubscriptionComponents';
+import { ensureUserSubscription, getUserSubscription } from '../../lib/subscriptions';
 import SiteCard from '../Components/support/SiteCard';
 import SiteSettingsModal from '../Components/support/SiteSettingsModal';
 import {
@@ -47,6 +48,8 @@ export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [siteToDelete, setSiteToDelete] = useState(null);
@@ -72,10 +75,11 @@ export default function Dashboard() {
   const [selectedSite, setSelectedSite] = useState(null);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
 
-  // Load user sites on component mount
+  // Load user sites and subscription on component mount
   useEffect(() => {
     if (user && !authLoading) {
       loadUserSites();
+      loadUserSubscription();
     }
   }, [user, authLoading]);
 
@@ -94,6 +98,36 @@ export default function Dashboard() {
       message.error('Failed to load your sites');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUserSubscription = async () => {
+    try {
+      setSubscriptionLoading(true);
+      // Ensure user has proper subscription data in Firebase
+      const userSubscription = await ensureUserSubscription(user.uid);
+      setSubscription(userSubscription);
+      console.log('User subscription loaded:', userSubscription);
+    } catch (error) {
+      console.error('Error loading subscription:', error);
+      // Set default free tier if error
+      setSubscription({
+        tier: 'free',
+        limits: {
+          maxStorage: 100 * 1024 * 1024,
+          maxImages: 20,
+          maxVideos: 5,
+          maxSites: 1
+        },
+        usage: {
+          storageUsed: 0,
+          imageCount: 0,
+          videoCount: 0,
+          sitesCount: 0
+        }
+      });
+    } finally {
+      setSubscriptionLoading(false);
     }
   };
 
@@ -290,24 +324,29 @@ export default function Dashboard() {
     setIsAnalyticsModalVisible(true);
   };
 
-  // Get user's current plan info
+  // Get user's current plan info from subscription data
   const getCurrentPlan = () => {
-    const siteCount = sites.length;
-    let currentPlan = PRICING_PLANS.free;
-    
-    // Determine plan based on site count (simplified logic)
-    if (siteCount <= 1) {
-      currentPlan = PRICING_PLANS.free;
-    } else if (siteCount <= 5) {
-      currentPlan = PRICING_PLANS.pro;
-    } else {
-      currentPlan = PRICING_PLANS.business;
+    if (!subscription) {
+      // Fallback to free plan if subscription not loaded yet
+      return PRICING_PLANS.free;
     }
     
-    return currentPlan;
+    // Map subscription tiers to pricing plans
+    switch (subscription.tier) {
+      case 'pro':
+        return PRICING_PLANS.pro;
+      case 'business':
+        return PRICING_PLANS.business;
+      case 'admin':
+        // Admin uses pro plan limits for display purposes
+        return { ...PRICING_PLANS.pro, name: 'Admin', maxSites: -1 };
+      case 'free':
+      default:
+        return PRICING_PLANS.free;
+    }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || loading || subscriptionLoading) {
     return (
       <div style={{ 
         display: 'flex', 
@@ -332,9 +371,19 @@ export default function Dashboard() {
   }
 
   const currentPlan = getCurrentPlan();
-  const siteUsage = sites.length;
-  const maxSites = currentPlan.maxSites;
-  const usagePercentage = maxSites === Infinity ? 0 : (siteUsage / maxSites) * 100;
+  const siteUsage = subscription ? subscription.usage.sitesCount : sites.length;
+  const maxSites = subscription ? subscription.limits.maxSites : currentPlan.maxSites;
+  const usagePercentage = maxSites === -1 ? 0 : (siteUsage / maxSites) * 100;
+
+  // Debug logging for admin users
+  if (subscription?.tier === 'admin') {
+    console.log('Admin user detected:', {
+      tier: subscription.tier,
+      maxSites: maxSites,
+      siteUsage: siteUsage,
+      subscriptionLimits: subscription.limits
+    });
+  }
 
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -362,11 +411,16 @@ export default function Dashboard() {
         <Row gutter={[16, 16]} align="middle">
           <Col flex="auto">
             <Space direction="vertical" size={0}>
-              <Text strong>Current Plan: {currentPlan.name}</Text>
-              <Text type="secondary">
-                {siteUsage} of {maxSites === Infinity ? '∞' : maxSites} sites used
+              <Text strong>
+                Current Plan: {currentPlan.name}
+                {subscription?.tier === 'admin' && (
+                  <span style={{ marginLeft: 8, color: '#722ed1' }}>👑</span>
+                )}
               </Text>
-              {maxSites !== Infinity && (
+              <Text type="secondary">
+                {siteUsage} of {maxSites === -1 ? '∞' : maxSites} sites used
+              </Text>
+              {maxSites !== -1 && (
                 <Progress 
                   percent={usagePercentage} 
                   size="small"

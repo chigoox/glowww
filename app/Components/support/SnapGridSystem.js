@@ -47,6 +47,14 @@ class SnapGridSystem {
     this.snapThreshold = SNAP_CONFIG.THRESHOLD;
     this.elementSnapThreshold = 50; // Increased from 12px to 50px for wider detection range
     
+    // NEW: Vertical guide lines configuration
+    this.verticalGuidesEnabled = true;
+    this.verticalGuidesVisible = true;
+    this.guideWidth = 960; // Distance between the two vertical guides (safe area width)
+    this.guideSnapThreshold = 25; // Snap threshold for guide lines
+    this.canvasWidth = 1920; // Will be updated from actual canvas
+    this.canvasHeight = 1080; // Will be updated from actual canvas
+    
     // Current snap state
     this.activeSnapLines = [];
     this.activeDistanceIndicators = [];
@@ -138,6 +146,119 @@ class SnapGridSystem {
     this.emitUpdate('grid-opacity-changed', { opacity: this.gridOpacity });
   }
 
+  // NEW: Vertical guide lines methods
+  
+  // Toggle vertical guides visibility
+  toggleVerticalGuides() {
+    this.verticalGuidesVisible = !this.verticalGuidesVisible;
+    this.emitUpdate('vertical-guides-visibility-changed', { visible: this.verticalGuidesVisible });
+    return this.verticalGuidesVisible;
+  }
+
+  // Set vertical guides enabled/disabled
+  setVerticalGuidesEnabled(enabled) {
+    this.verticalGuidesEnabled = enabled;
+    if (!enabled) {
+      this.clearSnapIndicators();
+    }
+    this.emitUpdate('vertical-guides-toggled', { enabled: this.verticalGuidesEnabled });
+  }
+
+  // Update canvas dimensions (important for centering guides)
+  updateCanvasSize(width, height) {
+    this.canvasWidth = width;
+    this.canvasHeight = height;
+    this.clearSnapCache();
+    this.emitUpdate('canvas-size-changed', { width, height });
+  }
+
+  // Calculate vertical guide positions (960px apart, centered)
+  getVerticalGuidePositions() {
+    const centerX = this.canvasWidth / 2;
+    const halfGuideWidth = this.guideWidth / 2;
+    
+    return {
+      leftGuide: centerX - halfGuideWidth,   // Left vertical line
+      rightGuide: centerX + halfGuideWidth,  // Right vertical line
+      centerX: centerX,
+      safeAreaLeft: centerX - halfGuideWidth,
+      safeAreaRight: centerX + halfGuideWidth,
+      safeAreaWidth: this.guideWidth
+    };
+  }
+
+  // Snap to vertical guides
+  snapToVerticalGuides(elementBounds) {
+    if (!this.verticalGuidesEnabled || !this.snapEnabled) {
+      return { snapped: false, x: null, y: null, snapLines: [] };
+    }
+
+    const guides = this.getVerticalGuidePositions();
+    const snapLines = [];
+    let snappedX = null;
+    let snapped = false;
+
+    // Check snapping to left guide
+    const leftEdgeDistance = Math.abs(elementBounds.left - guides.leftGuide);
+    const leftCenterDistance = Math.abs(elementBounds.centerX - guides.leftGuide);
+    const rightEdgeToLeftGuideDistance = Math.abs(elementBounds.right - guides.leftGuide);
+
+    // Check snapping to right guide  
+    const rightEdgeDistance = Math.abs(elementBounds.right - guides.rightGuide);
+    const rightCenterDistance = Math.abs(elementBounds.centerX - guides.rightGuide);
+    const leftEdgeToRightGuideDistance = Math.abs(elementBounds.left - guides.rightGuide);
+
+    // Find the closest snap point
+    const snapOptions = [
+      { distance: leftEdgeDistance, x: guides.leftGuide, type: 'left-edge-to-left-guide' },
+      { distance: leftCenterDistance, x: guides.leftGuide - elementBounds.width / 2, type: 'center-to-left-guide' },
+      { distance: rightEdgeToLeftGuideDistance, x: guides.leftGuide - elementBounds.width, type: 'right-edge-to-left-guide' },
+      { distance: rightEdgeDistance, x: guides.rightGuide - elementBounds.width, type: 'right-edge-to-right-guide' },
+      { distance: rightCenterDistance, x: guides.rightGuide - elementBounds.width / 2, type: 'center-to-right-guide' },
+      { distance: leftEdgeToRightGuideDistance, x: guides.rightGuide, type: 'left-edge-to-right-guide' }
+    ];
+
+    // Find closest snap within threshold
+    const closestSnap = snapOptions
+      .filter(option => option.distance <= this.guideSnapThreshold)
+      .sort((a, b) => a.distance - b.distance)[0];
+
+    if (closestSnap) {
+      snappedX = closestSnap.x;
+      snapped = true;
+
+      // Add snap line for the guide that was snapped to
+      if (closestSnap.type.includes('left-guide')) {
+        snapLines.push({
+          type: 'vertical',
+          x: guides.leftGuide,
+          y1: 0,
+          y2: this.canvasHeight,
+          color: '#ff0000', // Red color for guide lines
+          width: 2,
+          dashed: true
+        });
+      } else {
+        snapLines.push({
+          type: 'vertical', 
+          x: guides.rightGuide,
+          y1: 0,
+          y2: this.canvasHeight,
+          color: '#ff0000', // Red color for guide lines
+          width: 2,
+          dashed: true
+        });
+      }
+    }
+
+    return {
+      snapped,
+      x: snappedX,
+      y: null, // Vertical guides only affect X position
+      snapLines
+    };
+  }
+
   // Register an element for snapping
   registerElement(id, element, bounds) {
     if (!element || !bounds) return;
@@ -222,6 +343,46 @@ class SnapGridSystem {
     // Snap each relevant edge
     let hasSnapped = false;
     for (const edge of edgesToSnap) {
+      // First try vertical guide snapping for X coordinates
+      if (edge.coordinate === 'x' && this.verticalGuidesEnabled) {
+        const guides = this.getVerticalGuidePositions();
+        const guidePositions = [guides.leftGuide, guides.rightGuide];
+        
+        for (const guidePos of guidePositions) {
+          if (Math.abs(edge.position - guidePos) <= this.guideSnapThreshold) {
+            // Apply the snap adjustment to the bounds
+            if (edge.type === 'right') {
+              snapResult.bounds.width = guidePos - snapResult.bounds.left;
+              snapResult.bounds.right = guidePos;
+              snapResult.bounds.centerX = snapResult.bounds.left + snapResult.bounds.width / 2;
+            } else if (edge.type === 'left') {
+              const widthChange = snapResult.bounds.left - guidePos;
+              snapResult.bounds.left = guidePos;
+              snapResult.bounds.width += widthChange;
+              snapResult.bounds.right = snapResult.bounds.left + snapResult.bounds.width;
+              snapResult.bounds.centerX = snapResult.bounds.left + snapResult.bounds.width / 2;
+            }
+            
+            // Add vertical guide snap line
+            snapResult.snapLines.push({
+              type: 'vertical',
+              x: guidePos,
+              y1: 0,
+              y2: this.canvasHeight,
+              color: '#ff0000', // Red color for guide lines
+              width: 2,
+              dashed: true
+            });
+            
+            hasSnapped = true;
+            break;
+          }
+        }
+        
+        if (hasSnapped) continue; // Skip element snapping if we snapped to guide
+      }
+      
+      // If no guide snapping, try element snapping
       const edgeSnapResult = this.snapResizeEdge(draggedElementId, edge, snapResult.bounds);
       if (edgeSnapResult.snapped) {
         // Apply the snap adjustment to the bounds
@@ -568,7 +729,15 @@ class SnapGridSystem {
       // Note: Don't add distance indicators from snapToElements - we'll calculate them after final position
     }
 
-    // 3. Canvas edge snapping
+    // 3. Vertical guide lines snapping (NEW - highest priority after elements)
+    const verticalGuideSnapResult = this.snapToVerticalGuides(elementBounds);
+    if (verticalGuideSnapResult.snapped) {
+      if (verticalGuideSnapResult.x !== null) snapResult.x = verticalGuideSnapResult.x;
+      snapResult.snapped = true;
+      snapResult.snapLines.push(...verticalGuideSnapResult.snapLines);
+    }
+
+    // 4. Canvas edge snapping
     const canvasSnapResult = this.snapToCanvasEdges(elementBounds);
     if (canvasSnapResult.snapped) {
       if (canvasSnapResult.x !== null) snapResult.x = canvasSnapResult.x;
@@ -577,7 +746,7 @@ class SnapGridSystem {
       snapResult.snapLines.push(...canvasSnapResult.snapLines);
     }
 
-    // 4. Calculate distance indicators using the FINAL snapped position
+    // 5. Calculate distance indicators using the FINAL snapped position
     const finalElementBounds = {
       left: snapResult.x,
       top: snapResult.y,
@@ -977,7 +1146,8 @@ class SnapGridSystem {
       gridSize: this.gridSize,
       gridOpacity: this.gridOpacity,
       snapThreshold: this.snapThreshold,
-      elementSnapThreshold: this.elementSnapThreshold
+      elementSnapThreshold: this.elementSnapThreshold,
+      verticalGuidesEnabled: this.verticalGuidesEnabled
     };
   }
 

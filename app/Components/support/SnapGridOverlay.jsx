@@ -128,6 +128,34 @@ const SnapGridOverlay = ({
     ctx.restore();
   }, [settings, zoom, canvasWidth, canvasHeight, offsetX, offsetY]);
 
+  // Render vertical guide lines
+  const renderVerticalGuides = useCallback((ctx) => {
+    if (!settings.verticalGuidesEnabled) return;
+
+    const guides = snapGridSystem.getVerticalGuidePositions();
+    
+    ctx.save();
+    ctx.strokeStyle = '#ff0000'; // Red color for guide lines
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]); // Dashed line pattern
+    ctx.globalAlpha = 0.7;
+
+    // Draw left guide line
+    ctx.beginPath();
+    ctx.moveTo(guides.leftGuide, 0);
+    ctx.lineTo(guides.leftGuide, canvasHeight);
+    ctx.stroke();
+
+    // Draw right guide line
+    ctx.beginPath();
+    ctx.moveTo(guides.rightGuide, 0);
+    ctx.lineTo(guides.rightGuide, canvasHeight);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  }, [settings, canvasHeight]);
+
   // Render snap lines
   const renderSnapLines = useCallback((ctx) => {
     if (snapLines.length === 0) return;
@@ -275,6 +303,9 @@ const SnapGridOverlay = ({
       // Render grid
       renderGrid(ctx);
       
+      // Render vertical guide lines
+      renderVerticalGuides(ctx);
+      
       // Render snap indicators
       renderSnapLines(ctx);
       renderDistanceIndicators(ctx);
@@ -289,7 +320,7 @@ const SnapGridOverlay = ({
         cancelAnimationFrame(animationId);
       }
     };
-  }, [renderGrid, renderSnapLines, renderDistanceIndicators, canvasWidth, canvasHeight]);
+  }, [renderGrid, renderVerticalGuides, renderSnapLines, renderDistanceIndicators, canvasWidth, canvasHeight]);
 
   return (
     <canvas

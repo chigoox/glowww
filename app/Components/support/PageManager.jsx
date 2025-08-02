@@ -314,7 +314,7 @@ const PageManager = () => {
   const loadPageData = (pageKey, pagesOverride = null) => {
     const pagesArray = pagesOverride || pages;
     const page = pagesArray.find(p => p.key === pageKey);
-    const defaultData = '{"ROOT":{"type":{"resolvedName":"Root"},"nodes":[],"props":{"canvas":true},"custom":{},"parent":null,"displayName":"Root","isCanvas":true}}';
+    const defaultData = '{"ROOT":{"type":{"resolvedName":"Root"},"nodes":[],"props":{"canvas":true,"padding":0,"margin":0,"width":"100%","minWidth":"100%","maxWidth":"100%","minHeight":"100vh","background":"#ffffff","position":"relative","display":"block"},"custom":{},"parent":null,"displayName":"Root","isCanvas":true}}';
     let dataToLoad = defaultData;
     let isEmpty = true;
 

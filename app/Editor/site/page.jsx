@@ -299,7 +299,18 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       cleaned.ROOT = {
         type: { resolvedName: "Root" },
         isCanvas: true,
-        props: { canvas: true },
+        props: { 
+          canvas: true,
+          padding: 0,
+          margin: 0,
+          width: "100%",
+          minWidth: "100%",
+          maxWidth: "100%",
+          minHeight: "100vh",
+          background: "#ffffff",
+          position: "relative",
+          display: "block"
+        },
         displayName: "Root",
         custom: {},
         parent: null,
@@ -431,7 +442,18 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
               "ROOT": {
                 "type": { "resolvedName": "Root" },
                 "nodes": ["welcomeText"],
-                "props": { "canvas": true },
+                "props": { 
+                  "canvas": true,
+                  "padding": 0,
+                  "margin": 0,
+                  "width": "100%",
+                  "minWidth": "100%",
+                  "maxWidth": "100%",
+                  "minHeight": "100vh",
+                  "background": "#ffffff",
+                  "position": "relative",
+                  "display": "block"
+                },
                 "custom": {},
                 "parent": null,
                 "displayName": "Root",
@@ -1945,6 +1967,8 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                     background="#ffffff" 
                     position="relative"
                     display="block"
+                    padding={0}
+                    margin={0}
                     canvas
                     className="w-full h-full min-h-[100vh]"
                   />
@@ -2022,7 +2046,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
           return shouldShowStyleMenu && !isRightPanelMinimized;
         })() && (
           <div className={`absolute right-4 top-4 bottom-4 bg-white border border-gray-200 shadow-lg rounded-lg flex-shrink-0 z-30 ${
-            useFigmaStyle ? 'w-80 min-w-80' : 'w-96 min-w-96'
+            useFigmaStyle ? 'w-64 min-w-64' : 'w-72 min-w-72'
           } flex flex-col`}>
             {/* Minimize Button */}
             <div className="flex justify-between items-center p-2 border-b border-gray-200">

@@ -1,17 +1,28 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Modal, Tabs, Upload, Button as AntButton, message, Divider } from 'antd';
+import { Modal, Tabs, Upload, Button as AntButton, Button, message, Divider, Progress, Alert, Space, Typography, notification } from 'antd';
 import {
   PictureOutlined,
   VideoCameraOutlined,
   UploadOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
-  LinkOutlined
+  LinkOutlined,
+  CrownOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
+import { useAuth } from '../../../contexts/AuthContext';
+import { 
+  getUserSubscription,
+  checkUserLimits,
+  updateUserUsage,
+  SUBSCRIPTION_TIERS,
+  formatStorageSize 
+} from '../../../lib/subscriptions';
 
 const { TabPane } = Tabs;
+const { Text } = Typography;
 
 // Mock media library data
 const MOCK_MEDIA_LIBRARY = {
@@ -243,12 +254,55 @@ const MediaLibrary = ({
   type = 'both', // 'images', 'videos', or 'both'
   title = 'Media Library'
 }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(type === 'videos' ? 'videos' : 'images');
   const [uploading, setUploading] = useState(false);
   const [userUploads, setUserUploads] = useState({
     images: [],
     videos: []
   });
+  
+  // Subscription state
+  const [subscription, setSubscription] = useState(null);
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
+  
+  // Load subscription data
+  useEffect(() => {
+    const loadSubscription = async () => {
+      if (!user?.uid) {
+        setLoadingSubscription(false);
+        return;
+      }
+      
+      try {
+        const subData = await getUserSubscription(user.uid);
+        setSubscription(subData);
+      } catch (error) {
+        console.error('Error loading subscription:', error);
+        // Set default free tier if error
+        setSubscription({
+          tier: SUBSCRIPTION_TIERS.FREE,
+          limits: {
+            maxStorage: 100 * 1024 * 1024, // 100MB
+            maxImages: 20,
+            maxVideos: 5,
+            maxImageSize: 2 * 1024 * 1024, // 2MB
+            maxVideoSize: 10 * 1024 * 1024, // 10MB
+          },
+          usage: {
+            storageUsed: 0,
+            imageCount: 0,
+            videoCount: 0,
+            sitesCount: 0
+          }
+        });
+      } finally {
+        setLoadingSubscription(false);
+      }
+    };
+    
+    loadSubscription();
+  }, [user?.uid]);
 
   // Load user uploads from localStorage on component mount
   useEffect(() => {
@@ -356,11 +410,13 @@ const MediaLibrary = ({
     
     try {
       let fileUrl;
+      let finalFileSize = file.size;
       
       // For images, compress them to save space
       if (fileType === 'images' && file.type.startsWith('image/')) {
         const compressedFile = await compressImage(file);
         fileUrl = URL.createObjectURL(compressedFile);
+        finalFileSize = compressedFile.size;
       } else {
         fileUrl = URL.createObjectURL(file);
       }
@@ -369,7 +425,7 @@ const MediaLibrary = ({
         id: Date.now() + Math.random(),
         name: file.name,
         url: fileUrl,
-        size: file.size,
+        size: finalFileSize,
         type: file.type,
         uploadDate: new Date().toISOString(),
         isUserUpload: true
@@ -382,6 +438,24 @@ const MediaLibrary = ({
           fileData.thumbnail = thumbnail;
         } catch (error) {
           console.warn('Failed to create video thumbnail:', error);
+        }
+      }
+      
+      // Update subscription usage tracking
+      if (user?.uid) {
+        try {
+          await updateUserUsage(user.uid, {
+            storageUsed: finalFileSize,
+            imageCount: fileType === 'images' ? 1 : 0,
+            videoCount: fileType === 'videos' ? 1 : 0
+          });
+          
+          // Reload subscription data to update UI
+          const updatedSubscription = await getUserSubscription(user.uid);
+          setSubscription(updatedSubscription);
+        } catch (error) {
+          console.error('Failed to update usage tracking:', error);
+          // Continue with upload even if usage tracking fails
         }
       }
       
@@ -448,12 +522,35 @@ const MediaLibrary = ({
   const storageUsage = getStorageUsage();
 
   // Delete uploaded file
-  const deleteUserUpload = (fileId, fileType) => {
+  const deleteUserUpload = async (fileId, fileType) => {
+    const fileToDelete = userUploads[fileType].find(file => file.id === fileId);
+    if (!fileToDelete) return;
+    
     const newUploads = {
       ...userUploads,
       [fileType]: userUploads[fileType].filter(file => file.id !== fileId)
     };
+    
     saveUserUploads(newUploads);
+    
+    // Update subscription usage tracking
+    if (user?.uid && fileToDelete.size) {
+      try {
+        await updateUserUsage(user.uid, {
+          storageUsed: -fileToDelete.size, // Negative to decrease usage
+          imageCount: fileType === 'images' ? -1 : 0,
+          videoCount: fileType === 'videos' ? -1 : 0
+        });
+        
+        // Reload subscription data to update UI
+        const updatedSubscription = await getUserSubscription(user.uid);
+        setSubscription(updatedSubscription);
+      } catch (error) {
+        console.error('Failed to update usage tracking:', error);
+        // Continue with deletion even if usage tracking fails
+      }
+    }
+    
     message.success('File deleted successfully');
   };
 
@@ -480,10 +577,28 @@ const MediaLibrary = ({
     onClose();
   };
 
+  // Enhanced file size calculation
+  const getFileSize = (file) => {
+    if (file.type.startsWith('image/')) {
+      // For images, we need to estimate compressed size
+      return file.size * 0.7; // Assume 30% compression for images
+    }
+    return file.size; // For videos, use actual size
+  };
+
   // Upload configuration
   const uploadProps = {
     beforeUpload: async (file) => {
+      if (!user?.uid || !subscription) {
+        notification.error({
+          message: 'Authentication Required',
+          description: 'Please log in to upload media files.',
+        });
+        return false;
+      }
+
       const fileType = activeTab;
+      const estimatedSize = getFileSize(file);
       
       console.log('Uploading file:', file.name, 'Type:', file.type, 'Tab:', fileType);
       
@@ -494,29 +609,56 @@ const MediaLibrary = ({
           message.error('Please upload a valid image file');
           return false;
         }
-        
-        // Check file size (max 5MB for images, will be compressed)
-        const isLt5M = file.size / 1024 / 1024 < 5;
-        if (!isLt5M) {
-          message.error('Image must be smaller than 5MB');
-          return false;
-        }
       } else if (fileType === 'videos') {
         const isVideo = file.type.startsWith('video/');
         if (!isVideo) {
           message.error('Please upload a valid video file');
           return false;
         }
-        
-        // Check file size (max 20MB for videos)
-        const isLt20M = file.size / 1024 / 1024 < 20;
-        if (!isLt20M) {
-          message.error('Video must be smaller than 20MB');
-          return false;
-        }
       }
       
       try {
+        // Check subscription limits
+        const canUpload = await checkUserLimits(user.uid, 'upload_file', {
+          fileType: fileType === 'images' ? 'image' : 'video',
+          fileSize: estimatedSize
+        });
+
+        if (!canUpload.allowed) {
+          // Show appropriate error based on limit type
+          if (canUpload.reason === 'storage_exceeded') {
+            const storageUsed = formatStorageSize(subscription.usage.storageUsed);
+            const storageLimit = formatStorageSize(subscription.limits.maxStorage);
+            
+            notification.error({
+              message: 'Storage Limit Reached',
+              description: `You've used ${storageUsed} of your ${storageLimit} storage limit. ${subscription.tier === SUBSCRIPTION_TIERS.FREE ? 'Upgrade to Pro for 10GB storage!' : 'Please delete some files to continue.'}`,
+              duration: 6,
+            });
+          } else if (canUpload.reason === 'file_count_exceeded') {
+            const fileCategory = fileType === 'images' ? 'image' : 'video';
+            const currentCount = fileCategory === 'image' ? subscription.usage.imageCount : subscription.usage.videoCount;
+            const limit = fileCategory === 'image' ? subscription.limits.maxImages : subscription.limits.maxVideos;
+            
+            notification.error({
+              message: `${fileCategory === 'image' ? 'Image' : 'Video'} Limit Reached`,
+              description: `You've reached your limit of ${limit} ${fileCategory}s (currently ${currentCount}). ${subscription.tier === SUBSCRIPTION_TIERS.FREE ? 'Upgrade to Pro for unlimited uploads!' : 'Please delete some files to continue.'}`,
+              duration: 6,
+            });
+          } else if (canUpload.reason === 'file_size_exceeded') {
+            const fileCategory = fileType === 'images' ? 'image' : 'video';
+            const maxSize = fileCategory === 'image' ? subscription.limits.maxImageSize : subscription.limits.maxVideoSize;
+            
+            notification.error({
+              message: 'File Too Large',
+              description: `${fileCategory === 'image' ? 'Images' : 'Videos'} must be smaller than ${formatStorageSize(maxSize)}. ${subscription.tier === SUBSCRIPTION_TIERS.FREE ? 'Upgrade to Pro for larger file limits!' : ''}`,
+              duration: 6,
+            });
+          }
+          
+          return false;
+        }
+        
         await handleFileUpload(file, fileType);
         return false;
       } catch (error) {
@@ -530,28 +672,85 @@ const MediaLibrary = ({
     accept: activeTab === 'images' ? 'image/*' : 'video/*'
   };
 
+  // Calculate subscription-aware storage info
+  const getSubscriptionStorageInfo = () => {
+    if (!subscription) {
+      return { usedDisplay: '0 MB', limitDisplay: '100 MB', percentage: 0, isNearLimit: false };
+    }
+    
+    const usedMB = subscription.usage.storageUsed / (1024 * 1024);
+    const limitMB = subscription.limits.maxStorage / (1024 * 1024);
+    const percentage = Math.min((usedMB / limitMB) * 100, 100);
+    
+    return {
+      usedDisplay: formatStorageSize(subscription.usage.storageUsed),
+      limitDisplay: formatStorageSize(subscription.limits.maxStorage),
+      percentage: percentage.toFixed(1),
+      isNearLimit: percentage > 80
+    };
+  };
+
+  const storageInfo = getSubscriptionStorageInfo();
+
   return (
     <Modal
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{title}</span>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            Storage: {storageUsage.usedMB}MB / 5MB ({storageUsage.percentage}%)
-            <div style={{ 
-              width: 100, 
-              height: 4, 
-              backgroundColor: '#f0f0f0', 
-              borderRadius: 2, 
-              marginTop: 2,
-              overflow: 'hidden'
-            }}>
-              <div style={{ 
-                width: `${storageUsage.percentage}%`, 
-                height: '100%', 
-                backgroundColor: storageUsage.percentage > 80 ? '#ff4d4f' : '#52c41a',
-                transition: 'width 0.3s'
-              }} />
-            </div>
+          <div style={{ fontSize: '12px', color: '#666', textAlign: 'right' }}>
+            {loadingSubscription ? (
+              <div>Loading subscription...</div>
+            ) : subscription ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span>
+                    {subscription.tier === SUBSCRIPTION_TIERS.FREE && '🆓'} 
+                    {subscription.tier === SUBSCRIPTION_TIERS.PRO && '⭐'} 
+                    {subscription.tier === SUBSCRIPTION_TIERS.ADMIN && '👑'} 
+                    {subscription.tier.toUpperCase()}
+                  </span>
+                  {subscription.tier === SUBSCRIPTION_TIERS.FREE && (
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{ padding: '0 4px', height: 'auto', fontSize: '10px' }}
+                      onClick={() => window.open('/pricing', '_blank')}
+                    >
+                      Upgrade
+                    </Button>
+                  )}
+                </div>
+                <div>
+                  Storage: {storageInfo.usedDisplay} / {storageInfo.limitDisplay} ({storageInfo.percentage}%)
+                </div>
+                <div style={{ 
+                  width: 120, 
+                  height: 4, 
+                  backgroundColor: '#f0f0f0', 
+                  borderRadius: 2, 
+                  marginTop: 2,
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    width: `${storageInfo.percentage}%`, 
+                    height: '100%', 
+                    backgroundColor: storageInfo.isNearLimit ? '#ff4d4f' : '#52c41a',
+                    transition: 'width 0.3s'
+                  }} />
+                </div>
+                <div style={{ fontSize: '10px', marginTop: 2 }}>
+                  Images: {subscription.usage.imageCount}/{subscription.limits.maxImages === -1 ? '∞' : subscription.limits.maxImages} • 
+                  Videos: {subscription.usage.videoCount}/{subscription.limits.maxVideos === -1 ? '∞' : subscription.limits.maxVideos}
+                  {subscription.tier === SUBSCRIPTION_TIERS.ADMIN && (
+                    <div style={{ color: '#722ed1', marginTop: 2 }}>
+                      👑 Admin - Unlimited Access
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>No subscription data</div>
+            )}
           </div>
         </div>
       }
@@ -562,6 +761,64 @@ const MediaLibrary = ({
       style={{ top: 20 }}
       zIndex={99999}
     >
+      {/* Subscription Status Alerts */}
+      {subscription && (
+        <>
+          {/* Near Limit Warning */}
+          {storageInfo.percentage > 80 && subscription.tier === SUBSCRIPTION_TIERS.FREE && (
+            <Alert
+              message="Storage Nearly Full"
+              description={
+                <div>
+                  You're using {storageInfo.percentage}% of your storage limit. 
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    style={{ padding: '0 4px' }}
+                    onClick={() => window.open('/pricing', '_blank')}
+                  >
+                    Upgrade to Pro
+                  </Button> 
+                  for 10GB storage!
+                </div>
+              }
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+          
+          {/* File Count Warning */}
+          {subscription.tier === SUBSCRIPTION_TIERS.FREE && (
+            (subscription.usage.imageCount >= subscription.limits.maxImages * 0.8 || 
+             subscription.usage.videoCount >= subscription.limits.maxVideos * 0.8) && (
+            <Alert
+              message="Upload Limit Approaching"
+              description={
+                <div>
+                  {subscription.usage.imageCount >= subscription.limits.maxImages * 0.8 && 
+                    `Images: ${subscription.usage.imageCount}/${subscription.limits.maxImages}. `}
+                  {subscription.usage.videoCount >= subscription.limits.maxVideos * 0.8 && 
+                    `Videos: ${subscription.usage.videoCount}/${subscription.limits.maxVideos}. `}
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    style={{ padding: '0 4px' }}
+                    onClick={() => window.open('/pricing', '_blank')}
+                  >
+                    Upgrade to Pro
+                  </Button> 
+                  for unlimited uploads!
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          ))}
+        </>
+      )}
+      
       <Tabs 
         activeKey={activeTab} 
         onChange={setActiveTab}
@@ -596,7 +853,14 @@ const MediaLibrary = ({
                     </AntButton>
                   </Upload>
                   <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
-                    Supports: JPG, PNG, GIF, WebP • Max size: 5MB • Multiple files allowed • Images will be compressed for optimal storage
+                    Supports: JPG, PNG, GIF, WebP • 
+                    {subscription ? `Max size: ${formatStorageSize(subscription.limits.maxImageSize)}` : 'Max size: 2MB'} • 
+                    Multiple files allowed • Images will be compressed for optimal storage
+                    {subscription && subscription.tier === SUBSCRIPTION_TIERS.FREE && (
+                      <div style={{ color: '#1890ff', marginTop: 4 }}>
+                        ⭐ Upgrade to Pro for larger files and unlimited uploads!
+                      </div>
+                    )}
                   </div>
                   {uploading && (
                     <div style={{ marginTop: 8, color: '#1890ff', fontSize: '12px' }}>
@@ -739,7 +1003,14 @@ const MediaLibrary = ({
                     </AntButton>
                   </Upload>
                   <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
-                    Supports: MP4, WebM, MOV, AVI • Max size: 20MB • Multiple files allowed
+                    Supports: MP4, WebM, MOV, AVI • 
+                    {subscription ? `Max size: ${formatStorageSize(subscription.limits.maxVideoSize)}` : 'Max size: 10MB'} • 
+                    Multiple files allowed
+                    {subscription && subscription.tier === SUBSCRIPTION_TIERS.FREE && (
+                      <div style={{ color: '#1890ff', marginTop: 4 }}>
+                        ⭐ Upgrade to Pro for larger files and unlimited uploads!
+                      </div>
+                    )}
                   </div>
                   {uploading && (
                     <div style={{ marginTop: 8, color: '#1890ff', fontSize: '12px' }}>
