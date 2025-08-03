@@ -422,104 +422,229 @@ function HomePage() {
             Simple, Transparent Pricing
           </h2>
           <p className="text-xl text-gray-600 mb-12">
-            Everything you need to build and sell online. One price, forever.
+            Start free, upgrade when you grow. No hidden fees.
           </p>
           
-          <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 border-4 border-gradient-to-r from-purple-500 to-blue-500 relative overflow-hidden">
-            {/* Popular badge */}
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-full text-sm font-semibold">
-                BEST VALUE
-              </div>
-            </div>
-            
-            <div className="text-center">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Lifetime Access</h3>
-              <div className="mb-6">
-                <span className="text-6xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">$1</span>
-                <span className="text-xl text-gray-600 ml-2">one time</span>
-              </div>
-              <p className="text-lg text-gray-600 mb-8">
-                Pay once, own forever. No monthly fees, no hidden costs.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left mb-8">
-                <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {/* Free Plan */}
+            <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-gray-100 relative">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Free</h3>
+                <div className="mb-6">
+                  <span className="text-5xl font-bold text-gray-900">$0</span>
+                  <span className="text-lg text-gray-600 ml-2">forever</span>
+                </div>
+                <p className="text-gray-600 mb-8">Perfect to get started</p>
+                
+                <div className="space-y-4 text-left mb-8">
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Unlimited websites & pages</span>
+                    <span>1 Website</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Any website type</span>
+                    <span>Unlimited pages</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>E-commerce capabilities</span>
+                    <span>Basic templates</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Mobile responsive design</span>
+                    <span>Glow subdomain</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Basic support</span>
                   </div>
                 </div>
-                <div className="space-y-4">
+                
+                {!loading && (
+                  <>
+                    {user ? (
+                      <Link href="/dashboard">
+                        <button className="w-full bg-gray-100 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200">
+                          Current Plan
+                        </button>
+                      </Link>
+                    ) : (
+                      <Link href="/Signup">
+                        <button className="w-full bg-gray-100 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200">
+                          Get Started Free
+                        </button>
+                      </Link>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Pro Plan */}
+            <div className="bg-white rounded-2xl shadow-2xl p-8 border-4 border-gradient-to-r from-purple-500 to-blue-500 relative transform scale-105">
+              {/* Popular badge */}
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-full text-sm font-semibold">
+                  MOST POPULAR
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Pro</h3>
+                <div className="mb-6">
+                  <span className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">$9.99</span>
+                  <span className="text-lg text-gray-600 ml-2">/month</span>
+                </div>
+                <p className="text-gray-600 mb-8">For growing businesses</p>
+                
+                <div className="space-y-4 text-left mb-8">
                   <div className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>SEO optimization tools</span>
+                    <span><strong>5 Websites</strong></span>
                   </div>
                   <div className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Analytics & insights</span>
+                    <span>Unlimited pages</span>
                   </div>
                   <div className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Lifetime updates</span>
+                    <span>Premium templates</span>
                   </div>
                   <div className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Custom domain support</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Advanced analytics</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Remove Glow branding</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-purple-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
                     <span>Priority support</span>
                   </div>
                 </div>
+                
+                {!loading && (
+                  <>
+                    {user ? (
+                      <Link href="/dashboard">
+                        <button className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg">
+                          Upgrade Now
+                        </button>
+                      </Link>
+                    ) : (
+                      <Link href="/Signup">
+                        <button className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg">
+                          Start Pro Trial
+                        </button>
+                      </Link>
+                    )}
+                  </>
+                )}
               </div>
-              
-              {!loading && (
-                <>
-                  {user ? (
-                    <Link href="/Editor">
-                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 w-full md:w-auto">
-                        Continue Building
-                      </button>
-                    </Link>
-                  ) : (
-                    <Link href="/Signup">
-                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 w-full md:w-auto">
-                        Get Lifetime Access - $1
-                      </button>
-                    </Link>
-                  )}
-                </>
-              )}
-              
-              <p className="text-sm text-gray-500 mt-4">
-                💳 Secure payment • 🔒 30-day money back guarantee • 🚀 Instant access
-              </p>
             </div>
+
+            {/* Business Plan */}
+            <div className="bg-white rounded-2xl shadow-lg p-8 border-2 border-gray-100 relative">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">Business</h3>
+                <div className="mb-6">
+                  <span className="text-5xl font-bold text-gray-900">$19.99</span>
+                  <span className="text-lg text-gray-600 ml-2">/month</span>
+                </div>
+                <p className="text-gray-600 mb-8">For serious entrepreneurs</p>
+                
+                <div className="space-y-4 text-left mb-8">
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span><strong>25 Websites</strong></span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>All premium features</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>White-label solution</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Advanced e-commerce</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>API access</span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Dedicated support</span>
+                  </div>
+                </div>
+                
+                {!loading && (
+                  <>
+                    {user ? (
+                      <Link href="/dashboard">
+                        <button className="w-full bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-900 transition-all duration-200">
+                          Upgrade to Business
+                        </button>
+                      </Link>
+                    ) : (
+                      <Link href="/Signup">
+                        <button className="w-full bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-900 transition-all duration-200">
+                          Start Business Trial
+                        </button>
+                      </Link>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-12 text-center">
+            <p className="text-sm text-gray-500">
+              💳 Secure payment • 🔒 Cancel anytime • 🚀 14-day free trial on all paid plans
+            </p>
           </div>
         </div>
       </section>
@@ -534,7 +659,7 @@ function HomePage() {
             Join thousands of creators building amazing websites with Glow.
           </p>
           <p className="text-2xl font-bold text-white mb-8">
-            🎉 Special Launch Price: Only $1 for Lifetime Access! 🎉
+            🚀 Start Free - Upgrade When You Grow! 🚀
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {!loading && (
