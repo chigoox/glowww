@@ -49,7 +49,7 @@ export const useEnhancedNewComponentDrop = () => {
       font-weight: bold;
       transition: all 0.1s ease;
     `;
-    preview.textContent = component.name || 'Component';
+    preview.textContent = component?.name || 'Component';
     
     document.body.appendChild(preview);
     return preview;
@@ -155,7 +155,11 @@ export const useEnhancedNewComponentDrop = () => {
       // Create initial visual feedback
       dragStateRef.current.visualFeedback = createDropPreview(e.clientX, e.clientY, component);
 
-      console.log('🎯 Enhanced drag started for new component:', component.name);
+      console.log('🎯 Enhanced drag started for new component:', component?.name || 'Unknown Component');
+
+      // Add document event listeners only when dragging starts
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
     };
 
     const handleMouseMove = (e) => {
@@ -208,15 +212,20 @@ export const useEnhancedNewComponentDrop = () => {
         );
 
         console.log('🎯 Creating component at precise position:', {
-          component: draggedComponent.name,
+          component: draggedComponent?.name || 'Unknown Component',
           container: targetContainer,
           position: dropPosition
         });
 
         try {
           // Extract component class from React element
-          const ComponentClass = draggedComponent.element.props.is;
-          const originalProps = draggedComponent.element.props;
+          const ComponentClass = draggedComponent?.element?.props?.is;
+          const originalProps = draggedComponent?.element?.props || {};
+
+          if (!ComponentClass) {
+            console.error('❌ Enhanced drop: No component class found in element');
+            return;
+          }
 
           // Create component props with precise positioning
           const componentProps = {
@@ -283,19 +292,16 @@ export const useEnhancedNewComponentDrop = () => {
       document.removeEventListener('mouseup', handleMouseUp);
     };
 
-    // Add event listeners
+    // Add event listeners only for mousedown
     element.addEventListener('mousedown', handleMouseDown);
     
     // Store cleanup function
     element._enhancedCleanup = () => {
       element.removeEventListener('mousedown', handleMouseDown);
+      // Clean up any active document listeners
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-
-    // Also set up the move and up listeners when dragging starts
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
 
     return element;
   }, [createDropPreview, findTargetContainer, calculateDropPosition, actions, query]);
