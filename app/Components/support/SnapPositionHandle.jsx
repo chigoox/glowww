@@ -94,8 +94,8 @@ const SnapPositionHandle = ({
     const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
 
     // Calculate position relative to parent container, not root canvas
-    const currentLeft = elementRect.left - containerRect.left + borderLeft;
-    const currentTop = elementRect.top - containerRect.top + borderTop;
+    const currentLeft = elementRect.left - containerRect.left;
+    const currentTop = elementRect.top - containerRect.top;
 
     // Initialize drag state - align to padding box (inside border, including padding)
     dragState.current = {
@@ -104,8 +104,8 @@ const SnapPositionHandle = ({
       startY: e.clientY,
       startElementX: currentLeft,
       startElementY: currentTop,
-      elementWidth: elementRect.width - borderLeft - borderRight,
-      elementHeight: elementRect.height - borderTop - borderBottom,
+      elementWidth: elementRect.width,
+      elementHeight: elementRect.height,
       canvasRect: containerRect // Use container rect instead of canvas rect
     };
 
@@ -125,13 +125,12 @@ const SnapPositionHandle = ({
           const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
           const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
           
-          // For visual alignment, we want to align to the padding box (inside border, including padding)
-          // Calculate relative to the same container
+          // For consistent visual alignment, calculate relative to container bounds
           const relativeBounds = {
-            x: nodeBounds.left - containerRect.left + borderLeft,
-            y: nodeBounds.top - containerRect.top + borderTop,
-            width: nodeBounds.width - borderLeft - borderRight,
-            height: nodeBounds.height - borderTop - borderBottom
+            x: nodeBounds.left - containerRect.left,
+            y: nodeBounds.top - containerRect.top,
+            width: nodeBounds.width,
+            height: nodeBounds.height
           };
           
           snapGridSystem.registerElement(id, node.dom, relativeBounds);
@@ -190,46 +189,31 @@ const SnapPositionHandle = ({
 
     // Immediately update actual position for smooth dragging
     if (dom) {
-      // We calculated positions for the padding box (inside border), 
-      // but style.left/top sets the border box position, so we need to offset
-      const computedStyle = window.getComputedStyle(dom);
-      const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
-      const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
-      
-      // Update the actual style properties instead of using transform
+      // Update the actual style properties directly
       dom.style.position = 'absolute';
-      dom.style.left = `${finalX - borderLeft}px`;  // Subtract border to get border box position
-      dom.style.top = `${finalY - borderTop}px`;    // Subtract border to get border box position
+      dom.style.left = `${finalX}px`;
+      dom.style.top = `${finalY}px`;
     }
 
     // Also update Craft.js state to keep it in sync
     setProp((props) => {
-      // We calculated positions for the padding box (inside border), 
-      // but Craft.js properties should match the DOM style (border box position)
-      const computedStyle = window.getComputedStyle(dom);
-      const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
-      const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
-      
-      const borderBoxX = finalX - borderLeft;
-      const borderBoxY = finalY - borderTop;
-      
       // Handle different position prop structures
       if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
-        props.left = borderBoxX;
-        props.top = borderBoxY;
+        props.left = finalX;
+        props.top = finalY;
         props.position = 'absolute';
       } else if (props.style) {
         props.style = {
           ...props.style,
           position: 'absolute',
-          left: `${borderBoxX}px`,
-          top: `${borderBoxY}px`
+          left: `${finalX}px`,
+          top: `${finalY}px`
         };
       } else {
         props.style = {
           position: 'absolute',
-          left: `${borderBoxX}px`,
-          top: `${borderBoxY}px`
+          left: `${finalX}px`,
+          top: `${finalY}px`
         };
       }
     });
@@ -246,8 +230,7 @@ const SnapPositionHandle = ({
     dragState.current.isDragging = false;
     setIsDragging(false);
 
-    // Position is already set during drag, so we don't need to do anything special here
-    // Just ensure the final state is committed to Craft.js
+    // Ensure the final position is properly committed to Craft.js
     const finalX = dragState.current.currentX || 0;
     const finalY = dragState.current.currentY || 0;
 

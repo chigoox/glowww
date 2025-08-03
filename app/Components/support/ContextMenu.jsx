@@ -17,7 +17,9 @@ import {
   LockOutlined,
   UnlockOutlined,
   SnippetsOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  EditOutlined,
+  BgColorsOutlined
 } from '@ant-design/icons';
 import { useEditor, useNode } from '@craftjs/core';
 import { useMultiSelect } from './MultiSelectContext';
@@ -91,7 +93,8 @@ const ContextMenu = ({
     margin: 5,
     zIndex: 1,
     rotation: 0,
-    order: 0,
+    stroke: 0,
+    strokeColor: '#000000',
     backgroundColor: '#ffffff'
   });
 
@@ -154,7 +157,8 @@ const ContextMenu = ({
               margin: parseMargin(props.margin),
               zIndex: parseInt(props.zIndex) || 1,
               rotation: 0, // We'll add this as a new feature
-              order: parseInt(props.order) || 0,
+              stroke: parseInt(props.stroke) || 0,
+              strokeColor: props.strokeColor || '#000000',
               backgroundColor: props.backgroundColor || '#ffffff'
             };
           }
@@ -630,8 +634,11 @@ const ContextMenu = ({
             case 'rotation':
               props.transform = `rotate(${value}deg)`;
               break;
-            case 'order':
-              props.order = value;
+            case 'stroke':
+              props.stroke = value;
+              break;
+            case 'strokeColor':
+              props.strokeColor = value;
               break;
             case 'backgroundColor':
               props.backgroundColor = value;
@@ -699,11 +706,11 @@ const ContextMenu = ({
       step: 1
     },
     { 
-      key: 'order', 
-      icon: <BorderOutlined />, 
-      label: 'Order',
-      min: -10,
-      max: 10,
+      key: 'stroke', 
+      icon: <EditOutlined />, 
+      label: 'Stroke Width',
+      min: 0,
+      max: 20,
       step: 1
     }
   ];
@@ -738,31 +745,35 @@ const ContextMenu = ({
         }}
         bodyStyle={{ padding: 12 }}
       >
-        {/* Color Picker (Top Right) */}
+        {/* Color Pickers (Top Right) */}
         <div style={{ 
           position: 'absolute', 
           top: 12, 
           right: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
           zIndex: 99999999999
         }}>
-          <ColorPicker
-          zIndex={99999}
-            value={styleValues.backgroundColor}
-            
-            onChange={(color) => {
-              const colorStr = color.toHexString();
-              setStyleValues(prev => ({ ...prev, backgroundColor: colorStr }));
-              updateStyle('backgroundColor', colorStr);
-            }}
-            showText={false}
-            size="small"
-            style={{
-              width: 24,
-              height: 24,
-              zIndex: 99999999999,
-
-            }}
-          />
+          {/* Background Color Picker */}
+          <Tooltip title="Background Color" placement="left">
+            <ColorPicker
+              zIndex={99999}
+              value={styleValues.backgroundColor}
+              onChange={(color) => {
+                const colorStr = color.toHexString();
+                setStyleValues(prev => ({ ...prev, backgroundColor: colorStr }));
+                updateStyle('backgroundColor', colorStr);
+              }}
+              showText={false}
+              size="small"
+              style={{
+                width: 24,
+                height: 24,
+                zIndex: 99999999999,
+              }}
+            />
+          </Tooltip>
         </div>
 
         {/* Recent Components Section */}
@@ -944,6 +955,38 @@ const ContextMenu = ({
                     disabled={lockedControls.has(control.key)}
                   />
                 </Tooltip>
+                
+                {/* Stroke Color Picker - positioned at bottom right of stroke control */}
+                {control.key === 'stroke' && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: -2,
+                    right: 10, // Offset to avoid overlap with lock button
+                    zIndex: 99999999999
+                  }}>
+                    <Tooltip title="Stroke Color" placement="top">
+                      <ColorPicker
+                        zIndex={99999}
+                        value={styleValues.strokeColor}
+                        onChange={(color) => {
+                          const colorStr = color.toHexString();
+                          setStyleValues(prev => ({ ...prev, strokeColor: colorStr }));
+                          updateStyle('strokeColor', colorStr);
+                        }}
+                        showText={false}
+                        size="small"
+                        style={{
+                          width: 12,
+                          height: 12,
+                          border: '1px solid #fff',
+                          borderRadius: '50%',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                        }}
+                      />
+                    </Tooltip>
+                  </div>
+                )}
+                
                 {/* Lock button overlay */}
                 <Button
                   size="small"

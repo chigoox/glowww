@@ -24,6 +24,7 @@ export const MultiSelectProvider = ({ children }) => {
   // Drag selection state
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [dragSelection, setDragSelection] = useState(null);
+  const [recentlyFinishedDragSelecting, setRecentlyFinishedDragSelecting] = useState(false);
   const dragStartRef = useRef(null);
   
   // Drag delay state
@@ -125,13 +126,16 @@ export const MultiSelectProvider = ({ children }) => {
   // Deselect on left click outside selected elements or bounding box
   useEffect(() => {
     const handleClick = (e) => {
-      // Skip if we were drag selecting
-      if (isDragSelecting) {
-      
+      // Skip if we were drag selecting or recently finished drag selecting
+      if (isDragSelecting || recentlyFinishedDragSelecting) {
+        console.log('🖱️ Skipping click due to drag selecting or recent drag selection');
         return;
       }
       
-      
+      // Skip if this is not a left click
+      if (e.button !== 0) {
+        return;
+      }
       
       // Don't clear selection if Ctrl/Cmd is held (for multi-selection)
       if (e.ctrlKey || e.metaKey) {
@@ -142,27 +146,38 @@ export const MultiSelectProvider = ({ children }) => {
       // Check if clicking on bounding box or selected element
       const clickedBoundingBox = e.target.closest('.multi-select-bounding-box');
       const clickedSelectedElement = e.target.closest('.multi-selected-element');
+      const clickedResizeHandle = e.target.closest('[title*="Resize"]');
+      const clickedPortalControl = e.target.closest('.pill-control, [title*="Drag"], [title*="move"]');
+      const clickedContextMenu = e.target.closest('.ant-dropdown, .context-menu');
       
-     
+      console.log('🖱️ Click analysis:', {
+        clickedBoundingBox: !!clickedBoundingBox,
+        clickedSelectedElement: !!clickedSelectedElement,
+        clickedResizeHandle: !!clickedResizeHandle,
+        clickedPortalControl: !!clickedPortalControl,
+        clickedContextMenu: !!clickedContextMenu,
+        target: e.target.tagName
+      });
       
-      // If clicking on bounding box or selected element, don't clear
-      if (clickedBoundingBox || clickedSelectedElement) {
+      // If clicking on bounding box, selected element, resize handles, or controls, don't clear
+      if (clickedBoundingBox || clickedSelectedElement || clickedResizeHandle || clickedPortalControl || clickedContextMenu) {
+        console.log('🖱️ Clicking on interactive element, preserving selection');
         return;
       }
       
       // Only clear if clicking in the editor area
       const editorRoot = document.querySelector('[data-editor="true"]');
       if (editorRoot && editorRoot.contains(e.target)) {
-        c
+        console.log('🖱️ Clearing selection - clicked outside selected elements');
         clearSelection();
       } else {
-      
+        console.log('🖱️ Click outside editor area, ignoring');
       }
     };
     
     document.addEventListener('click', handleClick, true); // Use capture phase
     return () => document.removeEventListener('click', handleClick, true);
-  }, [clearSelection, isDragSelecting]);
+  }, [clearSelection, isDragSelecting, recentlyFinishedDragSelecting]);
 
   // Watch for changes to selected elements (for StyleMenu updates)
   useEffect(() => {
@@ -370,10 +385,19 @@ export const MultiSelectProvider = ({ children }) => {
       
       // If we were actually drag selecting, end it
       if (isDragSelecting) {
+        console.log('🖱️ Ending drag selection, setting temporary flag to prevent click handler');
         setIsDragSelecting(false);
         setDragSelection(null);
         isDragDelayActiveRef.current = false;
         dragStartRef.current = null;
+        
+        // Set flag to prevent immediate click handler from clearing selection
+        setRecentlyFinishedDragSelecting(true);
+        
+        // Clear the flag after a short delay (longer than click event timing)
+        setTimeout(() => {
+          setRecentlyFinishedDragSelecting(false);
+        }, 100);
       }
     };
 

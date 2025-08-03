@@ -1304,9 +1304,19 @@ export const Carousel = ({
         id={id}
         title={title}
         onClick={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.stopPropagation();
-            toggleSelection(nodeId);
+          if (!hideEditorUI) {
+            // Prevent selection during resize operations
+            if (isResizing) {
+              e.stopPropagation();
+              e.preventDefault();
+              return;
+            }
+            
+            if (e.ctrlKey || e.metaKey) {
+              e.stopPropagation();
+              e.preventDefault();
+              toggleSelection(nodeId);
+            }
           }
         }}
         onMouseEnter={hideEditorUI ? undefined : () => {
@@ -1492,10 +1502,10 @@ const PortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
+        zIndex: 99999
       }}
     >
-      {/* Combined pill-shaped drag controls with EDIT in center */}
+      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
       <div
         style={{
           position: 'absolute',
@@ -1516,10 +1526,11 @@ const PortalControls = ({
       >
         {/* Left section - MOVE (Craft.js drag) */}
         <div
+          ref={dragRef}
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '4px',
+            padding: '4px 8px',
             borderRadius: '14px 0 0 14px',
             cursor: 'grab',
             display: 'flex',
@@ -1534,12 +1545,13 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Center section - EDIT (Purple) */}
+        {/* Middle section - EDIT */}
         <div
           style={{
             background: '#722ed1',
             color: 'white',
-            padding: '4px',
+            padding: '4px 8px',
+            borderRadius: '0',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -1560,7 +1572,7 @@ const PortalControls = ({
           style={{
             background: '#1890ff',
             color: 'white',
-            padding: '4px',
+            padding: '4px 8px',
             borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
@@ -1586,15 +1598,12 @@ const PortalControls = ({
       </div>
 
       {/* Resize handles */}
+      {/* Corner handles */}
       {[
         { position: 'nw', cursor: 'nw-resize', top: -4, left: -4 },
         { position: 'ne', cursor: 'ne-resize', top: -4, left: boxPosition.width - 4 },
         { position: 'sw', cursor: 'sw-resize', top: boxPosition.height - 4, left: -4 },
-        { position: 'se', cursor: 'se-resize', top: boxPosition.height - 4, left: boxPosition.width - 4 },
-        { position: 'n', cursor: 'n-resize', top: -4, left: boxPosition.width / 2 - 4 },
-        { position: 's', cursor: 's-resize', top: boxPosition.height - 4, left: boxPosition.width / 2 - 4 },
-        { position: 'w', cursor: 'w-resize', top: boxPosition.height / 2 - 4, left: -4 },
-        { position: 'e', cursor: 'e-resize', top: boxPosition.height / 2 - 4, left: boxPosition.width - 4 }
+        { position: 'se', cursor: 'se-resize', top: boxPosition.height - 4, left: boxPosition.width - 4 }
       ].map(handle => (
         <div
           key={handle.position}
@@ -1615,6 +1624,79 @@ const PortalControls = ({
           title="Resize"
         />
       ))}
+
+      {/* Edge handles - beautiful semi-transparent style */}
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'n-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+        title="Resize height"
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 's-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+        title="Resize height"
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'w-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+        title="Resize width"
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left + boxPosition.width - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'e-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+        title="Resize width"
+      />
     </div>,
     document.body
   );

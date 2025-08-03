@@ -441,7 +441,7 @@ const LinkPortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
+        zIndex: 99999
       }}
     >
       {/* Combined pill-shaped drag controls with EDIT in the middle */}

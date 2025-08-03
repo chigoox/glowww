@@ -514,8 +514,49 @@ export const Text = ({
 
   // Handle text editing functions
   const handleTextChange = (e) => {
-    const newText = e.target.textContent || e.target.innerText;
+    const newText = e.target.textContent || e.target.innerText || '';
+    
+    // Save cursor position before any changes
+    const selection = window.getSelection();
+    let cursorPosition = 0;
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      cursorPosition = range.startOffset;
+    }
+    
     setLocalText(newText);
+    
+    // Update props without re-rendering the contentEditable
+    // This prevents cursor jumping
+    requestAnimationFrame(() => {
+      setProp(props => {
+        props.text = newText;
+      });
+      
+      // Restore cursor position after the update
+      if (textRef.current && document.activeElement === textRef.current) {
+        const range = document.createRange();
+        const selection = window.getSelection();
+        
+        try {
+          const textNode = textRef.current.childNodes[0] || textRef.current;
+          const maxLength = textNode.nodeType === Node.TEXT_NODE ? textNode.textContent.length : 0;
+          const safePosition = Math.min(cursorPosition, maxLength);
+          
+          if (textNode.nodeType === Node.TEXT_NODE && maxLength > 0) {
+            range.setStart(textNode, safePosition);
+          } else {
+            range.setStart(textRef.current, 0);
+          }
+          
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } catch (error) {
+          console.log('Cursor position restoration failed:', error);
+        }
+      }
+    });
   };
 
   const handleKeyDown = (e) => {
@@ -537,16 +578,114 @@ export const Text = ({
   const handleDoubleClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsEditing(true);
-    setLocalText(text);
+    if (!hideEditorUI && !isEditing) {
+      setIsEditing(true);
+      setLocalText(text);
+      // Focus after a short delay
+      setTimeout(() => {
+        if (textRef.current) {
+          textRef.current.focus();
+          // Place cursor at the end
+          const range = document.createRange();
+          const selection = window.getSelection();
+          if (textRef.current.childNodes.length > 0) {
+            range.setStart(textRef.current.childNodes[0], textRef.current.textContent.length);
+          } else {
+            range.setStart(textRef.current, 0);
+          }
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }, 50);
+    }
   };
 
-  const handleBlur = () => {
+  const handleEditClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsEditing(true);
+    setLocalText(text);
+    // Focus the text element after state update
+    setTimeout(() => {
+      if (textRef.current) {
+        textRef.current.focus();
+        // Place cursor at the end of the text
+        const range = document.createRange();
+        const selection = window.getSelection();
+        if (textRef.current.childNodes.length > 0) {
+          range.setStart(textRef.current.childNodes[0], textRef.current.textContent.length);
+        } else {
+          range.setStart(textRef.current, 0);
+        }
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }, 50);
+  };
+
+  const handleBlur = (e) => {
+    // Don't exit edit mode if clicking on font controls or related elements
+    const relatedTarget = e.relatedTarget;
+    if (relatedTarget) {
+      // Check if the related target is a font control element
+      const isControlElement = relatedTarget.tagName === 'BUTTON' || 
+                              relatedTarget.tagName === 'SELECT' || 
+                              relatedTarget.tagName === 'INPUT' ||
+                              relatedTarget.type === 'color' ||
+                              relatedTarget.closest('[data-font-controls]');
+      
+      if (isControlElement) {
+        // Keep focus on the text element
+        setTimeout(() => {
+          if (textRef.current) {
+            textRef.current.focus();
+          }
+        }, 0);
+        return;
+      }
+    }
+    
+    // Exit editing mode
     setIsEditing(false);
     setProp(props => {
       props.text = localText;
     });
   };
+
+  // Add global click handler to exit edit mode when clicking outside
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const handleGlobalClick = (e) => {
+      // Check if click is inside the text element or font controls
+      if (!textRef.current) return;
+      
+      const isInsideText = textRef.current.contains(e.target);
+      const isInsideControls = e.target.closest('[data-font-controls]') || 
+                              e.target.tagName === 'BUTTON' ||
+                              e.target.tagName === 'SELECT' ||
+                              e.target.tagName === 'INPUT';
+      
+      if (!isInsideText && !isInsideControls) {
+        setIsEditing(false);
+        setProp(props => {
+          props.text = localText;
+        });
+      }
+    };
+
+    // Add listener with a slight delay to avoid immediate closing
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleGlobalClick, true);
+    }, 100);
+    
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleGlobalClick, true);
+    };
+  }, [isEditing, localText, setProp]);
 
   // Handle data attributes
   const dataAttrs = {};
@@ -801,6 +940,7 @@ export const Text = ({
           boxPosition={boxPosition}
           dragRef={dragRef}
           handleResizeStart={handleResizeStart}
+          handleEditClick={handleEditClick}
           nodeId={nodeId}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
@@ -808,21 +948,292 @@ export const Text = ({
       )}
       
       {/* Text content - editable span */}
-      <span
-        contentEditable={isEditing}
-        onBlur={handleBlur}
-        onInput={handleTextChange}
-        onKeyDown={handleKeyDown}
-        style={{
-          outline: 'none',
-          display: 'block',
-          width: '100%',
-          minHeight: '1em'
-        }}
-        suppressContentEditableWarning={true}
-      >
-        {text}
-      </span>
+      {isEditing ? (
+        <span
+          ref={textRef}
+          contentEditable={true}
+          onBlur={handleBlur}
+          onInput={handleTextChange}
+          onKeyDown={handleKeyDown}
+          style={{
+            outline: 'none',
+            display: 'block',
+            width: '100%',
+            minHeight: '1em',
+            border: '2px dashed #722ed1',
+            padding: '4px',
+            background: 'rgba(114, 46, 209, 0.05)',
+            borderRadius: '4px'
+          }}
+          suppressContentEditableWarning={true}
+        >
+          {localText}
+        </span>
+      ) : (
+        <span
+          style={{
+            display: 'block',
+            width: '100%',
+            minHeight: '1em'
+          }}
+        >
+          {text}
+        </span>
+      )}
+      {/* Enhanced editing controls */}
+      {isEditing && (
+        <div style={{
+          position: 'absolute',
+          top: -120,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 2147483647,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          width: '500px',
+          minWidth: '500px'
+        }}>
+          {/* Top row - Exit button and status */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            width: '100%',
+            minWidth: '480px'
+          }}>
+            <div style={{
+              fontSize: '11px',
+              background: 'linear-gradient(135deg, #722ed1, #9254de)',
+              color: 'white',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(114, 46, 209, 0.3)',
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}>
+              ✏️ EDITING MODE
+            </div>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsEditing(false);
+                setProp(props => {
+                  props.text = localText;
+                });
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              style={{
+                fontSize: '11px',
+                background: 'linear-gradient(135deg, #ff4d4f, #ff7875)',
+                color: 'white',
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(255, 77, 79, 0.3)',
+                transition: 'transform 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
+              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+            >
+              EXIT
+            </button>
+          </div>
+
+          {/* Font controls row */}
+          <div 
+            data-font-controls="true"
+            style={{
+              display: 'flex',
+              gap: '8px',
+              background: 'rgba(255, 255, 255, 0.98)',
+              padding: '12px',
+              borderRadius: '16px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              backdropFilter: 'blur(16px)',
+              alignItems: 'center',
+              width: '100%',
+              minWidth: '480px'
+            }}
+            onMouseDown={(e) => e.preventDefault()} // Prevent blur on mouse down
+            onClick={(e) => e.stopPropagation()} // Prevent event bubbling
+          >
+            {/* Font Family */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>FONT</label>
+              <select
+                value={fontFamily}
+                onChange={(e) => setProp(props => props.fontFamily = e.target.value)}
+                onMouseDown={(e) => e.preventDefault()}
+                onFocus={(e) => e.preventDefault()}
+                style={{
+                  fontSize: '11px',
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid #e0e0e0',
+                  background: 'white',
+                  cursor: 'pointer',
+                  minWidth: '110px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.borderColor = '#722ed1'}
+                onMouseLeave={(e) => e.target.style.borderColor = '#e0e0e0'}
+              >
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="Helvetica, sans-serif">Helvetica</option>
+                <option value="Times New Roman, serif">Times</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="Verdana, sans-serif">Verdana</option>
+                <option value="Courier New, monospace">Courier</option>
+                <option value="Impact, sans-serif">Impact</option>
+                <option value="Comic Sans MS, cursive">Comic Sans</option>
+              </select>
+            </div>
+
+            {/* Font Size */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>SIZE</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input
+                  type="number"
+                  value={parseInt(fontSize) || 16}
+                  onChange={(e) => setProp(props => props.fontSize = `${e.target.value}px`)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onFocus={(e) => e.preventDefault()}
+                  style={{
+                    fontSize: '11px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: '1px solid #e0e0e0',
+                    background: 'white',
+                    width: '50px',
+                    textAlign: 'center',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  min="8"
+                  max="72"
+                  onMouseEnter={(e) => e.target.style.borderColor = '#722ed1'}
+                  onMouseLeave={(e) => e.target.style.borderColor = '#e0e0e0'}
+                />
+                <span style={{ fontSize: '10px', color: '#999' }}>px</span>
+              </div>
+            </div>
+
+            {/* Font Color */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>COLOR</label>
+              <div style={{ 
+                position: 'relative',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}>
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => setProp(props => props.color = e.target.value)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onFocus={(e) => e.preventDefault()}
+                  style={{
+                    width: '40px',
+                    height: '32px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: 'none'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Style buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>STYLE</label>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setProp(props => 
+                      props.fontWeight = props.fontWeight === 'bold' ? 'normal' : 'bold'
+                    );
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  style={{
+                    fontSize: '12px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: '1px solid #e0e0e0',
+                    background: fontWeight === 'bold' ? 'linear-gradient(135deg, #722ed1, #9254de)' : 'white',
+                    color: fontWeight === 'bold' ? 'white' : '#000',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                    transition: 'all 0.2s ease',
+                    minWidth: '32px'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (fontWeight !== 'bold') {
+                      e.target.style.borderColor = '#722ed1';
+                      e.target.style.background = '#f9f9f9';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (fontWeight !== 'bold') {
+                      e.target.style.borderColor = '#e0e0e0';
+                      e.target.style.background = 'white';
+                    }
+                  }}
+                >
+                  B
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setProp(props => 
+                      props.fontStyle = props.fontStyle === 'italic' ? 'normal' : 'italic'
+                    );
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  style={{
+                    fontSize: '12px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: '1px solid #e0e0e0',
+                    background: fontStyle === 'italic' ? 'linear-gradient(135deg, #722ed1, #9254de)' : 'white',
+                    color: fontStyle === 'italic' ? 'white' : '#000',
+                    cursor: 'pointer',
+                    fontStyle: 'italic',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                    transition: 'all 0.2s ease',
+                    minWidth: '32px'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (fontStyle !== 'italic') {
+                      e.target.style.borderColor = '#722ed1';
+                      e.target.style.background = '#f9f9f9';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (fontStyle !== 'italic') {
+                      e.target.style.borderColor = '#e0e0e0';
+                      e.target.style.background = 'white';
+                    }
+                  }}
+                >
+                  I
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       
       {/* Context Menu - hide in preview mode */}
       {!hideEditorUI && (
@@ -844,7 +1255,8 @@ const PortalControls = ({
   handleResizeStart,
   nodeId,
   isDragging,
-  setIsDragging
+  setIsDragging,
+  handleEditClick
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -855,10 +1267,10 @@ const PortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
+        zIndex: 2147483646
       }}
     >
-      {/* Combined pill-shaped drag controls */}
+      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
       <div
         style={{
           position: 'absolute',
@@ -873,16 +1285,17 @@ const PortalControls = ({
           fontWeight: 'bold',
           userSelect: 'none',
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto' // Re-enable pointer events for this element
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000000
         }}
       >
-        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
+        {/* Left section - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '6px 12px',
+            padding: '4px 8px',
             borderRadius: '14px 0 0 14px',
             cursor: 'grab',
             display: 'flex',
@@ -897,13 +1310,42 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Right half - POS (Custom position drag with snapping) */}
+        {/* Middle section - EDIT */}
+        <div
+          style={{
+            background: '#722ed1',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleEditClick(e);
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          title="Edit text content"
+        >
+          ✏️ EDIT
+        </div>
+        
+        {/* Right section - POS (Custom position drag with snapping) */}
         <SnapPositionHandle
           nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
-            padding: '6px 12px',
+            padding: '4px 8px',
             borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',

@@ -64,10 +64,11 @@ export const Image = ({
     selected: node.events.selected,
     parent: node.data.parent,
   }));
-  const { actions } = useEditor();
+  const { actions, query } = useEditor();
   
   // Use snap functionality
-  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  const snapHook = useCraftSnap(nodeId);
+  const { connectors: { snapConnect, snapDrag } = {} } = snapHook || {};
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
@@ -79,11 +80,17 @@ export const Image = ({
     if (prevParentRef.current !== parent) {
       console.log('Image: Parent changed, resetting position properties');
       setProp(props => {
-        props.top = undefined;
-        props.left = undefined;
-        props.right = undefined;
-        props.bottom = undefined;
-        props.position = "relative";
+        // Only reset if position properties were actually set
+        if (props.top !== undefined || props.left !== undefined || 
+            props.right !== undefined || props.bottom !== undefined) {
+          console.log('🔄 Resetting position properties after container move');
+          props.top = undefined;
+          props.left = undefined;
+          props.right = undefined;
+          props.bottom = undefined;
+          // Keep position as relative for normal flow
+          props.position = "relative";
+        }
       });
       prevParentRef.current = parent;
     }
@@ -167,10 +174,20 @@ export const Image = ({
   useEffect(() => {
     const connectElements = () => {
       if (imageRef.current) {
-        snapConnect(imageRef.current); // Connect for selection with snap functionality
+        // Use defensive connection with safety checks
+        let connectedRef = imageRef.current;
+        if (snapConnect && typeof snapConnect === 'function') {
+          connectedRef = snapConnect(connectedRef);
+        }
+        connect(connectedRef); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
+        // Use defensive connection with safety checks
+        let connectedRef = dragRef.current;
+        if (snapDrag && typeof snapDrag === 'function') {
+          connectedRef = snapDrag(connectedRef);
+        }
+        drag(connectedRef); // Connect the drag handle with snap functionality
       }
     };
 
@@ -180,7 +197,7 @@ export const Image = ({
     // Reconnect when selection state changes
     const timer = setTimeout(connectElements, 50);
     return () => clearTimeout(timer);
-  }, [snapConnect, snapDrag]);
+  }, [connect, drag, snapConnect, snapDrag]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -206,13 +223,57 @@ export const Image = ({
     e.stopPropagation();
     e.preventDefault();
     
+    // Prevent any other interactions during resize
+    setIsResizing(true);
+    
     const startX = e.clientX;
     const startY = e.clientY;
     const rect = imageRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
-    
-    setIsResizing(true);
+
+    // Register all elements for snapping during resize
+    const nodes = query.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(node.dom);
+          
+          // Get border widths for reference
+          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
+          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
+          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+          
+          // For visual alignment, we want to align to the full visual bounds (border box)
+          // This includes padding and borders as users expect visual alignment to the actual edge
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          
+          console.log('📝 Registering element with border box bounds:', {
+            id,
+            elementRect: {
+              left: elementRect.left - editorRect.left,
+              top: elementRect.top - editorRect.top,
+              width: elementRect.width,
+              height: elementRect.height,
+              right: (elementRect.left - editorRect.left) + elementRect.width,
+              bottom: (elementRect.top - editorRect.top) + elementRect.height
+            },
+            borders: { borderLeft, borderRight, borderTop, borderBottom }
+          });
+          
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
+        }
+      }
+    });
     
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
@@ -260,9 +321,75 @@ export const Image = ({
       // Apply maximum constraints if set
       if (maxWidth) newWidth = Math.min(newWidth, maxWidth);
       if (maxHeight) newHeight = Math.min(newHeight, maxHeight);
+
+      // Get current position for snap calculations
+      const currentRect = imageRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        
+        // Calculate the intended bounds based on resize direction
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
+
+        // Adjust position for edges that move the element's origin
+        if (direction.includes('w')) {
+          // Left edge resize - element position changes
+          const widthDelta = newWidth - currentRect.width;
+          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        
+        if (direction.includes('n')) {
+          // Top edge resize - element position changes
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+
+        // Calculate all edge positions with the new dimensions
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        console.log('🔧 Resize bounds:', { 
+          direction, 
+          currentBounds: {
+            left: currentRect.left - editorRect.left,
+            top: currentRect.top - editorRect.top,
+            width: currentRect.width,
+            height: currentRect.height
+          },
+          intendedBounds,
+          newDimensions: { newWidth, newHeight }
+        });
+
+        // Use resize-specific snap method
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+          
+          console.log('🔧 Applied snap result:', { 
+            snappedWidth: newWidth, 
+            snappedHeight: newHeight,
+            originalDimensions: { width: newWidth, height: newHeight }
+          });
+        }
+      }
       
-      // Update dimensions using Craft.js setProp
-      setProp(props => {
+      // Update dimensions using Craft.js throttled setProp for smooth history
+      actions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -270,6 +397,13 @@ export const Image = ({
     
     const handleMouseUp = () => {
       setIsResizing(false);
+      
+      // Clear snap indicators and cleanup tracked elements
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => {
+        snapGridSystem.cleanupTrackedElements();
+      }, 100);
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -398,6 +532,13 @@ export const Image = ({
       onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
       onClick={(e) => {
         if (!hideEditorUI) {
+          // Prevent selection during resize operations
+          if (isResizing) {
+            e.stopPropagation();
+            e.preventDefault();
+            return;
+          }
+          
           if (e.ctrlKey || e.metaKey) {
             e.stopPropagation();
             e.preventDefault();
@@ -489,10 +630,10 @@ const PortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
+        zIndex: 99999
       }}
     >
-      {/* Combined pill-shaped drag controls */}
+      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
       <div
         style={{
           position: 'absolute',
@@ -511,13 +652,13 @@ const PortalControls = ({
           zIndex: 10000
         }}
       >
-        {/* Left half - MOVE (Craft.js drag) */}
+        {/* Left section - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '2px',
+            padding: '4px 8px',
             borderRadius: '14px 0 0 14px',
             cursor: 'grab',
             display: 'flex',
@@ -532,13 +673,34 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Right half - POS (Custom position drag with snapping) */}
+        {/* Middle section - EDIT */}
+        <div
+          style={{
+            background: '#722ed1',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onClick={handleEditClick}
+          title="Change image"
+        >
+          🖼️ EDIT
+        </div>
+        
+        {/* Right section - POS (Custom position drag with snapping) */}
         <SnapPositionHandle
           nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
-            padding: '4px',
+            padding: '4px 8px',
             borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
@@ -563,31 +725,6 @@ const PortalControls = ({
         </SnapPositionHandle>
       </div>
 
-      {/* EDIT Button - separate control */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width + 10,
-          background: '#722ed1',
-          color: 'white',
-          padding: '4px 8px',
-          borderRadius: '12px',
-          cursor: 'pointer',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto',
-          zIndex: 10000,
-          transition: 'background 0.2s ease'
-        }}
-        onClick={handleEditClick}
-        title="Change image"
-      >
-        🖼️ EDIT
-      </div>
-
       {/* Resize handles */}
       {/* Top-left corner */}
       <div
@@ -605,6 +742,9 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize"
       />
 
       {/* Top-right corner */}
@@ -623,6 +763,9 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize"
       />
 
       {/* Bottom-left corner */}
@@ -641,6 +784,9 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize"
       />
 
       {/* Bottom-right corner */}
@@ -659,6 +805,9 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'se')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize"
       />
 
       {/* Top edge */}
@@ -666,17 +815,19 @@ const PortalControls = ({
         style={{
           position: 'absolute',
           top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 4,
-          width: 8,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
           height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
+          background: 'rgba(24, 144, 255, 0.3)',
           cursor: 'n-resize',
-          zIndex: 10001,
+          zIndex: 9999,
+          borderRadius: '4px',
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'n')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize height"
       />
 
       {/* Bottom edge */}
@@ -684,53 +835,59 @@ const PortalControls = ({
         style={{
           position: 'absolute',
           top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 4,
-          width: 8,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
           height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
+          background: 'rgba(24, 144, 255, 0.3)',
           cursor: 's-resize',
-          zIndex: 10001,
+          zIndex: 9999,
+          borderRadius: '4px',
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 's')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize height"
       />
 
       {/* Left edge */}
       <div
         style={{
           position: 'absolute',
-          top: boxPosition.top + boxPosition.height / 2 - 4,
           left: boxPosition.left - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
           width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
           cursor: 'w-resize',
-          zIndex: 10001,
+          zIndex: 9999,
+          borderRadius: '4px',
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'w')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize width"
       />
 
       {/* Right edge */}
       <div
         style={{
           position: 'absolute',
-          top: boxPosition.top + boxPosition.height / 2 - 4,
           left: boxPosition.left + boxPosition.width - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
           width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
           cursor: 'e-resize',
-          zIndex: 10001,
+          zIndex: 9999,
+          borderRadius: '4px',
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'e')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
+        title="Resize width"
       />
     </div>,
     document.body

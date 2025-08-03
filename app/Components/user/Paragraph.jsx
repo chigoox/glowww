@@ -500,7 +500,7 @@ const PortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
+        zIndex: 99999
       }}
     >
       {/* Combined pill-shaped controls with Edit button */}
@@ -543,33 +543,12 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Center - POS (Custom position drag) */}
+        {/* Center - EDIT (Edit content) */}
         <div
           style={{
-            background: '#1890ff',
+            background: '#722ed1',
             color: 'white',
             padding: '2px',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '36px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
-        >
-          ↕↔ POS
-        </div>
-
-        {/* Right - EDIT (Edit content) */}
-        <div
-          style={{
-            background: '#faad14',
-            color: 'white',
-            padding: '2px',
-            borderRadius: '0 14px 14px 0',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -582,6 +561,27 @@ const PortalControls = ({
           title="Edit paragraph content"
         >
           ✏️ EDIT
+        </div>
+
+        {/* Right - POS (Custom position drag) */}
+        <div
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '2px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '36px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseDown={(e) => handleDragStart(e)}
+          title="Drag to change position"
+        >
+          ↕↔ POS
         </div>
       </div>
 

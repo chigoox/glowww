@@ -2,7 +2,6 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import Card from "antd/es/card/Card";
 import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../support/ContextMenu";
 import useEditorDisplay from "../support/useEditorDisplay";
@@ -14,11 +13,11 @@ import { useMultiSelect } from '../support/MultiSelectContext';
 export const FlexBox = ({
   
   // Layout & Position
-  width = "auto",
-  height = "auto",
-  minWidth,
+  width = "200px",
+  height = "200px",
+  minWidth = "200px",
   maxWidth,
-  minHeight,
+  minHeight = "200px",
   maxHeight,
   display = "block",
   position = "relative",
@@ -818,7 +817,7 @@ const PortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
+        zIndex: 99999
       }}
     >
       {/* Combined pill-shaped drag controls */}
@@ -1054,11 +1053,16 @@ FlexBox.craft = {
     canvas: true,
     
     // Layout & Position
-    width: "auto",
-    height: "auto",
-    minHeight: "5rem",
+    width: "200px",
+    height: "200px",
+    minHeight: "200px",
+    minWidth: "200px",
     display: "block",
     position: "relative",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 1,
     visibility: "visible",
     float: "none",

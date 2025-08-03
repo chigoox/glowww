@@ -168,16 +168,20 @@ const MultiSelectBoundingBox = () => {
           scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
           scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
           break;
-        case 'e': // right edge
+        case 'e': // right edge - only scale X
           scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
+          scaleY = 1; // Keep Y unchanged
           break;
-        case 'w': // left edge
+        case 'w': // left edge - only scale X
           scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
+          scaleY = 1; // Keep Y unchanged
           break;
-        case 's': // bottom edge
+        case 's': // bottom edge - only scale Y
+          scaleX = 1; // Keep X unchanged
           scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
           break;
-        case 'n': // top edge
+        case 'n': // top edge - only scale Y
+          scaleX = 1; // Keep X unchanged
           scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
           break;
       }
@@ -194,10 +198,40 @@ const MultiSelectBoundingBox = () => {
     };
 
     const handleMouseUp = () => {
-     
+      console.log('🔧 Applying bounding box scale:', { finalScaleX, finalScaleY, direction });
       
-      // Apply the final resize to all selected elements
-      resizeSelection(finalScaleX, finalScaleY);
+      // Calculate appropriate origin point based on resize direction
+      let origin = { x: 0.5, y: 0.5 }; // Default center
+      
+      switch (direction) {
+        case 'nw': // top-left corner
+          origin = { x: 1, y: 1 }; // Scale from bottom-right
+          break;
+        case 'ne': // top-right corner
+          origin = { x: 0, y: 1 }; // Scale from bottom-left
+          break;
+        case 'sw': // bottom-left corner
+          origin = { x: 1, y: 0 }; // Scale from top-right
+          break;
+        case 'se': // bottom-right corner
+          origin = { x: 0, y: 0 }; // Scale from top-left
+          break;
+        case 'n': // top edge
+          origin = { x: 0.5, y: 1 }; // Scale from bottom
+          break;
+        case 's': // bottom edge
+          origin = { x: 0.5, y: 0 }; // Scale from top
+          break;
+        case 'w': // left edge
+          origin = { x: 1, y: 0.5 }; // Scale from right
+          break;
+        case 'e': // right edge
+          origin = { x: 0, y: 0.5 }; // Scale from left
+          break;
+      }
+      
+      // Apply the final scale to all selected elements with proper origin
+      scaleSelection(finalScaleX, finalScaleY, origin);
 
       // Reset visual feedback
       if (boundingBoxRef.current) {
@@ -212,7 +246,7 @@ const MultiSelectBoundingBox = () => {
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [boundingBox, resizeSelection, setIsResizing]);
+  }, [boundingBox, scaleSelection, setIsResizing]);
 
   const boundingBoxStyle = {
     position: 'absolute',
