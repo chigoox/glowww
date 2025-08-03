@@ -294,7 +294,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
       }
     });
 
-    // Ensure ROOT node exists
+    // Ensure ROOT node exists with proper full-width properties
     if (!cleaned.ROOT) {
       cleaned.ROOT = {
         type: { resolvedName: "Root" },
@@ -317,6 +317,32 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         nodes: [],
         linkedNodes: {}
       };
+    } else {
+      // Ensure existing ROOT has full-width properties to prevent width corruption
+      if (cleaned.ROOT.props) {
+        cleaned.ROOT.props = {
+          ...cleaned.ROOT.props,
+          width: "100%",
+          minWidth: "100%", 
+          maxWidth: "100%",
+          canvas: true,
+          position: "relative",
+          display: "block"
+        };
+      } else {
+        cleaned.ROOT.props = {
+          canvas: true,
+          padding: 0,
+          margin: 0,
+          width: "100%",
+          minWidth: "100%",
+          maxWidth: "100%",
+          minHeight: "100vh",
+          background: "#ffffff",
+          position: "relative",
+          display: "block"
+        };
+      }
     }
 
     return cleaned;
@@ -406,13 +432,36 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
           const pageData = await getPage(user.uid, siteId, targetPageId);
           console.log('📋 Firebase page data:', pageData);
           
-          if (pageData?.content && pageData.content.ROOT) {
-            const pageContent = JSON.stringify(pageData.content);
-            contentToLoad = pageContent;
-            setHasLoadedFromFirebase(true); // Mark that we loaded real content
-            console.log('✅ Loaded valid content from Firebase, size:', pageContent.length);
+          // Be more lenient about content validation during initial load
+          if (pageData?.content && Object.keys(pageData.content).length > 0) {
+            // Try to validate content structure
+            let validContent = null;
+            
+            if (pageData.content.ROOT) {
+              // Content has ROOT - use directly
+              validContent = pageData.content;
+            } else if (typeof pageData.content === 'object') {
+              // Content might be stored differently - try to find any valid node structure
+              const hasValidNodes = Object.values(pageData.content).some(node => 
+                node && typeof node === 'object' && node.type
+              );
+              
+              if (hasValidNodes) {
+                validContent = pageData.content;
+              }
+            }
+            
+            if (validContent) {
+              const pageContent = JSON.stringify(validContent);
+              contentToLoad = pageContent;
+              setHasLoadedFromFirebase(true); // Mark that we loaded real content
+              console.log('✅ Loaded valid content from Firebase, size:', pageContent.length);
+            } else {
+              console.log('⚠️ Firebase page exists but content structure is not recognizable');
+              setHasLoadedFromFirebase(false);
+            }
           } else {
-            console.log('⚠️ Firebase page exists but has no valid content');
+            console.log('⚠️ Firebase page exists but has no content or empty content');
             setHasLoadedFromFirebase(false); // Mark that we didn't get real content
           }
         } catch (error) {
@@ -435,13 +484,13 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         // Clear editor first to ensure clean state
         actions.clearEvents();
         
-        // Define fallback handler for initialization errors
+        // Define fallback handler for initialization errors (clean empty state)
         const handleInitializationFallback = () => {
           try {
             const fallbackState = {
               "ROOT": {
                 "type": { "resolvedName": "Root" },
-                "nodes": ["welcomeText"],
+                "nodes": [],
                 "props": { 
                   "canvas": true,
                   "padding": 0,
@@ -458,22 +507,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 "parent": null,
                 "displayName": "Root",
                 "isCanvas": true
-              },
-              "welcomeText": {
-                "type": { "resolvedName": "Text" },
-                "isCanvas": false,
-                "props": {
-                  "text": `Welcome to ${targetPageId}! You can now add components to this page.`,
-                  "fontSize": "18",
-                  "color": "#666666",
-                  "textAlign": "center",
-                  "padding": [20, 20, 20, 20]
-                },
-                "displayName": "Text",
-                "custom": {},
-                "parent": "ROOT",
-                "nodes": [],
-                "linkedNodes": {}
               }
             };
             
@@ -552,11 +585,14 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                   "nodes": [],
                   "props": { 
                     "canvas": true,
-                    "minHeight": "900px",
+                    "padding": 0,
+                    "margin": 0,
+                    "width": "100%",
+                    "minWidth": "100%",
+                    "maxWidth": "100%",
+                    "minHeight": "100vh",
                     "background": "#ffffff",
                     "position": "relative",
-                    "width": "100%",
-                    "padding": 0,
                     "display": "block"
                   },
                   "custom": {},
@@ -1211,65 +1247,76 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             pageId: newPageId, 
             hasContent: !!pageData?.content, 
             contentKeys: pageData?.content ? Object.keys(pageData.content) : [],
-            hasRoot: !!pageData?.content?.ROOT 
+            hasRoot: !!pageData?.content?.ROOT,
+            contentType: typeof pageData?.content
           });
           
-          if (pageData?.content?.ROOT) {
-            contentToLoad = JSON.stringify(pageData.content);
-            console.log('✅ V4: Loaded from Firebase');
+          // Be more lenient about content validation - accept any content structure
+          if (pageData?.content && Object.keys(pageData.content).length > 0) {
+            // Try to validate content structure
+            let validContent = null;
+            
+            if (pageData.content.ROOT) {
+              // Content has ROOT - use directly
+              validContent = pageData.content;
+            } else if (typeof pageData.content === 'object') {
+              // Content might be stored differently - try to find any valid node structure
+              const hasValidNodes = Object.values(pageData.content).some(node => 
+                node && typeof node === 'object' && node.type
+              );
+              
+              if (hasValidNodes) {
+                validContent = pageData.content;
+              }
+            }
+            
+            if (validContent) {
+              contentToLoad = JSON.stringify(validContent);
+              console.log('✅ V4: Loaded valid content from Firebase, size:', contentToLoad.length);
+            } else {
+              console.warn('⚠️ V4: Page data exists but content structure is not recognizable');
+            }
           } else {
-            console.warn('⚠️ V4: Page data exists but no valid content structure');
+            console.log('⚠️ V4: Page exists but has no content or empty content');
           }
         } catch (firebaseError) {
           console.error('❌ V4: Firebase error:', firebaseError);
         }
       }
       
-      // Use empty state if nothing found
+      // Only create empty state if we truly have no content
       if (!contentToLoad) {
-        // Find the page info to create a distinctive empty state
+        // Find the page info to check if this should be an empty page
         const currentPage = pages.find(p => p.id === newPageId);
-        const pageName = currentPage?.name || 'Unknown Page';
+        const pageName = currentPage?.name || 'New Page';
         const isHomePage = currentPage?.isHome || false;
         
-        console.log('📝 V4: Creating distinctive empty state for:', { newPageId, pageName, isHomePage });
+        console.log('📝 V4: No content found, creating empty state for:', { newPageId, pageName, isHomePage });
         
+        // Create a clean empty state with proper full-width Root
         contentToLoad = JSON.stringify({
           "ROOT": {
             "type": { "resolvedName": "Root" },
-            "nodes": ["welcomeText"],
+            "nodes": [],
             "props": { 
               "canvas": true,
-              "minHeight": "900px",
+              "padding": 0,
+              "margin": 0,
+              "width": "100%",
+              "minWidth": "100%",
+              "maxWidth": "100%",
+              "minHeight": "100vh",
               "background": "#ffffff",
               "position": "relative",
-              "width": "100%",
-              "padding": 0,
               "display": "block"
             },
             "custom": {},
             "parent": null,
             "displayName": "Root",
             "isCanvas": true
-          },
-          "welcomeText": {
-            "type": { "resolvedName": "Text" },
-            "isCanvas": false,
-            "props": {
-              "text": `${isHomePage ? '🏠 Welcome to your Home Page!' : `📄 This is the "${pageName}" page`}\n\nStart building by dragging components from the toolbox on the left.`,
-              "fontSize": "18",
-              "color": "#666666",
-              "textAlign": "center",
-              "padding": [40, 20, 40, 20]
-            },
-            "displayName": "Text",
-            "custom": {},
-            "parent": "ROOT",
-            "nodes": [],
-            "linkedNodes": {}
           }
         });
-        console.log('📝 V4: Using distinctive empty state for page:', pageName);
+        console.log('📝 V4: Created clean empty state for new page:', pageName);
       }
       
       // 5. Apply content to editor with rendering fix
@@ -1362,39 +1409,23 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         const enhancedEmptyState = {
           "ROOT": {
             "type": { "resolvedName": "Root" },
-            "nodes": ["emergencyText"],
+            "nodes": [],
             "props": { 
               "canvas": true,
-              "minHeight": "900px",
+              "padding": 0,
+              "margin": 0,
+              "width": "100%",
+              "minWidth": "100%",
+              "maxWidth": "100%",
+              "minHeight": "100vh",
               "background": "#ffffff",
               "position": "relative",
-              "width": "100%",
-              "padding": 0,
               "display": "block"
             },
             "custom": {},
             "parent": null,
             "displayName": "Root",
             "isCanvas": true
-          },
-          "emergencyText": {
-            "type": { "resolvedName": "Text" },
-            "isCanvas": false,
-            "props": {
-              "text": `⚠️ Emergency Recovery Mode\n\nPage: "${pageName}"\n\nContent could not be loaded properly, but you can start building here.`,
-              "fontSize": "16",
-              "color": "#856404",
-              "textAlign": "center",
-              "padding": [40, 20, 40, 20],
-              "backgroundColor": "#fff3cd",
-              "border": "1px solid #ffeeba",
-              "borderRadius": "8px"
-            },
-            "displayName": "Text",
-            "custom": {},
-            "parent": "ROOT",
-            "nodes": [],
-            "linkedNodes": {}
           }
         };
         

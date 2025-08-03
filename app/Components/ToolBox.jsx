@@ -7,6 +7,7 @@ import { Box } from "./user/Box";
 import { FlexBox } from "./user/FlexBox";
 import { GridBox } from "./user/GridBox";
 import { Image } from "./user/Image";
+import { useEnhancedNewComponentDrop } from "./support/useEnhancedNewComponentDrop";
 
 import { 
   AppstoreOutlined, 
@@ -48,6 +49,7 @@ import { NavBar } from "./user/Nav/NavBar";
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const { connectors } = useEditor();
+  const { enhancedCreate } = useEnhancedNewComponentDrop();
   const toolboxRef = useRef(null);
 
   // Create refs for each component
@@ -234,8 +236,9 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         if (activeSection) {
           activeSection.components.forEach(component => {
             if (component.ref.current) {
-              console.log(`Creating connector for ${component.name}`);
-              connectors.create(component.ref.current, component.element);
+              console.log(`Creating enhanced connector for ${component.name}`);
+              // Use enhanced create instead of standard connector
+              enhancedCreate(component.ref.current, component.element);
             }
           });
         }
@@ -243,7 +246,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
       return () => clearTimeout(timer);
     }
-  }, [activeDrawer, connectors]);
+  }, [activeDrawer, enhancedCreate]);
 
   const openDrawer = (sectionId) => {
     setActiveDrawer(sectionId);
