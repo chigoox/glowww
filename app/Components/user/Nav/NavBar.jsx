@@ -3,11 +3,11 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
-import ContextMenu from "../../support/ContextMenu";
-import { useContextMenu } from "../../support/useContextMenu";
-import useEditorDisplay from "../../support/useEditorDisplay";
-import MediaLibrary from "../../support/MediaLibrary";
-import useSaveOperations from "../../support/useSaveOperations";
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/context/useEditorDisplay";
+import MediaLibrary from "../../editor/MediaLibrary";
+import useSaveOperations from "../../utils/export/useSaveOperations";
 import { 
   EditOutlined, 
   MenuOutlined,

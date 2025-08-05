@@ -7,7 +7,7 @@ import { Box } from "./user/Box";
 import { FlexBox } from "./user/FlexBox";
 import { GridBox } from "./user/GridBox";
 import { Image } from "./user/Image";
-import { useEnhancedNewComponentDrop } from "./support/useEnhancedNewComponentDrop";
+import { useDropPositionCorrection } from './utils/drag-drop/useDropPositionCorrection';
 
 import { 
   AppstoreOutlined, 
@@ -49,7 +49,7 @@ import { NavBar } from "./user/Nav/NavBar";
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const { connectors } = useEditor();
-  const { enhancedCreate } = useEnhancedNewComponentDrop();
+  const { correctPosition } = useDropPositionCorrection();
   const toolboxRef = useRef(null);
 
   // Create refs for each component
@@ -162,7 +162,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           name: 'Navbar',
           icon: <MenuOutlined />,
           description: 'Navigation bar with pages',
-          element: <Element is={NavBar} canvas />
+          element: <Element is={NavBar} />
         }
       ]
     },
@@ -177,7 +177,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           name: 'Button',
           icon: <InteractionOutlined />,
           description: 'Clickable button',
-          element: <Element is={Button} text="Button" canvas />
+          element: <Element is={Button} text="Button" />
         },
         {
           ref: linkRef,
@@ -236,9 +236,9 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         if (activeSection) {
           activeSection.components.forEach(component => {
             if (component.ref.current) {
-              console.log(`Creating enhanced connector for ${component.name}`);
-              // Use enhanced create instead of standard connector
-              enhancedCreate(component.ref.current, component.element);
+              console.log(`Setting up drag connector for ${component.name}`);
+              // Use regular Craft.js drag connector
+              connectors.create(component.ref.current, component.element);
             }
           });
         }
@@ -246,7 +246,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
       return () => clearTimeout(timer);
     }
-  }, [activeDrawer, enhancedCreate]);
+  }, [activeDrawer, connectors]);
 
   const openDrawer = (sectionId) => {
     setActiveDrawer(sectionId);
@@ -273,8 +273,9 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           >
             <div
               ref={component.ref}
-              className="w-12 h-12 p-0 border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all cursor-grab active:cursor-grabbing group bg-white flex items-center justify-center"
+              className="w-12 h-12 p-0 border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all cursor-grab active:cursor-grabbing group bg-white flex items-center justify-center toolbox-component"
               style={{ userSelect: 'none' }}
+              data-component={component.name}
             >
               <div className="text-lg text-gray-600 group-hover:text-gray-800 transition-colors">
                 {component.icon}

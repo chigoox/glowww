@@ -5,9 +5,9 @@ import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
 import { EditOutlined } from '@ant-design/icons';
 import dynamic from 'next/dynamic';
-import ContextMenu from "../support/ContextMenu";
-import { useContextMenu } from "../support/useContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
+import ContextMenu from "../utils/context/ContextMenu";
+import { useContextMenu } from "../utils/hooks/useContextMenu";
+import useEditorDisplay from "../utils/context/useEditorDisplay";
 
 // Dynamically import the Editor to avoid SSR issues
 const Editor = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
@@ -16,7 +16,7 @@ const Editor = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Ed
 });
 
 // Create a separate component for TinyMCE initialization
-const TinyMCEEditor = dynamic(() => import('../support/Tinymce'), {
+const TinyMCEEditor = dynamic(() => import('../editor/Tinymce'), {
   ssr: false,
 });
 

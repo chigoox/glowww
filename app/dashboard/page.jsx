@@ -5,10 +5,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getUserSites, createSite, deleteSite, updateSite, canCreateSite } from '../../lib/sites';
 import { signOut } from '../../lib/auth';
 import { PRICING_PLANS, createCheckoutSession } from '../../lib/stripe';
-import { UpgradeBenefits } from '../Components/support/SubscriptionComponents';
+import { UpgradeBenefits } from '../Components/utils/subscription/SubscriptionComponents';
 import { ensureUserSubscription, getUserSubscription } from '../../lib/subscriptions';
-import SiteCard from '../Components/support/SiteCard';
-import SiteSettingsModal from '../Components/support/SiteSettingsModal';
+import SiteCard from '../Components/ui/SiteCard';
+import SiteSettingsModal from '../Components/ui/SiteSettingsModal';
 import {
   Button,
   Card,

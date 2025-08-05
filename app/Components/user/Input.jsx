@@ -4,9 +4,9 @@ import { EditOutlined, UploadOutlined, CalendarOutlined, ClockCircleOutlined } f
 import { Element, useNode } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import { useState, useEffect, useRef } from "react";
-import ContextMenu from "../support/ContextMenu";
-import { useContextMenu } from "../support/useContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
+import ContextMenu from "../utils/context/ContextMenu";
+import { useContextMenu } from "../utils/hooks/useContextMenu";
+import useEditorDisplay from "../utils/craft/useEditorDisplay";
 import { 
   Button, 
   ColorPicker, 

@@ -3,11 +3,11 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "./support/ContextMenu";
-import useEditorDisplay from "./support/useEditorDisplay";
-import SnapGridOverlay from "./support/SnapGridOverlay";
-import { useSnapGridCanvas } from "./support/useCraftSnap";
-import MultiSelectBoundingBox from "./support/MultiSelectBoundingBox";
+import ContextMenu from "./utils/context/ContextMenu";
+import useEditorDisplay from "./utils/context/useEditorDisplay";
+import SnapGridOverlay from "./utils/grid/SnapGridOverlay";
+import { useSnapGridCanvas } from "./utils/craft/useCraftSnap";
+import MultiSelectBoundingBox from "./utils/selection/MultiSelectBoundingBox";
 
 export const Root = ({
   // Layout & Position
@@ -662,10 +662,9 @@ placeContent,
 // Define default props for Craft.js - these will be the initial values
 Root.craft = {
   displayName: "Root",
+  // Canvas property for containers - THIS MUST BE AT ROOT LEVEL
+  canvas: true,
   props: {
-    // Canvas property for containers
-    canvas: true,
-    
     // Layout & Position
     width: "auto",
     height: "900px",

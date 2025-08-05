@@ -2,8 +2,8 @@
 
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useMultiSelect } from './MultiSelectContext';
-import ContextMenu from './ContextMenu';
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import ContextMenu from '../utils/context/ContextMenu';
 
 const MultiSelectBoundingBox = () => {
   const [isClient, setIsClient] = useState(false);

@@ -5,9 +5,9 @@ import { Element, useNode } from "@craftjs/core";
 import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
 import { useEffect, useState } from "react";
 import { FlexBox } from "../FlexBox";
-import ContextMenu from "../../support/ContextMenu";
-import { useContextMenu } from "../../support/useContextMenu";
-import useEditorDisplay from "../../support/useEditorDisplay";
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/craft/useEditorDisplay";
 
 
 // Mock Stripe Products Data

@@ -3,13 +3,15 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
-import MediaLibrary from '../support/MediaLibrary';
-import ContextMenu from "../support/ContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
-import { useCraftSnap } from "../support/useCraftSnap";
-import SnapPositionHandle from "../support/SnapPositionHandle";
-import { snapGridSystem } from "../support/SnapGridSystem";
-import { useMultiSelect } from '../support/MultiSelectContext';
+import MediaLibrary from '../editor/MediaLibrary';
+import ContextMenu from "../utils/context/ContextMenu";
+import useEditorDisplay from "../utils/craft/useEditorDisplay";
+import { useCraftSnap } from "../utils/craft/useCraftSnap";
+import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
+import { useAutoPositionOnContainerSwitch } from '../utils/drag-drop/useAutoPositionOnContainerSwitch';
+import SnapPositionHandle from "../editor/SnapPositionHandle";
+import { snapGridSystem } from "../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
 
 const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -68,6 +70,12 @@ export const Image = ({
   
   // Use snap functionality
   const snapHook = useCraftSnap(nodeId);
+  
+  // Use centered container drag for the move handle  
+  const { centeredDrag } = useCenteredContainerDrag(nodeId);
+  
+  // Auto-position when switched to new container
+  const autoPositionInfo = useAutoPositionOnContainerSwitch(nodeId);
   const { connectors: { snapConnect, snapDrag } = {} } = snapHook || {};
   
   // Use multi-selection functionality

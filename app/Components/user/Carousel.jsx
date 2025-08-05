@@ -3,13 +3,13 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor, Element } from "@craftjs/core";
 import { createPortal } from 'react-dom';
-import ContextMenu from "../support/ContextMenu";
-import { useContextMenu } from "../support/useContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
-import { useMultiSelect } from '../support/MultiSelectContext';
-import { useCraftSnap } from '../support/useCraftSnap';
-import SnapPositionHandle from '../support/SnapPositionHandle';
-import { snapGridSystem } from '../support/SnapGridSystem';
+import ContextMenu from "../utils/context/ContextMenu";
+import { useContextMenu } from "../utils/hooks/useContextMenu";
+import useEditorDisplay from "../utils/craft/useEditorDisplay";
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { useCraftSnap } from '../utils/craft/useCraftSnap';
+import SnapPositionHandle from '../editor/SnapPositionHandle';
+import { snapGridSystem } from '../utils/grid/SnapGridSystem';
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -47,7 +47,7 @@ import {
   Divider
 } from 'antd';
 import { Paragraph } from "./Paragraph";
-import MediaLibrary from '../support/MediaLibrary';
+import MediaLibrary from '../editor/MediaLibrary';
 
 const { TabPane } = Tabs;
 

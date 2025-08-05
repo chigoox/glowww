@@ -3,12 +3,14 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../support/ContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
-import { useCraftSnap } from "../support/useCraftSnap";
-import SnapPositionHandle from "../support/SnapPositionHandle";
-import { snapGridSystem } from "../support/SnapGridSystem";
-import { useMultiSelect } from '../support/MultiSelectContext';
+import ContextMenu from "../utils/context/ContextMenu";
+import useEditorDisplay from "../utils/context/useEditorDisplay";
+import { useCraftSnap } from "../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../editor/SnapPositionHandle";
+import { snapGridSystem } from "../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
+import { useAutoPositionOnContainerSwitch } from '../utils/drag-drop/useAutoPositionOnContainerSwitch';
 
 export const Box = ({
   
@@ -208,12 +210,103 @@ placeContent,
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+
+  // Use centered container drag for the move handle
+  const { centeredDrag } = useCenteredContainerDrag(nodeId);
+  
+  // Auto-position when switched to new container
+  const autoPositionInfo = useAutoPositionOnContainerSwitch(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
+
+  // DEBUG: Test if programmatic move works and test container switching
+  useEffect(() => {
+    if (typeof window !== 'undefined' && nodeId) {
+      window.testCraftMove = (fromNodeId, toNodeId) => {
+        try {
+          console.log(`Testing programmatic move: ${fromNodeId} -> ${toNodeId}`);
+          editorActions.move(fromNodeId, toNodeId, 0);
+          console.log('✅ Programmatic move successful');
+          return true;
+        } catch (error) {
+          console.error('❌ Programmatic move failed:', error);
+          return false;
+        }
+      };
+
+      // Test container switching functionality with improved diagnostics
+      window.testContainerSwitching = () => {
+        try {
+          const nodes = query.getNodes();
+          console.log('🔍 Available nodes:', Object.keys(nodes));
+          
+          // Find all Box containers - use only Craft.js isCanvas() method
+          const containers = Object.entries(nodes).filter(([id, node]) => {
+            const isBox = node.data.displayName === 'Box';
+            const canAcceptDrops = query.node(id).isCanvas();
+            
+            console.log(`📦 Checking node ${id} (${node.data.displayName}):`, {
+              isBox,
+              canAcceptDrops,
+              hasRules: !!query.node(id).rules,
+              canDrop: query.node(id).rules?.canDrop?.() || false,
+              canMoveIn: query.node(id).rules?.canMoveIn?.() || false,
+            });
+            return isBox && canAcceptDrops;
+          });
+          console.log('📦 Canvas-enabled containers:', containers.map(([id, node]) => id));
+          
+          // Find all draggable elements (exclude ROOT and containers)
+          const elements = Object.entries(nodes).filter(([id, node]) => {
+            const isNotRoot = node.data.displayName !== 'Root' && id !== 'ROOT';
+            const isNotCanvas = !query.node(id).isCanvas();
+            const canBeDragged = query.node(id).rules?.canDrag?.() || false;
+            
+            return isNotRoot && isNotCanvas && canBeDragged;
+          });
+          console.log('🔧 Draggable elements:', elements.map(([id, node]) => ({ id, name: node.data.displayName })));
+          
+          // Additional diagnostics: Check connector status
+          window.testConnectors = () => {
+            elements.forEach(([id, node]) => {
+              const domElement = node.dom;
+              if (domElement) {
+                console.log(`🔗 Connector status for ${id}:`, {
+                  hasDom: !!domElement,
+                  hasDataCraftNodeId: domElement.getAttribute('data-craft-node-id'),
+                  craftDataAttribute: domElement.getAttribute('data-craft'),
+                  classList: Array.from(domElement.classList || [])
+                });
+              }
+            });
+          };
+          
+          if (containers.length >= 2 && elements.length >= 1) {
+            const [elementId] = elements[0];
+            const [containerId] = containers[1]; // Move to second container
+            
+            console.log(`🚚 Testing container switch: moving ${elementId} (${nodes[elementId].data.displayName}) to ${containerId} (${nodes[containerId].data.displayName})`);
+            editorActions.move(elementId, containerId, 0);
+            console.log('✅ Container switching test successful');
+            return true;
+          } else {
+            console.log('❌ Not enough canvas containers or draggable elements for testing', {
+              containers: containers.length,
+              elements: elements.length
+            });
+            return false;
+          }
+        } catch (error) {
+          console.error('❌ Container switching test failed:', error);
+          return false;
+        }
+      };
+    }
+  }, [nodeId, editorActions, query]);
 
   const cardRef = useRef(null);
   const dragRef = useRef(null);
@@ -290,46 +383,68 @@ placeContent,
         snapConnect(cardRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
+        centeredDrag(dragRef.current); // Connect the MOVE handle to centered drag for container switching
       }
     };
 
+    // Always attempt to connect elements
     connectElements();
     
-    // Also reconnect when the component is selected
-    if (isSelected) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(connectElements, 10);
-      return () => clearTimeout(timer);
-    }
-  }, [snapConnect, snapDrag, isSelected]);
+    // Also reconnect when the component is selected or when nodeId changes
+    const timer = setTimeout(() => {
+      connectElements();
+      // Reduce logging frequency for connector re-establishment
+      if (Math.random() < 0.1) { // Only log 10% of the time
+        console.log('🔗 Connectors re-established for node:', nodeId);
+      }
+    }, 100); // Give DOM time to settle
+    
+    return () => clearTimeout(timer);
+  }, [snapConnect, centeredDrag, isSelected, nodeId]); // Added nodeId to dependencies and replaced drag with centeredDrag
 
   // Detect parent changes and reset position properties
   useEffect(() => {
     // Skip the initial render (when prevParentRef.current is first set)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
       // Parent has changed - element was moved to a different container
-      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
       
-      // Reset position properties to default
-      editorActions.history.throttle(500).setProp(nodeId, (props) => {
-        // Only reset if position properties were actually set
-        if (props.top !== undefined || props.left !== undefined || 
-            props.right !== undefined || props.bottom !== undefined) {
-          console.log('🔄 Resetting position properties after container move');
-          props.top = undefined;
-          props.left = undefined;
-          props.right = undefined;
-          props.bottom = undefined;
-          // Keep position as relative for normal flow
-          props.position = "relative";
+      // Wait longer than the centered drag positioning (600ms) before resetting
+      // This allows useCenteredContainerDrag to apply its centered positioning first
+      setTimeout(() => {
+        // Check if position was already set by centered drag (absolute position with left/top set)
+        const currentNode = query.node(nodeId);
+        if (currentNode) {
+          const currentProps = currentNode.get().data.props;
+          const hasPositioning = currentProps.position === 'absolute' && 
+                                (currentProps.left !== undefined || currentProps.top !== undefined);
+          
+          if (hasPositioning) {
+            console.log('🎯 Position already set by centered drag system, skipping reset');
+            return; // Don't reset if centered positioning was applied
+          }
         }
-      });
+        
+        // Reset position properties to default only if no positioning was applied
+        editorActions.history.throttle(500).setProp(nodeId, (props) => {
+          // Only reset if position properties were actually set
+          if (props.top !== undefined || props.left !== undefined || 
+              props.right !== undefined || props.bottom !== undefined) {
+            console.log('🔄 Resetting position properties after container move (no centered positioning detected)');
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            // Keep position as relative for normal flow
+            props.position = "relative";
+          }
+        });
+      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
     }
     
     // Update the ref for next comparison
     prevParentRef.current = parent;
-  }, [parent, nodeId, setProp]);
+  }, [parent, nodeId, setProp, query, editorActions]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -849,6 +964,9 @@ const PortalControls = ({
         {/* Left half - MOVE (Craft.js drag) - Now interactive */}
         <div
           ref={dragRef}
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -1055,10 +1173,9 @@ const PortalControls = ({
 // Define default props for Craft.js - these will be the initial values
 Box.craft = {
   displayName: "Box",
+  // Canvas property for containers - MUST BE AT ROOT LEVEL FOR CRAFT.JS
+  canvas: true,
   props: {
-    // Canvas property for containers
-    canvas: true,
-    
     // Layout & Position
     width: "200px",
     height: "200px",

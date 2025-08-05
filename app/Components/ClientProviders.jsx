@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthProvider } from "../../contexts/AuthContext";
-import { PagesProvider } from "./PagesContext";
+import { PagesProvider } from "./utils/context/PagesContext";
 
 /**
  * Client-side wrapper for providers to prevent hydration mismatch

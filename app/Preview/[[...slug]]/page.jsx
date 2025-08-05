@@ -19,14 +19,14 @@ import { FormInput } from '../../Components/user/Input';
 import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
 import { Carousel } from '../../Components/user/Carousel';
 import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
-import { Root } from '../../Components/Root';
+import { Root } from '../../Components/core/Root';
 
 // Import save operations hook to load auto-saved projects
-import useSaveOperations from '../../Components/support/useSaveOperations';
+import useSaveOperations from '../../Components/utils/export/useSaveOperations';
 
 // Import context providers needed for preview
-import { MultiSelectProvider } from '../../Components/support/MultiSelectContext';
-import { PagesProvider } from '../../Components/PagesContext';
+import { MultiSelectProvider } from '../../Components/utils/context/MultiSelectContext';
+import { PagesProvider } from '../../Components/utils/context/PagesContext';
 
 /**
  * Preview Page Component

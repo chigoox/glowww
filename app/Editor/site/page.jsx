@@ -11,11 +11,11 @@ import { EyeOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined, HistoryOutl
          MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined } from '@ant-design/icons';
 
 // Import existing editor components
-import { Toolbox } from '../../Components/ToolBox';
-import { TopBar } from '../../Components/TopBar';
+import { Toolbox } from '../../Components/editor/ToolBox';
+import { TopBar } from '../../Components/editor/TopBar';
 import { Editor, Element, Frame, useEditor } from "@craftjs/core";
 import { Box } from '../../Components/user/Box';
-import { StyleMenu } from '../../Components/StyleMenu';
+import { StyleMenu } from '../../Components/editor/StyleMenu';
 import { FlexBox } from '../../Components/user/FlexBox';
 import { Text } from '../../Components/user/Text';
 import { GridBox } from '../../Components/user/GridBox';
@@ -26,15 +26,17 @@ import { Paragraph } from '../../Components/user/Paragraph';
 import { Video } from '../../Components/user/Video';
 import { ShopFlexBox, ShopImage, ShopText } from '../../Components/user/Advanced/ShopFlexBox';
 import { FormInput } from '../../Components/user/Input';
-import EditorLayers from '../../Components/EditorLayers';
+import EditorLayers from '../../Components/editor/EditorLayers';
 import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
 import { Carousel } from '../../Components/user/Carousel';
 import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
 import { Root } from '../../Components/Root';
-import { MultiSelectProvider } from '../../Components/support/MultiSelectContext';
-import SnapGridControls from '../../Components/support/SnapGridControls';
-import PageManager2 from '../../Components/support/PageManager2';
-import PageLoadModal from '../../Components/support/PageLoadModal';
+import { MultiSelectProvider } from '../../Components/utils/context/MultiSelectContext';
+import { useDropPositionCorrection } from '../../Components/utils/drag-drop/useDropPositionCorrection';
+import { useContainerSwitchingFeedback } from '../../Components/utils/drag-drop/useContainerSwitchingFeedback';
+import SnapGridControls from '../../Components/utils/grid/SnapGridControls';
+import PageManager2 from '../../Components/editor/PageManager2';
+import PageLoadModal from '../../Components/editor/PageLoadModal';
 import { exportPageToGlow } from '../../../lib/pageExportImport';
 import pako from 'pako';
 
@@ -56,7 +58,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   const [isLoadingPage, setIsLoadingPage] = useState(false); // Loading state for page switches
   const [isInitialized, setIsInitialized] = useState(false);
   const [loadModalVisible, setLoadModalVisible] = useState(false); // Page load modal state
-  console.log(pages)
   // Auto-save functionality
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
@@ -69,6 +70,15 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
   const [lastStateSnapshot, setLastStateSnapshot] = useState(null);
   const [isHistoryInitialized, setIsHistoryInitialized] = useState(false);
+
+  // Initialize drop position correction system
+  useDropPositionCorrection();
+  
+  // Initialize container switching feedback system
+  useContainerSwitchingFeedback();
+  
+  // Initialize container switching feedback system
+  useContainerSwitchingFeedback();
 
   // Helper function to detect what changed between states (from TopBar.jsx)
   const detectChanges = (previousState, currentState) => {
@@ -1623,6 +1633,63 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
           console.log('  Frame element not found ❌');
         }
       };
+      
+      // Test function for auto-positioning on container switch
+      window.testAutoPositioning = () => {
+        console.log('🧪 Testing Auto-Positioning on Container Switch');
+        
+        if (!query) {
+          console.error('❌ Query not available');
+          return false;
+        }
+        
+        try {
+          const nodes = query.getNodes();
+          console.log('🔍 Available nodes:', Object.keys(nodes));
+          
+          // Find Box containers (canvas elements)
+          const containers = Object.entries(nodes).filter(([id, node]) => {
+            return node.data.displayName === 'Box' && query.node(id).isCanvas();
+          });
+          console.log('📦 Canvas containers:', containers.map(([id]) => id));
+          
+          // Find draggable elements
+          const elements = Object.entries(nodes).filter(([id, node]) => {
+            return node.data.displayName !== 'Root' && 
+                   node.data.displayName !== 'Box' && 
+                   id !== 'ROOT';
+          });
+          console.log('🔧 Draggable elements:', elements.map(([id, node]) => ({ id, type: node.data.displayName })));
+          
+          if (containers.length >= 2 && elements.length >= 1) {
+            const [elementId] = elements[0];
+            const [sourceContainerId] = containers[0];
+            const [targetContainerId] = containers[1];
+            
+            console.log(`🚚 Testing container switch: moving ${elementId} from ${sourceContainerId} to ${targetContainerId}`);
+            
+            // Simulate mouse position for testing
+            window.dispatchEvent(new MouseEvent('mousemove', {
+              clientX: 300,
+              clientY: 200,
+              bubbles: true
+            }));
+            
+            // Move the element
+            actions.move(elementId, targetContainerId, 0);
+            
+            console.log('✅ Auto-positioning test initiated - check component logs for position correction');
+            return true;
+          } else {
+            console.log('❌ Need at least 2 Box containers and 1 draggable element for testing');
+            console.log(`Available: ${containers.length} containers, ${elements.length} elements`);
+            return false;
+          }
+        } catch (error) {
+          console.error('❌ Auto-positioning test failed:', error);
+          return false;
+        }
+      };
     }
     return () => {
       if (window) {
@@ -1631,6 +1698,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         delete window.debugEditorState;
         delete window.debugPageLoading;
         delete window.testPageSave;
+        delete window.testAutoPositioning;
       }
     };
   }, [refreshPageCache, pages, currentPageId, pageContentCache, isInitialized, isLoadingPage, handlePageChange, actions, query, user?.uid, siteId]);
@@ -2068,12 +2136,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         {/* Floating Right Sidebar - Style Menu */}
         {(() => {
           const shouldShowStyleMenu = enabled && isInitialized;
-          console.log('🎨 V2: StyleMenu render check:', {
-            enabled,
-            isInitialized,
-            shouldShowStyleMenu,
-            currentPageId
-          });
+          
           return shouldShowStyleMenu && !isRightPanelMinimized;
         })() && (
           <div className={`absolute right-4 top-4 bottom-4 bg-white border border-gray-200 shadow-lg rounded-lg flex-shrink-0 z-30 ${

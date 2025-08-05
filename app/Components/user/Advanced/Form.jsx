@@ -3,13 +3,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNode, useEditor, Element } from "@craftjs/core";
-import ContextMenu from "../../support/ContextMenu";
-import { useContextMenu } from "../../support/useContextMenu";
-import useEditorDisplay from "../../support/useEditorDisplay";
-import { useCraftSnap } from "../../support/useCraftSnap";
-import SnapPositionHandle from "../../support/SnapPositionHandle";
-import { snapGridSystem } from "../../support/SnapGridSystem";
-import { useMultiSelect } from '../../support/MultiSelectContext';
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/craft/useEditorDisplay";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import { 
   EditOutlined, 
   DatabaseOutlined, 

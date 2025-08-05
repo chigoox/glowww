@@ -3,13 +3,15 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../support/ContextMenu";
-import { useContextMenu } from "../support/useContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
-import { useCraftSnap } from "../support/useCraftSnap";
-import SnapPositionHandle from "../support/SnapPositionHandle";
-import { snapGridSystem } from "../support/SnapGridSystem";
-import { useMultiSelect } from '../support/MultiSelectContext';
+import ContextMenu from "../utils/context/ContextMenu";
+import { useContextMenu } from "../utils/hooks/useContextMenu";
+import useEditorDisplay from "../utils/context/useEditorDisplay";
+import { useCraftSnap } from "../utils/craft/useCraftSnap";
+import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
+import { useAutoPositionOnContainerSwitch } from '../utils/drag-drop/useAutoPositionOnContainerSwitch';
+import SnapPositionHandle from "../editor/SnapPositionHandle";
+import { snapGridSystem } from "../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
 
 export const Text = ({
   // Content
@@ -251,6 +253,12 @@ export const Text = ({
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+  
+  // Use centered container drag for the move handle  
+  const { centeredDrag } = useCenteredContainerDrag(nodeId);
+  
+  // Auto-position when switched to new container
+  const autoPositionInfo = useAutoPositionOnContainerSwitch(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();

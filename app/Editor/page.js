@@ -4,12 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { isUserAdmin } from '../../lib/subscriptions';
 
-import { Toolbox } from '../Components/ToolBox';
-import { TopBar } from '../Components/TopBar';
+import { Toolbox } from '../Components/editor/ToolBox';
+import { TopBar } from '../Components/editor/TopBar';
 
 import { Editor, Element, Frame, useEditor } from "@craftjs/core";
 import { Box } from '../Components/user/Box';
-import { StyleMenu } from '../Components/StyleMenu';
+import { StyleMenu } from '../Components/editor/StyleMenu';
 import { FlexBox } from '../Components/user/FlexBox';
 import { Text } from '../Components/user/Text';
 import { GridBox } from '../Components/user/GridBox';
@@ -20,13 +20,13 @@ import { Paragraph } from '../Components/user/Paragraph';
 import { Video } from '../Components/user/Video';
 import {ShopFlexBox, ShopImage, ShopText} from '../Components/user/Advanced/ShopFlexBox';
 import { FormInput } from '../Components/user/Input';
-import EditorLayers from '../Components/EditorLayers';
+import EditorLayers from '../Components/editor/EditorLayers';
 import { Form, FormInputDropArea } from '../Components/user/Advanced/Form';
 import {Carousel} from '../Components/user/Carousel';
 import { NavBar, NavItem } from '../Components/user/Nav/NavBar';
 import { Flex } from 'antd';
-import { Root } from '../Components/Root';
-import { MultiSelectProvider } from '../Components/support/MultiSelectContext';
+import { Root } from '../Components/core/Root';
+import { MultiSelectProvider } from '../Components/utils/context/MultiSelectContext';
 
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {

@@ -4,14 +4,14 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
 import { PlayCircleOutlined } from '@ant-design/icons';
-import MediaLibrary from '../support/MediaLibrary';
-import ContextMenu from "../support/ContextMenu";
-import { useContextMenu } from "../support/useContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
-import { useMultiSelect } from '../support/MultiSelectContext';
-import { useCraftSnap } from '../support/useCraftSnap';
-import SnapPositionHandle from '../support/SnapPositionHandle';
-import { snapGridSystem } from "../support/SnapGridSystem";
+import MediaLibrary from '../editor/MediaLibrary';
+import ContextMenu from "../utils/context/ContextMenu";
+import { useContextMenu } from "../utils/hooks/useContextMenu";
+import useEditorDisplay from "../utils/context/useEditorDisplay";
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { useCraftSnap } from '../utils/craft/useCraftSnap';
+import SnapPositionHandle from '../editor/SnapPositionHandle';
+import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 
 export const Video = ({
   // Video Source

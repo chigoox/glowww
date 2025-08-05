@@ -3,12 +3,13 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../support/ContextMenu";
-import useEditorDisplay from "../support/useEditorDisplay";
-import { useCraftSnap } from "../support/useCraftSnap";
-import SnapPositionHandle from "../support/SnapPositionHandle";
-import { snapGridSystem } from "../support/SnapGridSystem";
-import { useMultiSelect } from '../support/MultiSelectContext';
+import ContextMenu from "../utils/context/ContextMenu";
+import useEditorDisplay from "../utils/context/useEditorDisplay";
+import { useCraftSnap } from "../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../editor/SnapPositionHandle";
+import { snapGridSystem } from "../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
 
 export const GridBox = ({
   
@@ -204,6 +205,9 @@ placeContent,
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
+
+  // Use centered container drag for the move handle
+  const { centeredDrag } = useCenteredContainerDrag(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
@@ -305,27 +309,44 @@ placeContent,
     // Skip the initial render (when prevParentRef.current is first set)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
       // Parent has changed - element was moved to a different container
-      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
       
-      // Reset position properties to default
-      editorActions.history.throttle(500).setProp(nodeId, (props) => {
-        // Only reset if position properties were actually set
-        if (props.top !== undefined || props.left !== undefined || 
-            props.right !== undefined || props.bottom !== undefined) {
-          console.log('🔄 Resetting position properties after container move');
-          props.top = undefined;
-          props.left = undefined;
-          props.right = undefined;
-          props.bottom = undefined;
-          // Keep position as relative for normal flow
-          props.position = "relative";
+      // Wait longer than the centered drag positioning (600ms) before resetting
+      // This allows useCenteredContainerDrag to apply its centered positioning first
+      setTimeout(() => {
+        // Check if position was already set by centered drag (absolute position with left/top set)
+        const currentNode = query.node(nodeId);
+        if (currentNode) {
+          const currentProps = currentNode.get().data.props;
+          const hasPositioning = currentProps.position === 'absolute' && 
+                                (currentProps.left !== undefined || currentProps.top !== undefined);
+          
+          if (hasPositioning) {
+            console.log('🎯 Position already set by centered drag system, skipping reset');
+            return; // Don't reset if centered positioning was applied
+          }
         }
-      });
+        
+        // Reset position properties to default only if no positioning was applied
+        editorActions.history.throttle(500).setProp(nodeId, (props) => {
+          // Only reset if position properties were actually set
+          if (props.top !== undefined || props.left !== undefined || 
+              props.right !== undefined || props.bottom !== undefined) {
+            console.log('🔄 Resetting position properties after container move (no centered positioning detected)');
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            // Keep position as relative for normal flow
+            props.position = "relative";
+          }
+        });
+      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
     }
     
     // Update the ref for next comparison
     prevParentRef.current = parent;
-  }, [parent, nodeId, setProp]);
+  }, [parent, nodeId, setProp, query, editorActions]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -1048,10 +1069,9 @@ const PortalControls = ({
 // Define default props for Craft.js - these will be the initial values
 GridBox.craft = {
   displayName: "GridBox",
+  // Canvas property for containers - THIS MUST BE AT ROOT LEVEL
+  canvas: true,
   props: {
-    // Canvas property for containers
-    canvas: true,
-    
     // Layout & Position
     width: "200px",
     height: "200px",
