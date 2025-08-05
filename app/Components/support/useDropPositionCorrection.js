@@ -2,6 +2,7 @@
 
 import { useEditor } from "@craftjs/core";
 import { useCallback, useRef, useEffect } from "react";
+import { useEditorSettings } from "../utils/context/EditorSettingsContext";
 
 /**
  * Drop Position Correction System with Visual Feedback
@@ -12,16 +13,42 @@ import { useCallback, useRef, useEffect } from "react";
  * 3. Calculate the intended position based on mouse position during drop
  * 4. Move the component to the correct position after creation
  * 5. Provide visual feedback during drag operations
+ * 6. Supports configurable positioning modes (center vs top-left)
  */
 export const useDropPositionCorrection = () => {
   const { actions, query } = useEditor();
+  
+  // Try to get settings, but provide defaults if context is not available
+  let settings;
+  try {
+    const { settings: contextSettings } = useEditorSettings();
+    settings = contextSettings;
+  } catch (error) {
+    // Fallback to default settings if context is not available
+    console.warn('EditorSettings context not available, using default settings');
+    settings = {
+      dropPosition: {
+        mode: 'center',
+        snapToGrid: false
+      },
+      snap: {
+        enabled: false
+      },
+      grid: {
+        size: 20
+      }
+    };
+  }
+  
   const dropStateRef = useRef({
     isNewDrop: false,
+    isExistingMove: false,
     mousePosition: { x: 0, y: 0 },
     targetContainer: null,
     lastNodeCount: 0,
     visualFeedback: null,
-    draggedComponent: null
+    draggedComponent: null,
+    draggedNodeId: null
   });
 
   // Find the best container at mouse position
@@ -138,10 +165,11 @@ export const useDropPositionCorrection = () => {
     return;
   }, []);
 
-  // Calculate position within container - CENTERED at mouse position
+  // Calculate position within container - supports both CENTER and TOP-LEFT modes
   const calculateRelativePosition = useCallback((mouseX, mouseY, containerId, componentDimensions = null) => {
     try {
       console.log('📏 Calculating position for container:', containerId);
+      console.log('🎯 Using positioning mode:', settings.dropPosition.mode);
       
       let containerElement = null;
       let containerRect = null;
@@ -184,9 +212,20 @@ export const useDropPositionCorrection = () => {
       const compWidth = componentDimensions?.width || 100;
       const compHeight = componentDimensions?.height || 50;
       
-      // Calculate relative position within container - CENTER the component at mouse position
-      const relativeX = mouseX - containerRect.left - (compWidth / 2);
-      const relativeY = mouseY - containerRect.top - (compHeight / 2);
+      // Calculate relative position within container based on positioning mode
+      let relativeX, relativeY;
+      
+      if (settings.dropPosition.mode === 'center') {
+        // CENTER MODE: Center the component at mouse position
+        relativeX = mouseX - containerRect.left - (compWidth / 2);
+        relativeY = mouseY - containerRect.top - (compHeight / 2);
+        console.log('🎯 Using CENTER positioning mode');
+      } else {
+        // TOP-LEFT MODE: Position top-left corner at mouse position
+        relativeX = mouseX - containerRect.left;
+        relativeY = mouseY - containerRect.top;
+        console.log('🎯 Using TOP-LEFT positioning mode');
+      }
 
       // Account for container padding if it exists
       const containerStyle = window.getComputedStyle(containerElement);
@@ -202,8 +241,9 @@ export const useDropPositionCorrection = () => {
       const finalX = Math.max(minX, Math.min(relativeX, maxX));
       const finalY = Math.max(minY, Math.min(relativeY, maxY));
 
-      console.log('📍 Position calculation details (CENTERED):', {
+      console.log('📍 Position calculation details:', {
         container: containerId,
+        mode: settings.dropPosition.mode,
         mouse: { x: mouseX, y: mouseY },
         componentSize: { width: compWidth, height: compHeight },
         containerRect: { 
@@ -223,7 +263,7 @@ export const useDropPositionCorrection = () => {
       console.warn('Failed to calculate relative position:', error);
       return { x: 50, y: 50 };
     }
-  }, [query]);
+  }, [query, settings.dropPosition.mode]);
 
   // Detect new component additions and apply position correction
   const checkForNewComponents = useCallback(() => {
@@ -300,32 +340,41 @@ export const useDropPositionCorrection = () => {
     dropStateRef.current.lastNodeCount = currentNodeCount;
   }, [query, actions, findContainerAtPosition, calculateRelativePosition, getComponentDimensions, getExistingComponentDimensions]);
   
-  // Helper function to apply positioning
+  // Helper function to apply positioning with snap to grid support
   const applyPositioning = useCallback((nodeId, position) => {
     try {
       // Get the actual component dimensions again for precision
       const componentDimensions = getExistingComponentDimensions(nodeId);
       console.log('📏 Final positioning - component dimensions:', componentDimensions);
       
+      let finalX = Math.round(position.x);
+      let finalY = Math.round(position.y);
+      
+      // Apply snap to grid if enabled
+      if (settings.dropPosition.snapToGrid && settings.snap.enabled) {
+        const gridSize = settings.grid.size || 20; // Default grid size
+        finalX = Math.round(finalX / gridSize) * gridSize;
+        finalY = Math.round(finalY / gridSize) * gridSize;
+        console.log('📐 Applied snap to grid:', { gridSize, snapped: { x: finalX, y: finalY } });
+      }
+      
       actions.setProp(nodeId, (props) => {
         props.position = 'absolute';
+        props.left = finalX;
+        props.top = finalY;
         
-        // Apply the position that was calculated to center the component
-        // The calculateRelativePosition already accounts for centering
-        props.left = Math.round(position.x);
-        props.top = Math.round(position.y);
-        
-        console.log('✅ Position correction applied (centered):', { 
+        console.log('✅ Position correction applied:', { 
           nodeId, 
-          x: Math.round(position.x), 
-          y: Math.round(position.y),
-          dimensions: componentDimensions
+          mode: settings.dropPosition.mode,
+          position: { x: finalX, y: finalY },
+          dimensions: componentDimensions,
+          snapToGrid: settings.dropPosition.snapToGrid && settings.snap.enabled
         });
       });
     } catch (error) {
       console.error('❌ Failed to apply positioning:', error);
     }
-  }, [actions, getExistingComponentDimensions]);
+  }, [actions, getExistingComponentDimensions, settings.dropPosition.snapToGrid, settings.snap.enabled, settings.grid?.size, settings.dropPosition.mode]);
 
   // Mouse position tracking
   const lastMousePositionRef = useRef({ x: 0, y: 0 });
@@ -338,7 +387,7 @@ export const useDropPositionCorrection = () => {
 
   // Set up event listeners and monitoring
   useEffect(() => {
-    // Listen for dragstart events on toolbox items
+    // Listen for dragstart events on toolbox items AND existing components
     const handleDragStart = (e) => {
       // Check if this is a drag from the toolbox
       const toolboxItem = e.target.closest('[data-component]');
@@ -354,12 +403,32 @@ export const useDropPositionCorrection = () => {
         dropStateRef.current.mousePosition = { x: e.clientX, y: e.clientY };
         
         console.log('🎯 Initial drag position:', dropStateRef.current.mousePosition);
+        return;
+      }
+
+      // Check if this is a drag of an existing component
+      const existingComponent = e.target.closest('[data-craft-node-id]');
+      if (existingComponent) {
+        const nodeId = existingComponent.getAttribute('data-craft-node-id');
+        if (nodeId && nodeId !== 'ROOT') {
+          console.log('🎯 Existing component drag started for node:', nodeId);
+          
+          dropStateRef.current.isNewDrop = false; // This is an existing component move
+          dropStateRef.current.isExistingMove = true;
+          dropStateRef.current.draggedNodeId = nodeId;
+          
+          // Initialize mouse tracking
+          lastMousePositionRef.current = { x: e.clientX, y: e.clientY };
+          dropStateRef.current.mousePosition = { x: e.clientX, y: e.clientY };
+          
+          console.log('🎯 Existing component initial drag position:', dropStateRef.current.mousePosition);
+        }
       }
     };
     
     // Enhanced mouse tracking for position only
     const handleMouseMove = (e) => {
-      if (dropStateRef.current.isNewDrop) {
+      if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         // Update stored positions (no visual feedback)
         const newPosition = { x: e.clientX, y: e.clientY };
         dropStateRef.current.mousePosition = newPosition;
@@ -369,7 +438,7 @@ export const useDropPositionCorrection = () => {
     
     // Listen for dragover to update mouse position during drag
     const handleDragOver = (e) => {
-      if (dropStateRef.current.isNewDrop) {
+      if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         e.preventDefault(); // Allow drop
         
         const mouseX = e.clientX;
@@ -385,24 +454,88 @@ export const useDropPositionCorrection = () => {
       }
     };
     
-    // Also listen for dragend to capture final position
+    // Handle dragend for both new and existing components
     const handleDragEnd = (e) => {
       if (dropStateRef.current.isNewDrop) {
-        console.log('🎯 Drag ended, final mouse position:', { x: e.clientX, y: e.clientY });
+        console.log('🎯 New component drag ended, final mouse position:', { x: e.clientX, y: e.clientY });
         
         // Update final mouse position
         dropStateRef.current.mousePosition = {
           x: e.clientX,
           y: e.clientY
         };
+      } else if (dropStateRef.current.isExistingMove) {
+        console.log('🎯 Existing component drag ended, applying position correction...');
         
-        // No visual cleanup needed since no visuals are shown
+        // Update final mouse position
+        dropStateRef.current.mousePosition = {
+          x: e.clientX,
+          y: e.clientY
+        };
+
+        // Apply position correction for existing component move
+        setTimeout(() => {
+          handleExistingComponentMove();
+        }, 100);
       }
+    };
+
+    // Handle existing component move positioning
+    const handleExistingComponentMove = () => {
+      if (!dropStateRef.current.draggedNodeId) return;
+
+      try {
+        const { x: mouseX, y: mouseY } = dropStateRef.current.mousePosition;
+        console.log('🎯 Applying position correction for existing component at mouse:', { mouseX, mouseY });
+        
+        // Verify mouse position is reasonable
+        if (mouseX <= 0 || mouseY <= 0) {
+          console.warn('⚠️ Invalid mouse position detected for existing component');
+          dropStateRef.current.isExistingMove = false;
+          return;
+        }
+        
+        const targetContainer = findContainerAtPosition(mouseX, mouseY);
+        console.log('📦 Target container for existing component:', targetContainer);
+        
+        // Get existing component dimensions
+        const nodeId = dropStateRef.current.draggedNodeId;
+        const componentDimensions = getExistingComponentDimensions(nodeId);
+        console.log('📏 Existing component dimensions:', componentDimensions);
+        
+        const position = calculateRelativePosition(mouseX, mouseY, targetContainer, componentDimensions);
+        console.log('📍 Position calculated for existing component:', position);
+        
+        // Check current parent
+        const nodeData = query.node(nodeId).get();
+        const currentParent = nodeData.data.parent;
+        
+        // Move to correct container if needed
+        if (currentParent !== targetContainer) {
+          console.log('📦 Moving existing component to correct container:', { from: currentParent, to: targetContainer });
+          actions.move(nodeId, targetContainer, 0);
+          
+          // Wait for move to complete
+          setTimeout(() => {
+            console.log('⏰ Applying position correction after container move...');
+            applyPositioning(nodeId, position);
+          }, 200);
+        } else {
+          applyPositioning(nodeId, position);
+        }
+        
+      } catch (error) {
+        console.error('❌ Existing component position correction failed:', error);
+      }
+      
+      // Reset existing move state
+      dropStateRef.current.isExistingMove = false;
+      dropStateRef.current.draggedNodeId = null;
     };
 
     // Handle drag enter for position tracking
     const handleDragEnter = (e) => {
-      if (dropStateRef.current.isNewDrop) {
+      if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         e.preventDefault();
         // Just update position - no visual feedback needed
       }

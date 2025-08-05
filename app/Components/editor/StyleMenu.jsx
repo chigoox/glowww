@@ -3545,14 +3545,14 @@ if (shouldShow('attributes')) {
     return (
       <div
         style={{
-          background: "#f5f5f5",
+          background: "var(--bg-secondary, #f5f5f5)",
           borderRadius: 8,
           padding: "40px 20px",
           textAlign: "center",
-          color: "#999",
+          color: "var(--text-secondary, #999)",
           minWidth: 320,
           maxWidth: 450,
-          border: "1px solid #eee",
+          border: "1px solid var(--border-color, #eee)",
           height: "100%",
           display: "flex",
           flexDirection: "column",
@@ -3571,13 +3571,13 @@ if (shouldShow('attributes')) {
   return (
     <div
     style={{
-      background: "#fff",
+      background: "var(--panel-bg, #fff)",
       boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
       borderRadius: 8,
       minWidth: 'auto',
       maxWidth: 'auto',
       fontSize: 13,
-      border: "1px solid #eee",
+      border: "1px solid var(--border-color, #eee)",
       height: "89vh", // Change from "100%" to "100vh"
       maxHeight: "89vh", // Add max height constraint
       display: "flex",
@@ -3592,11 +3592,11 @@ if (shouldShow('attributes')) {
           padding: "16px 20px 10px 20px",
           userSelect: "none",
           fontSize: 16,
-          color: "#222",
+          color: "var(--text-primary, #222)",
           borderTopLeftRadius: 8,
           borderTopRightRadius: 8,
-          background: "#f8fafd",
-          borderBottom: "1px solid #f0f0f0",
+          background: "var(--bg-secondary, #f8fafd)",
+          borderBottom: "1px solid var(--border-color, #f0f0f0)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",

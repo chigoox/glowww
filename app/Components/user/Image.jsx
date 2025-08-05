@@ -7,8 +7,6 @@ import MediaLibrary from '../editor/MediaLibrary';
 import ContextMenu from "../utils/context/ContextMenu";
 import useEditorDisplay from "../utils/craft/useEditorDisplay";
 import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
-import { useAutoPositionOnContainerSwitch } from '../utils/drag-drop/useAutoPositionOnContainerSwitch';
 import SnapPositionHandle from "../editor/SnapPositionHandle";
 import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
@@ -71,11 +69,6 @@ export const Image = ({
   // Use snap functionality
   const snapHook = useCraftSnap(nodeId);
   
-  // Use centered container drag for the move handle  
-  const { centeredDrag } = useCenteredContainerDrag(nodeId);
-  
-  // Auto-position when switched to new container
-  const autoPositionInfo = useAutoPositionOnContainerSwitch(nodeId);
   const { connectors: { snapConnect, snapDrag } = {} } = snapHook || {};
   
   // Use multi-selection functionality

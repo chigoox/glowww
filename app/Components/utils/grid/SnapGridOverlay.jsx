@@ -78,9 +78,30 @@ const SnapGridOverlay = ({
 
     ctx.save();
     
-    // Grid style - similar to Figma's dotted grid
-    ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
-    ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.5})`;
+    // Grid style - use configurable grid color
+    const gridColor = settings.gridColor || '#e0e0e0';
+    
+    // Parse the color and apply opacity
+    let r, g, b;
+    if (gridColor.startsWith('#')) {
+      // Hex color
+      const hex = gridColor.slice(1);
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+    } else if (gridColor.startsWith('rgb')) {
+      // RGB color - extract numbers
+      const match = gridColor.match(/\d+/g);
+      r = parseInt(match[0]);
+      g = parseInt(match[1]);
+      b = parseInt(match[2]);
+    } else {
+      // Fallback to gray
+      r = g = b = 224;
+    }
+    
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${opacity * 0.5})`;
     ctx.lineWidth = 1;
 
     // Calculate grid bounds with offset
@@ -132,9 +153,10 @@ const SnapGridOverlay = ({
     if (!settings.verticalGuidesEnabled) return;
 
     const guides = snapGridSystem.getVerticalGuidePositions();
+    const guideColor = settings.guideColor || '#0066ff';
     
     ctx.save();
-    ctx.strokeStyle = '#ff0000'; // Red color for guide lines
+    ctx.strokeStyle = guideColor; // Use configurable guide color
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 4]); // Dashed line pattern
     ctx.globalAlpha = 0.7;
@@ -164,8 +186,8 @@ const SnapGridOverlay = ({
     ctx.setLineDash([4, 4]);
 
     snapLines.forEach((line, index) => {
-      // Use brighter, more visible colors
-      const lineColor = line.color || '#0066ff'; // Use original blue color
+      // Use configurable snap line color from settings
+      const lineColor = line.color || settings.guideColor || '#0066ff';
       ctx.strokeStyle = lineColor;
       ctx.globalAlpha = 0.9; // More opaque
       ctx.lineWidth = 3; // Slightly thicker for better visibility
@@ -199,11 +221,12 @@ const SnapGridOverlay = ({
 
     ctx.save();
     ctx.lineWidth = 2; // Thicker lines for better visibility
-    ctx.strokeStyle = '#ffcc00'; // Default to yellow
-    ctx.fillStyle = '#ffcc00';
+    const defaultDistanceColor = settings.distanceColor || '#ff6600';
+    ctx.strokeStyle = defaultDistanceColor; // Use configurable distance color
+    ctx.fillStyle = defaultDistanceColor;
 
     distanceIndicators.forEach(indicator => {
-      const color = indicator.color || '#ffcc00'; // Yellow for distance indicators
+      const color = indicator.color || defaultDistanceColor; // Use settings color as fallback
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
 

@@ -9,7 +9,6 @@ import { useCraftSnap } from "../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../editor/SnapPositionHandle";
 import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
-import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
 
 export const FlexBox = ({
   
@@ -205,9 +204,6 @@ placeContent,
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
-
-  // Use centered container drag for the move handle
-  const { centeredDrag } = useCenteredContainerDrag(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
@@ -290,7 +286,7 @@ placeContent,
         snapConnect(cardRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        centeredDrag(dragRef.current); // Connect the MOVE handle to centered drag for container switching
+        drag(dragRef.current); // Connect to standard Craft.js drag
       }
     };
 
@@ -302,7 +298,7 @@ placeContent,
       const timer = setTimeout(connectElements, 10);
       return () => clearTimeout(timer);
     }
-  }, [snapConnect, centeredDrag, isSelected]);
+  }, [snapConnect, drag, isSelected]);
 
   // Detect parent changes and reset position properties
   useEffect(() => {

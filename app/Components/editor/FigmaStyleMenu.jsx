@@ -991,8 +991,8 @@ export const FigmaStyleMenu = ({
       width: '100%',
       minWidth: 260,
       maxWidth: 320,
-      backgroundColor: '#fff',
-      border: '1px solid #e0e0e0',
+      backgroundColor: 'var(--panel-bg, #fff)',
+      border: '1px solid var(--border-color, #e0e0e0)',
       borderRadius: 8,
       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
       fontSize: 12,
@@ -1001,12 +1001,12 @@ export const FigmaStyleMenu = ({
       {/* Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid #f0f0f0',
+        borderBottom: '1px solid var(--border-color, #f0f0f0)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <span style={{ fontWeight: 600, fontSize: 13 }}>Design</span>
+        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>Design</span>
         {onClose && (
           <Button 
             type="text" 

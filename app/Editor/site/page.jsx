@@ -32,6 +32,8 @@ import { Carousel } from '../../Components/user/Carousel';
 import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
 import { Root } from '../../Components/Root';
 import { MultiSelectProvider } from '../../Components/utils/context/MultiSelectContext';
+import { EditorSettingsProvider } from '../../Components/utils/context/EditorSettingsContext';
+import EditorSettingsModal from '../../Components/ui/EditorSettingsModal';
 import { useDropPositionCorrection } from '../../Components/utils/drag-drop/useDropPositionCorrection';
 import { useContainerSwitchingFeedback } from '../../Components/utils/drag-drop/useContainerSwitchingFeedback';
 import SnapGridControls from '../../Components/utils/grid/SnapGridControls';
@@ -64,6 +66,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   const [autoSaveFrequency, setAutoSaveFrequency] = useState(3000); // 3 seconds default
   const [lastInitialized, setLastInitialized] = useState(null); // Track when last initialized
   const [hasLoadedFromFirebase, setHasLoadedFromFirebase] = useState(false); // Track if we've loaded real content
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false); // Settings modal state
 
   // Full Photoshop-style history system (like TopBar.jsx)
   const [historyEntries, setHistoryEntries] = useState([]);
@@ -1633,63 +1636,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
           console.log('  Frame element not found ❌');
         }
       };
-      
-      // Test function for auto-positioning on container switch
-      window.testAutoPositioning = () => {
-        console.log('🧪 Testing Auto-Positioning on Container Switch');
-        
-        if (!query) {
-          console.error('❌ Query not available');
-          return false;
-        }
-        
-        try {
-          const nodes = query.getNodes();
-          console.log('🔍 Available nodes:', Object.keys(nodes));
-          
-          // Find Box containers (canvas elements)
-          const containers = Object.entries(nodes).filter(([id, node]) => {
-            return node.data.displayName === 'Box' && query.node(id).isCanvas();
-          });
-          console.log('📦 Canvas containers:', containers.map(([id]) => id));
-          
-          // Find draggable elements
-          const elements = Object.entries(nodes).filter(([id, node]) => {
-            return node.data.displayName !== 'Root' && 
-                   node.data.displayName !== 'Box' && 
-                   id !== 'ROOT';
-          });
-          console.log('🔧 Draggable elements:', elements.map(([id, node]) => ({ id, type: node.data.displayName })));
-          
-          if (containers.length >= 2 && elements.length >= 1) {
-            const [elementId] = elements[0];
-            const [sourceContainerId] = containers[0];
-            const [targetContainerId] = containers[1];
-            
-            console.log(`🚚 Testing container switch: moving ${elementId} from ${sourceContainerId} to ${targetContainerId}`);
-            
-            // Simulate mouse position for testing
-            window.dispatchEvent(new MouseEvent('mousemove', {
-              clientX: 300,
-              clientY: 200,
-              bubbles: true
-            }));
-            
-            // Move the element
-            actions.move(elementId, targetContainerId, 0);
-            
-            console.log('✅ Auto-positioning test initiated - check component logs for position correction');
-            return true;
-          } else {
-            console.log('❌ Need at least 2 Box containers and 1 draggable element for testing');
-            console.log(`Available: ${containers.length} containers, ${elements.length} elements`);
-            return false;
-          }
-        } catch (error) {
-          console.error('❌ Auto-positioning test failed:', error);
-          return false;
-        }
-      };
     }
     return () => {
       if (window) {
@@ -1698,7 +1644,6 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         delete window.debugEditorState;
         delete window.debugPageLoading;
         delete window.testPageSave;
-        delete window.testAutoPositioning;
       }
     };
   }, [refreshPageCache, pages, currentPageId, pageContentCache, isInitialized, isLoadingPage, handlePageChange, actions, query, user?.uid, siteId]);
@@ -1839,6 +1784,19 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             <div className="bg-gray-50 rounded-lg px-2 py-1 border border-gray-200">
               <SnapGridControls />
             </div>
+
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+            {/* Editor Settings */}
+            <Tooltip title="Editor Settings & Preferences">
+              <Button
+                icon={<SettingOutlined className="text-lg" />}
+                disabled={!isInitialized}
+                onClick={() => setSettingsModalOpen(true)}
+                className="h-10 w-10 bg-orange-600 text-white hover:bg-orange-700 border-orange-500"
+                size="large"
+              />
+            </Tooltip>
 
             <div className="w-px h-6 bg-gray-300 mx-2"></div>
 
@@ -2203,6 +2161,12 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         onLoad={handleLoadPageData}
         mode="load"
       />
+
+      {/* Editor Settings Modal */}
+      <EditorSettingsModal 
+        visible={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+      />
     </div>
   );
 };
@@ -2302,9 +2266,11 @@ function SiteEditor() {
         Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel, NavBar, NavItem
       }}
     > 
-      <MultiSelectProvider>
-        <SiteEditorLayout siteId={siteId} siteData={site} siteContent={siteContent} />
-      </MultiSelectProvider>
+      <EditorSettingsProvider>
+        <MultiSelectProvider>
+          <SiteEditorLayout siteId={siteId} siteData={site} siteContent={siteContent} />
+        </MultiSelectProvider>
+      </EditorSettingsProvider>
     </Editor>
   );
 }

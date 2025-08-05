@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { Switch, Button, Dropdown, Menu, Tooltip } from "antd";
-import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined } from "@ant-design/icons";
+import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { useEditor } from "@craftjs/core";
 import LoadProject from "./LoadProject";
 import ExportManager from "./ExportManager";
 import PageManager from "./PageManager";
 import PreviewButton from "./PreviewButton";
 import SnapGridControls from "../utils/grid/SnapGridControls";
+import EditorSettingsModal from "../ui/EditorSettingsModal";
+import { EditorSettingsProvider } from "../utils/context/EditorSettingsContext";
 
 export const TopBar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
@@ -24,6 +26,7 @@ export const TopBar = () => {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
   const [lastStateSnapshot, setLastStateSnapshot] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   // Helper function to detect what changed between states
   const detectChanges = (previousState, currentState) => {
@@ -307,114 +310,137 @@ export const TopBar = () => {
   };
 
   return (
-    <div className="w-full bg-gray-50 border-b border-slate-200 shadow-lg px-2 py-0.5">
-      <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between px-3 py-1.5">
-        
-        {/* Left Section - Editor Controls */}
-        <div className="flex items-center space-x-3">
-          {/* Enable/Disable Toggle */}
-          <div className="flex items-center space-x-3 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
-            <Switch 
-              checked={enabled} 
-              onChange={(value) => {
-                console.log('Toggling enabled state to:', value);
-                actions.setOptions(options => {
-                  options.enabled = value;
-                });
-              }}
-              className="data-[state=checked]:bg-emerald-500"
-            />
-            <span className="text-sm font-medium text-slate-700">
-              {enabled ? 'Editor On' : 'Editor Off'}
-            </span>
-          </div>
-
-          {/* History Controls */}
-          <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
-            {/* Undo Button */}
-            <Tooltip title={canUndo ? "Undo last action (Ctrl+Z)" : "Nothing to undo"}>
-              <Button
-                icon={<UndoOutlined className="text-base" />}
-                size="middle"
-                disabled={!canUndo}
-                onClick={handleUndo}
-                className={`h-6 w-6 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
-                  canUndo 
-                    ? 'hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm text-slate-600' 
-                    : 'text-slate-300'
-                }`}
-                type="text"
+    <EditorSettingsProvider>
+      <div className="w-full bg-gray-50 border-b border-slate-200 shadow-lg px-2 py-0.5">
+        <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between px-3 py-1.5">
+          
+          {/* Left Section - Editor Controls */}
+          <div className="flex items-center space-x-3">
+            {/* Enable/Disable Toggle */}
+            <div className="flex items-center space-x-3 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
+              <Switch 
+                checked={enabled} 
+                onChange={(value) => {
+                  console.log('Toggling enabled state to:', value);
+                  actions.setOptions(options => {
+                    options.enabled = value;
+                  });
+                }}
+                className="data-[state=checked]:bg-emerald-500"
               />
-            </Tooltip>
+              <span className="text-sm font-medium text-slate-700">
+                {enabled ? 'Editor On' : 'Editor Off'}
+              </span>
+            </div>
 
-            {/* Redo Button */}
-            <Tooltip title={canRedo ? "Redo last action (Ctrl+Y)" : "Nothing to redo"}>
-              <Button
-                icon={<RedoOutlined className="text-base" />}
-                size="middle"
-                disabled={!canRedo}
-                onClick={handleRedo}
-                className={`h-6 w-6 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
-                  canRedo 
-                    ? 'hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-sm text-slate-600' 
-                    : 'text-slate-300'
-                }`}
-                type="text"
-              />
-            </Tooltip>
-
-            {/* Divider */}
-            <div className="w-px h-5 bg-slate-200 mx-1"></div>
-
-            {/* History Dropdown */}
-            <Dropdown
-              menu={historyDropdownMenu}
-              placement="bottomLeft"
-              trigger={['click']}
-              overlayClassName="shadow-xl border border-slate-200 rounded-xl overflow-hidden"
-            >
-              <Tooltip title="View and navigate edit history">
+            {/* History Controls */}
+            <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
+              {/* Undo Button */}
+              <Tooltip title={canUndo ? "Undo last action (Ctrl+Z)" : "Nothing to undo"}>
                 <Button
-                  icon={<HistoryOutlined className="text-base" />}
+                  icon={<UndoOutlined className="text-base" />}
+                  size="middle"
+                  disabled={!canUndo}
+                  onClick={handleUndo}
+                  className={`h-6 w-6 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
+                    canUndo 
+                      ? 'hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm text-slate-600' 
+                      : 'text-slate-300'
+                  }`}
+                  type="text"
+                />
+              </Tooltip>
+
+              {/* Redo Button */}
+              <Tooltip title={canRedo ? "Redo last action (Ctrl+Y)" : "Nothing to redo"}>
+                <Button
+                  icon={<RedoOutlined className="text-base" />}
+                  size="middle"
+                  disabled={!canRedo}
+                  onClick={handleRedo}
+                  className={`h-6 w-6 flex items-center justify-center rounded-lg border-0 transition-all duration-200 ${
+                    canRedo 
+                      ? 'hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-sm text-slate-600' 
+                      : 'text-slate-300'
+                  }`}
+                  type="text"
+                />
+              </Tooltip>
+
+              {/* Divider */}
+              <div className="w-px h-5 bg-slate-200 mx-1"></div>
+
+              {/* History Dropdown */}
+              <Dropdown
+                menu={historyDropdownMenu}
+                placement="bottomLeft"
+                trigger={['click']}
+                overlayClassName="shadow-xl border border-slate-200 rounded-xl overflow-hidden"
+              >
+                <Tooltip title="View and navigate edit history">
+                  <Button
+                    icon={<HistoryOutlined className="text-base" />}
+                    size="middle"
+                    type="text"
+                    className="h-6 flex items-center space-x-2 px-2.5 rounded-lg border-0 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm transition-all duration-200 text-slate-600"
+                  >
+                    <span className="text-sm font-medium hidden sm:inline">History</span>
+                  </Button>
+                </Tooltip>
+              </Dropdown>
+            </div>
+
+            {/* Snap & Grid Controls */}
+            <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
+              <SnapGridControls />
+            </div>
+
+            {/* Settings Button */}
+            <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
+              <Tooltip title="Editor Settings & Preferences">
+                <Button
+                  icon={<SettingOutlined className="text-base" />}
                   size="middle"
                   type="text"
-                  className="h-6 flex items-center space-x-2 px-2.5 rounded-lg border-0 hover:bg-purple-50 hover:text-purple-600 hover:shadow-sm transition-all duration-200 text-slate-600"
+                  onClick={() => setSettingsModalOpen(true)}
+                  className="h-6 flex items-center space-x-2 px-2.5 rounded-lg border-0 hover:bg-orange-50 hover:text-orange-600 hover:shadow-sm transition-all duration-200 text-slate-600"
                 >
-                  <span className="text-sm font-medium hidden sm:inline">History</span>
+                  <span className="text-sm font-medium hidden sm:inline">Settings</span>
                 </Button>
               </Tooltip>
-            </Dropdown>
+            </div>
           </div>
 
-          {/* Snap & Grid Controls */}
-          <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
-            <SnapGridControls />
+          {/* Center Section - Branding/Logo Space (optional) */}
+          <div className="hidden md:flex items-center">
+            <div className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Glowww Editor
+            <div className="text-xs text-center">Made by ED5</div>
+            </div>
           </div>
-        </div>
 
-        {/* Center Section - Branding/Logo Space (optional) */}
-        <div className="hidden md:flex items-center">
-          <div className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Glowww Editor
-          <div className="text-xs text-center">Made by ED5</div>
-          </div>
-        </div>
-
-        {/* Right Section - Management Controls */}
-        <div className="flex items-center space-x-1.5">
-          <div className="flex items-center space-x-1.5 bg-white rounded-lg px-1.5 py-1 shadow-sm border border-slate-200">
-            <PageManager />
-            <PreviewButton />
-          </div>
-          
-          <div className="flex items-center space-x-1.5 bg-white rounded-lg px-1.5 py-1 shadow-sm border border-slate-200">
-            <LoadProject />
-            <ExportManager />
+          {/* Right Section - Management Controls */}
+          <div className="flex items-center space-x-1.5">
+            <div className="flex items-center space-x-1.5 bg-white rounded-lg px-1.5 py-1 shadow-sm border border-slate-200">
+              <PageManager />
+              <PreviewButton />
+            </div>
+            
+            <div className="flex items-center space-x-1.5 bg-white rounded-lg px-1.5 py-1 shadow-sm border border-slate-200">
+              <LoadProject />
+              <ExportManager />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    </div>
+      </div>
+
+      {/* Settings Modal */}
+      <EditorSettingsModal 
+        visible={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+      />
+    </EditorSettingsProvider>
   );
 };

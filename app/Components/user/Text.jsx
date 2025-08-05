@@ -7,8 +7,6 @@ import ContextMenu from "../utils/context/ContextMenu";
 import { useContextMenu } from "../utils/hooks/useContextMenu";
 import useEditorDisplay from "../utils/context/useEditorDisplay";
 import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
-import { useAutoPositionOnContainerSwitch } from '../utils/drag-drop/useAutoPositionOnContainerSwitch';
 import SnapPositionHandle from "../editor/SnapPositionHandle";
 import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
@@ -253,12 +251,6 @@ export const Text = ({
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
-  
-  // Use centered container drag for the move handle  
-  const { centeredDrag } = useCenteredContainerDrag(nodeId);
-  
-  // Auto-position when switched to new container
-  const autoPositionInfo = useAutoPositionOnContainerSwitch(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();

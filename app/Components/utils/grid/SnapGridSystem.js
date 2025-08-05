@@ -47,9 +47,16 @@ class SnapGridSystem {
     this.snapThreshold = SNAP_CONFIG.THRESHOLD;
     this.elementSnapThreshold = 50; // Increased from 12px to 50px for wider detection range
     
+    // Color settings
+    this.gridColor = '#e0e0e0';
+    this.guideColor = '#0066ff';
+    this.distanceColor = '#ff6600';
+    this.selectionColor = '#0088ff';
+    
     // NEW: Vertical guide lines configuration
     this.verticalGuidesEnabled = true;
     this.verticalGuidesVisible = true;
+    this.safeAreaEnabled = true; // Safe area guides
     this.guideWidth = 960; // Distance between the two vertical guides (safe area width)
     this.guideSnapThreshold = 25; // Snap threshold for guide lines
     this.canvasWidth = 1920; // Will be updated from actual canvas
@@ -239,7 +246,7 @@ class SnapGridSystem {
           x: guides.leftGuide,
           y1: 0,
           y2: this.canvasHeight,
-          color: '#ff0000', // Red color for guide lines
+          color: this.guideColor, // Use configurable guide color
           width: 2,
           dashed: true
         });
@@ -249,7 +256,7 @@ class SnapGridSystem {
           x: guides.rightGuide,
           y1: 0,
           y2: this.canvasHeight,
-          color: '#ff0000', // Red color for guide lines
+          color: this.guideColor, // Use configurable guide color
           width: 2,
           dashed: true
         });
@@ -364,7 +371,7 @@ class SnapGridSystem {
               x: guidePos,
               y1: 0,
               y2: this.canvasHeight,
-              color: '#ff0000', // Red color for guide lines
+              color: this.guideColor, // Use configurable guide color
               width: 2,
               dashed: true
             });
@@ -480,7 +487,7 @@ class SnapGridSystem {
               x: pos,
               y1: Math.min(elementBounds.top, other.top) - 10,
               y2: Math.max(elementBounds.bottom, other.bottom) + 10,
-              color: SNAP_CONFIG.GUIDE_COLOR,
+              color: this.guideColor, // Use configurable guide color
               label: ''
             });
             break;
@@ -501,7 +508,7 @@ class SnapGridSystem {
               y: pos,
               x1: Math.min(elementBounds.left, other.left) - 10,
               x2: Math.max(elementBounds.right, other.right) + 10,
-              color: SNAP_CONFIG.GUIDE_COLOR,
+              color: this.guideColor, // Use configurable guide color
               label: ''
             });
             break;
@@ -557,7 +564,7 @@ class SnapGridSystem {
               x2: other.left,
               y: (intendedBounds.centerY + other.centerY) / 2,
               distance: Math.round(distance),
-              color: SNAP_CONFIG.DISTANCE_COLOR
+              color: this.distanceColor // Use configurable distance color
             });
           }
         }
@@ -581,7 +588,7 @@ class SnapGridSystem {
               x2: intendedBounds.left,
               y: (intendedBounds.centerY + other.centerY) / 2,
               distance: Math.round(distance),
-              color: SNAP_CONFIG.DISTANCE_COLOR
+              color: this.distanceColor // Use configurable distance color
             });
           }
         }
@@ -605,7 +612,7 @@ class SnapGridSystem {
               y2: other.top,
               x: (intendedBounds.centerX + other.centerX) / 2,
               distance: Math.round(distance),
-              color: SNAP_CONFIG.DISTANCE_COLOR
+              color: this.distanceColor // Use configurable distance color
             });
           }
         }
@@ -629,7 +636,7 @@ class SnapGridSystem {
               y2: intendedBounds.top,
               x: (intendedBounds.centerX + other.centerX) / 2,
               distance: Math.round(distance),
-              color: SNAP_CONFIG.DISTANCE_COLOR
+              color: this.distanceColor // Use configurable distance color
             });
           }
         }
@@ -853,7 +860,7 @@ class SnapGridSystem {
               x: snapLineX,
               y1: Math.min(elementBounds.top, other.top) - 10,
               y2: Math.max(elementBounds.bottom, other.bottom) + 10,
-              color: SNAP_CONFIG.GUIDE_COLOR,
+              color: this.guideColor, // Use configurable guide color
               label: ''
             });
           }
@@ -923,7 +930,7 @@ class SnapGridSystem {
               y: snapLineY,
               x1: Math.min(elementBounds.left, other.left) - 10,
               x2: Math.max(elementBounds.right, other.right) + 10,
-              color: SNAP_CONFIG.GUIDE_COLOR,
+              color: this.guideColor, // Use configurable guide color
               label: ''
             });
           }
@@ -983,7 +990,7 @@ class SnapGridSystem {
             x2: x2,
             y: (elementBounds.centerY + other.centerY) / 2,
             distance: Math.round(horizontalDistance), // Round to avoid sub-pixel values
-            color: SNAP_CONFIG.DISTANCE_COLOR
+            color: this.distanceColor // Use configurable distance color
           });
         }
       }
@@ -1018,7 +1025,7 @@ class SnapGridSystem {
             y2: y2,
             x: (elementBounds.centerX + other.centerX) / 2,
             distance: Math.round(verticalDistance), // Round to avoid sub-pixel values
-            color: SNAP_CONFIG.DISTANCE_COLOR
+            color: this.distanceColor // Use configurable distance color
           });
         }
       }
@@ -1103,7 +1110,12 @@ class SnapGridSystem {
       gridOpacity: this.gridOpacity,
       snapThreshold: this.snapThreshold,
       elementSnapThreshold: this.elementSnapThreshold,
-      verticalGuidesEnabled: this.verticalGuidesEnabled
+      verticalGuidesEnabled: this.verticalGuidesEnabled,
+      safeAreaEnabled: this.safeAreaEnabled,
+      gridColor: this.gridColor,
+      guideColor: this.guideColor,
+      distanceColor: this.distanceColor,
+      selectionColor: this.selectionColor
     };
   }
 

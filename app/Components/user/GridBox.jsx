@@ -9,7 +9,6 @@ import { useCraftSnap } from "../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../editor/SnapPositionHandle";
 import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
-import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
 
 export const GridBox = ({
   
@@ -205,9 +204,6 @@ placeContent,
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
-
-  // Use centered container drag for the move handle
-  const { centeredDrag } = useCenteredContainerDrag(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
@@ -290,7 +286,7 @@ placeContent,
         snapConnect(cardRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        snapDrag(dragRef.current); // Connect the drag handle with snap functionality
+        drag(dragRef.current); // Connect to standard Craft.js drag
       }
     };
 

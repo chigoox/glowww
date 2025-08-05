@@ -6,6 +6,8 @@ import { isUserAdmin } from '../../lib/subscriptions';
 
 import { Toolbox } from '../Components/editor/ToolBox';
 import { TopBar } from '../Components/editor/TopBar';
+import EditorSettingsModal from '../Components/ui/EditorSettingsModal';
+import { EditorSettingsProvider } from '../Components/utils/context/EditorSettingsContext';
 
 import { Editor, Element, Frame, useEditor } from "@craftjs/core";
 import { Box } from '../Components/user/Box';
@@ -33,6 +35,7 @@ const EditorLayout = () => {
   const [openMenuNodeId, setOpenMenuNodeId] = useState(null);
   const [activeDrawer, setActiveDrawer] = useState(null);
   const [useFigmaStyle, setUseFigmaStyle] = useState(true); // Toggle for style menu type
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false); // Settings modal state
   
   const { enabled } = useEditor((state) => ({
     enabled: state.options.enabled
@@ -164,6 +167,12 @@ useEffect(() => {
           )}
         </div>
       </div>
+
+      {/* Editor Settings Modal */}
+      <EditorSettingsModal 
+        visible={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+      />
     </div>
   );
 };
@@ -239,9 +248,11 @@ export default function App() {
       Box, FlexBox, GridBox, Text, Image, Button, Link, FormInputDropArea,Root,
       Paragraph, Video, ShopFlexBox, ShopText, ShopImage, FormInput, Form, Carousel, NavBar, NavItem
     }}> 
-      <MultiSelectProvider>
-        <EditorLayout />
-      </MultiSelectProvider>
+      <EditorSettingsProvider>
+        <MultiSelectProvider>
+          <EditorLayout />
+        </MultiSelectProvider>
+      </EditorSettingsProvider>
     </Editor>
   );
 }

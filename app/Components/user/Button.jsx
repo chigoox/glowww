@@ -20,8 +20,6 @@ import { useCraftSnap } from "../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../editor/SnapPositionHandle";
 import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
-import { useCenteredContainerDrag } from '../utils/drag-drop/useCenteredContainerDrag';
-import { useAutoPositionOnContainerSwitch } from '../utils/drag-drop/useAutoPositionOnContainerSwitch';
 
 // Built-in action types
 const ACTION_TYPES = [
@@ -778,12 +776,6 @@ export const Button = ({
   
   // Use snap functionality
   const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
-  
-  // Use centered container drag for the move handle  
-  const { centeredDrag } = useCenteredContainerDrag(nodeId);
-  
-  // Auto-position when switched to new container
-  const autoPositionInfo = useAutoPositionOnContainerSwitch(nodeId);
   
   // Use multi-selection functionality
   const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();

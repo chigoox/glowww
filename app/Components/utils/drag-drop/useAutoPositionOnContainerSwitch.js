@@ -27,20 +27,41 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
   useEffect(() => {
     const updateMousePosition = (e) => {
       lastMousePosition.current = { x: e.clientX, y: e.clientY };
+      console.log('📍 Mouse position updated:', { x: e.clientX, y: e.clientY });
     };
     
     // Only track during potential move operations
     const handleMouseDown = (e) => {
-      // Check if this is a MOVE handle operation
-      const isMoveHandle = e.target?.closest('[data-handle="move"], .move-handle, [title*="Move"]');
+      console.log('🖱️ MouseDown detected, checking target:', e.target);
+      
+      // Check if this is a MOVE handle operation with the exact selectors used in components
+      const isMoveHandle = e.target?.closest('.move-handle, [data-handle-type="move"], [data-handle="move"]') ||
+                          e.target?.classList?.contains('move-handle') ||
+                          e.target?.getAttribute('data-handle-type') === 'move' ||
+                          e.target?.getAttribute('data-handle') === 'move';
+      
+      console.log('🔍 MOVE handle detection:', {
+        isMoveHandle,
+        targetElement: e.target,
+        targetClass: e.target?.className,
+        dataHandleType: e.target?.getAttribute('data-handle-type'),
+        dataHandle: e.target?.getAttribute('data-handle'),
+        closestMoveHandle: e.target?.closest('.move-handle, [data-handle-type="move"]'),
+        classList: Array.from(e.target?.classList || [])
+      });
+      
       if (isMoveHandle) {
+        console.log('🎯 MOVE handle detected - starting mouse tracking for node:', nodeId);
         // Start tracking mouse position for potential container switches
         document.addEventListener('mousemove', updateMousePosition, { passive: true });
         
         // Stop tracking after a reasonable time
         setTimeout(() => {
           document.removeEventListener('mousemove', updateMousePosition);
+          console.log('⏰ Mouse tracking timeout for node:', nodeId);
         }, 5000);
+      } else {
+        console.log('❌ Not a MOVE handle - skipping mouse tracking');
       }
     };
     
@@ -66,6 +87,8 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
     try {
       let containerElement = null;
       
+      console.log('🔍 Finding container element for parent:', newParentId);
+      
       if (newParentId === 'ROOT') {
         // Find the main editor canvas for ROOT
         containerElement = document.querySelector('[data-cy="editor-root"], .craft-renderer, [data-editor="true"]');
@@ -75,12 +98,19 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
         if (!containerElement) {
           containerElement = document.querySelector('.w-full.h-full.min-h-\\[100vh\\]');
         }
+        console.log('📍 ROOT container element found:', containerElement);
       } else {
         // Get specific parent container element
         try {
           const parentNode = query.node(newParentId);
           if (parentNode && parentNode.dom) {
             containerElement = parentNode.dom;
+            console.log('📦 Container element found via Craft.js:', {
+              nodeId: newParentId,
+              element: containerElement,
+              tagName: containerElement.tagName,
+              className: containerElement.className
+            });
           }
         } catch (error) {
           console.warn('Error getting parent node DOM:', error);
@@ -88,12 +118,21 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
       }
       
       if (!containerElement) {
-        console.warn('Container element not found for parent:', newParentId);
+        console.warn('❌ Container element not found for parent:', newParentId);
         return { x: 50, y: 50 }; // Fallback position
       }
       
       const containerRect = containerElement.getBoundingClientRect();
       const containerStyle = window.getComputedStyle(containerElement);
+      
+      console.log('📐 Container info:', {
+        rect: containerRect,
+        position: containerStyle.position,
+        padding: {
+          left: containerStyle.paddingLeft,
+          top: containerStyle.paddingTop
+        }
+      });
       
       // Account for container padding
       const paddingLeft = parseFloat(containerStyle.paddingLeft) || 0;
@@ -103,16 +142,17 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
       const relativeX = mouseX - containerRect.left - paddingLeft;
       const relativeY = mouseY - containerRect.top - paddingTop;
       
-      // Ensure position is within container bounds
-      const minX = 10;
-      const minY = 10;
-      const maxX = Math.max(minX, containerRect.width - paddingLeft * 2 - 100); // Leave space for component
-      const maxY = Math.max(minY, containerRect.height - paddingTop * 2 - 50);
+      // For containers, we want to position relative to the container, not viewport
+      // But ensure we're within reasonable bounds
+      const minX = 0; // Allow positioning at container edge
+      const minY = 0;
+      const maxX = Math.max(50, containerRect.width - paddingLeft * 2 - 50); // Leave some space
+      const maxY = Math.max(50, containerRect.height - paddingTop * 2 - 50);
       
       const finalX = Math.max(minX, Math.min(relativeX, maxX));
       const finalY = Math.max(minY, Math.min(relativeY, maxY));
       
-      console.log('🎯 Calculated position for container switch:', {
+      console.log('🎯 Position calculation breakdown:', {
         nodeId,
         newParentId,
         mousePosition: { x: mouseX, y: mouseY },
@@ -123,22 +163,37 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
           height: containerRect.height 
         },
         padding: { left: paddingLeft, top: paddingTop },
-        relativePosition: { x: relativeX, y: relativeY },
-        finalPosition: { x: finalX, y: finalY },
+        calculations: {
+          rawRelativeX: mouseX - containerRect.left,
+          rawRelativeY: mouseY - containerRect.top,
+          withPaddingX: relativeX,
+          withPaddingY: relativeY,
+          bounds: { minX, minY, maxX, maxY },
+          finalX,
+          finalY
+        },
         containerType: newParentId === 'ROOT' ? 'ROOT' : 'Container'
       });
       
       return { x: finalX, y: finalY };
     } catch (error) {
-      console.error('Error calculating relative position:', error);
+      console.error('❌ Error calculating relative position:', error);
       return { x: 50, y: 50 };
     }
   }, [query, nodeId]);
   
   // Monitor parent changes and auto-correct position
   useEffect(() => {
+    console.log('🔍 Parent change effect triggered for node:', nodeId, {
+      isInitialMount: isInitialMount.current,
+      prevParent: prevParentRef.current,
+      currentParent: parent,
+      hasChanged: prevParentRef.current !== parent
+    });
+    
     // Skip the initial mount
     if (isInitialMount.current) {
+      console.log('⏭️ Skipping initial mount for node:', nodeId);
       isInitialMount.current = false;
       prevParentRef.current = parent;
       return;
@@ -153,51 +208,176 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
         nodeId,
         from: oldParent,
         to: newParent,
-        lastMousePosition: lastMousePosition.current
+        lastMousePosition: lastMousePosition.current,
+        hasValidMousePosition: lastMousePosition.current.x > 0 && lastMousePosition.current.y > 0
       });
       
-      // Apply position correction after a brief delay to ensure Craft.js operations are complete
+      // Wait longer to let useCenteredContainerDrag do its positioning first
+      // Then check if we need to apply relative positioning correction
       setTimeout(() => {
         try {
           const mousePos = lastMousePosition.current;
           
+          console.log('🎯 Checking if position correction needed after centered drag:', {
+            nodeId,
+            mousePosition: mousePos,
+            hasValidPosition: mousePos.x > 0 && mousePos.y > 0
+          });
+          
           // Only apply position correction if we have a reasonable mouse position
+          // AND if useCenteredContainerDrag didn't already handle it properly
           if (mousePos.x > 0 && mousePos.y > 0) {
-            const newPosition = calculateRelativePosition(mousePos.x, mousePos.y, newParent);
             
-            console.log('✅ Applying self-correction for container switch:', {
+            // Check current node positioning after useCenteredContainerDrag
+            const currentNode = query.node(nodeId);
+            if (currentNode) {
+              const currentProps = currentNode.get().data.props;
+              const currentDom = currentNode.get().dom;
+              
+              console.log('🔍 Current node state after centered drag:', {
+                nodeId,
+                props: {
+                  position: currentProps.position,
+                  left: currentProps.left,
+                  top: currentProps.top
+                },
+                domStyle: currentDom ? {
+                  position: currentDom.style.position,
+                  left: currentDom.style.left,
+                  top: currentDom.style.top
+                } : null
+              });
+              
+              // If centered drag already positioned it (has absolute position with coordinates)
+              if (currentProps.position === 'absolute' && 
+                  (currentProps.left !== undefined || currentProps.top !== undefined)) {
+                
+                console.log('✅ useCenteredContainerDrag already positioned element, converting to relative positioning');
+                
+                // Convert the absolute position to container-relative position
+                const newPosition = calculateRelativePosition(mousePos.x, mousePos.y, newParent);
+                
+                console.log('🔄 Converting absolute to container-relative positioning:', {
+                  nodeId,
+                  oldParent,
+                  newParent,
+                  mousePosition: mousePos,
+                  absolutePosition: { left: currentProps.left, top: currentProps.top },
+                  newRelativePosition: newPosition
+                });
+                
+                // Apply container-relative position
+                setProp((props) => {
+                  props.position = 'absolute';
+                  props.left = newPosition.x;
+                  props.top = newPosition.y;
+                  
+                  // Remove any transform that might interfere
+                  if (props.transform) {
+                    delete props.transform;
+                  }
+                  
+                  console.log('📝 Props updated to container-relative positioning:', {
+                    nodeId,
+                    position: 'absolute',
+                    left: newPosition.x,
+                    top: newPosition.y,
+                    removedTransform: !!props.transform
+                  });
+                });
+                
+                // Also update DOM directly for immediate visual feedback
+                if (currentDom) {
+                  currentDom.style.position = 'absolute';
+                  currentDom.style.left = `${newPosition.x}px`;
+                  currentDom.style.top = `${newPosition.y}px`;
+                  currentDom.style.transform = '';
+                  
+                  console.log('🎨 DOM updated to container-relative positioning:', {
+                    nodeId,
+                    element: currentDom,
+                    position: currentDom.style.position,
+                    left: currentDom.style.left,
+                    top: currentDom.style.top
+                  });
+                }
+                
+              } else {
+                console.log('⚠️ No positioning detected from useCenteredContainerDrag, applying fresh positioning');
+                
+                // useCenteredContainerDrag didn't position it, so we do it
+                const newPosition = calculateRelativePosition(mousePos.x, mousePos.y, newParent);
+                
+                console.log('✅ Applying fresh container-relative positioning:', {
+                  nodeId,
+                  oldParent,
+                  newParent,
+                  mousePosition: mousePos,
+                  newPosition
+                });
+                
+                setProp((props) => {
+                  props.position = 'absolute';
+                  props.left = newPosition.x;
+                  props.top = newPosition.y;
+                  
+                  if (props.transform) {
+                    delete props.transform;
+                  }
+                });
+                
+                if (currentDom) {
+                  currentDom.style.position = 'absolute';
+                  currentDom.style.left = `${newPosition.x}px`;
+                  currentDom.style.top = `${newPosition.y}px`;
+                  currentDom.style.transform = '';
+                }
+              }
+            }
+            
+          } else {
+            console.log('⚠️ No valid mouse position for container switch correction:', {
               nodeId,
-              oldParent,
-              newParent,
               mousePosition: mousePos,
-              newPosition
+              reason: 'Mouse coordinates are 0 or negative'
             });
             
-            // Apply the position correction
+            // Apply a default position if no mouse position is available
+            const defaultPosition = { x: 50, y: 50 };
+            console.log('🔧 Applying default position (no valid mouse coords):', {
+              defaultPosition,
+              reason: 'Invalid mouse position',
+              mousePos
+            });
+            
             setProp((props) => {
               props.position = 'absolute';
-              props.left = newPosition.x;
-              props.top = newPosition.y;
+              props.left = defaultPosition.x;
+              props.top = defaultPosition.y;
+              
+              if (props.transform) {
+                delete props.transform;
+              }
             });
             
-            // Also update DOM directly for immediate visual feedback
             if (dom) {
               dom.style.position = 'absolute';
-              dom.style.left = `${newPosition.x}px`;
-              dom.style.top = `${newPosition.y}px`;
+              dom.style.left = `${defaultPosition.x}px`;
+              dom.style.top = `${defaultPosition.y}px`;
+              dom.style.transform = '';
             }
-          } else {
-            console.log('⚠️ No valid mouse position for container switch correction');
           }
         } catch (error) {
-          console.error('Error applying container switch correction:', error);
+          console.error('❌ Error applying container switch correction:', error);
         }
-      }, 100); // Small delay to ensure Craft.js operations complete
+      }, 200); // Wait 200ms to let useCenteredContainerDrag complete (it uses 50ms delay)
       
       // Update the ref for next comparison
       prevParentRef.current = parent;
+    } else {
+      console.log('➡️ No parent change detected for node:', nodeId);
     }
-  }, [parent, nodeId, calculateRelativePosition, setProp, dom]);
+  }, [parent, nodeId, calculateRelativePosition, setProp, dom, query]);
   
   // Return useful info for debugging
   return {
