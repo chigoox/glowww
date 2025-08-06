@@ -3,6 +3,7 @@
 import { Element, useEditor } from "@craftjs/core";
 import { Button as ButtonAD, Typography, Drawer, Space, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
+import { ThemedContainer } from "../theme/ThemedContainer";
 import { Box } from "../user/Box";
 import { FlexBox } from "../user/FlexBox";
 import { GridBox } from "../user/GridBox";
@@ -273,11 +274,27 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           >
             <div
               ref={component.ref}
-              className="w-12 h-12 p-0 border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all cursor-grab active:cursor-grabbing group bg-white flex items-center justify-center toolbox-component"
-              style={{ userSelect: 'none' }}
+              className="w-12 h-12 p-0 rounded-xl transition-all cursor-grab active:cursor-grabbing group flex items-center justify-center toolbox-component"
+              style={{ 
+                userSelect: 'none',
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'var(--bg-secondary)';
+                e.target.style.borderColor = 'var(--accent-color)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'var(--panel-bg)';
+                e.target.style.borderColor = 'var(--border-color)';
+              }}
               data-component={component.name}
             >
-              <div className="text-lg text-gray-600 group-hover:text-gray-800 transition-colors">
+              <div 
+                className="text-lg transition-colors"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 {component.icon}
               </div>
             </div>
@@ -285,14 +302,29 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
         ))}
         
         {/* Close button */}
-        <div className="ml-2 pl-2 border-l border-gray-200">
+        <div 
+          className="ml-2 pl-2"
+          style={{ borderLeft: '1px solid var(--border-color)' }}
+        >
           <ButtonAD
             type="text"
             size="small"
             icon={<CloseOutlined />}
             onClick={closeDrawer}
-            className="text-gray-400 hover:text-gray-600 !p-0 !min-w-0 !w-8 !h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
-            style={{ fontSize: '12px' }}
+            className="!p-0 !min-w-0 !w-8 !h-8 flex items-center justify-center rounded-lg"
+            style={{ 
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              background: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.color = 'var(--text-primary)';
+              e.target.style.background = 'var(--bg-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.color = 'var(--text-muted)';
+              e.target.style.background = 'transparent';
+            }}
           />
         </div>
       </div>
@@ -304,7 +336,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
       {/* Figma-style bottom center toolbar */}
       {!activeDrawer && (
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
+          <ThemedContainer variant="panel" className="rounded-2xl shadow-lg p-2">
             <div className="flex items-center gap-1">
               {sections.map((section) => (
                 <Tooltip
@@ -315,30 +347,43 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
                 >
                   <ButtonAD
                     type={activeDrawer === section.id ? "primary" : "text"}
-                    className={`w-12 h-12 p-0 flex items-center justify-center transition-all rounded-xl border ${
-                      activeDrawer === section.id 
-                        ? 'border-blue-500 bg-blue-500 shadow-sm' 
-                        : 'border-transparent hover:border-gray-300 hover:bg-gray-50'
-                    }`} 
+                    className="w-12 h-12 p-0 flex items-center justify-center transition-all rounded-xl border"
+                    style={{
+                      borderColor: activeDrawer === section.id ? 'var(--accent-color)' : 'transparent',
+                      background: activeDrawer === section.id ? 'var(--accent-color)' : 'transparent',
+                      color: activeDrawer === section.id ? '#ffffff' : 'var(--text-secondary)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (activeDrawer !== section.id) {
+                        e.target.style.borderColor = 'var(--border-color)';
+                        e.target.style.background = 'var(--bg-secondary)';
+                        e.target.style.color = 'var(--text-primary)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeDrawer !== section.id) {
+                        e.target.style.borderColor = 'transparent';
+                        e.target.style.background = 'transparent';
+                        e.target.style.color = 'var(--text-secondary)';
+                      }
+                    }}
                     onClick={() => activeDrawer === section.id ? closeDrawer() : openDrawer(section.id)}
                   >
-                    <div className={`text-lg ${
-                      activeDrawer === section.id ? 'text-white' : 'text-gray-600'
-                    }`}>
+                    <div className="text-lg">
                       {section.icon}
                     </div>
                   </ButtonAD>
                 </Tooltip>
               ))}
             </div>
-          </div>
+          </ThemedContainer>
         </div>
       )}
 
        {/* Quick Section Switcher (when drawer is open) */}
         {activeDrawer && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
+            <ThemedContainer variant="panel" className="rounded-2xl shadow-lg p-2">
               <div className="flex items-center gap-1">
                 {sections.map((section) => (
                   <Tooltip
@@ -350,23 +395,34 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
                     <ButtonAD
                       type={activeDrawer === section.id ? "primary" : "text"}
                       size="small"
-                      className={`w-10 h-10 p-0 flex items-center justify-center !min-w-0 rounded-xl transition-all ${
-                        activeDrawer === section.id 
-                          ? 'bg-blue-500 border-blue-500' 
-                          : 'hover:bg-gray-50'
-                      }`}
+                      className="w-10 h-10 p-0 flex items-center justify-center !min-w-0 rounded-xl transition-all"
+                      style={{
+                        background: activeDrawer === section.id ? 'var(--accent-color)' : 'transparent',
+                        borderColor: activeDrawer === section.id ? 'var(--accent-color)' : 'transparent',
+                        color: activeDrawer === section.id ? '#ffffff' : 'var(--text-secondary)'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeDrawer !== section.id) {
+                          e.target.style.background = 'var(--bg-secondary)';
+                          e.target.style.color = 'var(--text-primary)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeDrawer !== section.id) {
+                          e.target.style.background = 'transparent';
+                          e.target.style.color = 'var(--text-secondary)';
+                        }
+                      }}
                       onClick={() => switchDrawer(section.id)}
                     >
-                      <div className={`text-sm ${
-                        activeDrawer === section.id ? 'text-white' : 'text-gray-600'
-                      }`}>
+                      <div className="text-sm">
                         {section.icon}
                       </div>
                     </ButtonAD>
                   </Tooltip>
                 ))}
               </div>
-            </div>
+            </ThemedContainer>
           </div>
         )}
 
@@ -393,9 +449,9 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           body: {
             height: '64px',
             padding: '8px 16px',
-            backgroundColor: '#ffffff',
+            backgroundColor: 'var(--panel-bg)',
             borderRadius: '32px',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--border-color)',
             display: 'flex',
             alignItems: 'center'
           },
@@ -407,7 +463,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
             height: 'auto',
             width: 'auto',
             zIndex: 40,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+            boxShadow: 'var(--shadow)'
           },
           content: {
             zIndex: 40,

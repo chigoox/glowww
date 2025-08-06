@@ -113,8 +113,8 @@ const DragInput = ({
       minWidth: 80,
       padding: '2px 4px',
       borderRadius: 4,
-      backgroundColor: isDragging ? '#f0f8ff' : 'transparent',
-      border: isDragging ? '1px solid #1890ff' : '1px solid transparent',
+      backgroundColor: isDragging ? 'var(--accent-bg)' : 'transparent',
+      border: isDragging ? '1px solid var(--accent-color)' : '1px solid transparent',
       transition: 'all 0.2s ease',
       ...style
     }}>
@@ -129,13 +129,13 @@ const DragInput = ({
             width: 18,
             height: 18,
             cursor: isDragging ? 'col-resize' : (disabled ? 'not-allowed' : 'col-resize'),
-            color: isDragging ? '#1890ff' : (disabled ? '#d9d9d9' : '#666'),
-            backgroundColor: isDragging ? '#e6f7ff' : '#f5f5f5',
+            color: isDragging ? 'var(--accent-color)' : (disabled ? 'var(--text-muted)' : 'var(--text-secondary)'),
+            backgroundColor: isDragging ? 'var(--accent-bg)' : 'var(--bg-tertiary)',
             borderRadius: 3,
             transition: 'all 0.2s ease',
             fontSize: 11,
             userSelect: 'none',
-            boxShadow: isDragging ? '0 0 0 2px rgba(24, 144, 255, 0.2)' : 'none'
+            boxShadow: isDragging ? '0 0 0 2px var(--accent-shadow)' : 'none'
           }}
         >
           {icon}
@@ -152,14 +152,17 @@ const DragInput = ({
         disabled={disabled}
         style={{
           width: 60,
-          fontSize: 11
+          fontSize: 11,
+          backgroundColor: 'var(--bg-primary)',
+          borderColor: 'var(--border-color)',
+          color: 'var(--text-primary)'
         }}
         controls={false}
       />
       {suffix && (
         <span style={{
           fontSize: 10,
-          color: '#999',
+          color: 'var(--text-muted)',
           minWidth: 16,
           userSelect: 'none',
           fontWeight: 500
@@ -183,10 +186,10 @@ const SectionHeader = ({ icon, title, collapsed, onToggle }) => (
       cursor: 'pointer',
       fontSize: 12,
       fontWeight: 500,
-      color: '#333',
-      backgroundColor: '#fafafa',
+      color: 'var(--text-primary)',
+      backgroundColor: 'var(--bg-secondary)',
       borderRadius: 4,
-      border: '1px solid #f0f0f0',
+      border: '1px solid var(--border-color)',
       userSelect: 'none'
     }}
   >
@@ -217,8 +220,8 @@ const Section = ({ icon, title, children, defaultCollapsed = false }) => {
       {!collapsed && (
         <div style={{ 
           padding: '8px 12px',
-          backgroundColor: '#fcfcfc',
-          border: '1px solid #f0f0f0',
+          backgroundColor: 'var(--panel-bg)',
+          border: '1px solid var(--border-color)',
           borderTop: 'none',
           borderRadius: '0 0 4px 4px'
         }}>
@@ -246,7 +249,7 @@ const Row = ({ children, gap = 8, justify = 'space-between' }) => (
 const Label = ({ children, style = {} }) => (
   <span style={{ 
     fontSize: 11, 
-    color: '#666', 
+    color: 'var(--text-secondary)', 
     fontWeight: 500,
     minWidth: 'fit-content',
     ...style 
@@ -285,9 +288,9 @@ const GapControl = ({ getValue, updateValue }) => {
     <div style={{ 
       marginBottom: 16,
       padding: 12,
-      backgroundColor: '#fafafa',
+      backgroundColor: 'var(--bg-secondary)',
       borderRadius: 6,
-      border: '1px solid #f0f0f0'
+      border: '1px solid var(--border-color)'
     }}>
       <div style={{ 
         display: 'flex', 
@@ -404,9 +407,9 @@ const StrokeColorControl = ({ getValue, debouncedUpdate, props }) => {
     <div style={{ 
       marginBottom: 16,
       padding: 12,
-      backgroundColor: '#fafafa',
+      backgroundColor: 'var(--bg-secondary)',
       borderRadius: 6,
-      border: '1px solid #f0f0f0'
+      border: '1px solid var(--border-color)'
     }}>
       <div style={{ 
         display: 'flex', 
@@ -569,9 +572,9 @@ const StrokeStyleControl = ({ debouncedUpdate, props }) => {
     <div style={{ 
       marginBottom: 16,
       padding: 12,
-      backgroundColor: '#fafafa',
+      backgroundColor: 'var(--bg-secondary)',
       borderRadius: 6,
-      border: '1px solid #f0f0f0'
+      border: '1px solid var(--border-color)'
     }}>
       <div style={{ 
         display: 'flex', 
@@ -769,9 +772,9 @@ const SpacingControl = ({
     <div style={{ 
       marginBottom: 16,
       padding: 12,
-      backgroundColor: '#fafafa',
+      backgroundColor: 'var(--bg-secondary)',
       borderRadius: 6,
-      border: '1px solid #f0f0f0'
+      border: '1px solid var(--border-color)'
     }}>
       <div style={{ 
         display: 'flex', 
@@ -991,22 +994,22 @@ export const FigmaStyleMenu = ({
       width: '100%',
       minWidth: 260,
       maxWidth: 320,
-      backgroundColor: '#fff',
-      border: '1px solid #e0e0e0',
+      backgroundColor: 'var(--panel-bg, #fff)',
+      border: '1px solid var(--border-color, #e0e0e0)',
       borderRadius: 8,
-      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      boxShadow: 'var(--shadow)',
       fontSize: 12,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       {/* Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid #f0f0f0',
+        borderBottom: '1px solid var(--border-color, #f0f0f0)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <span style={{ fontWeight: 600, fontSize: 13 }}>Design</span>
+        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>Design</span>
         {onClose && (
           <Button 
             type="text" 
@@ -1255,9 +1258,9 @@ export const FigmaStyleMenu = ({
                   fontSize: 11,
                   fontWeight: 500,
                   borderRadius: 4,
-                  backgroundColor: props.backgroundImage ? '#f8f9fa' : '#fafbfc',
-                  borderColor: props.backgroundImage ? '#d0d7de' : '#1890ff',
-                  color: props.backgroundImage ? '#656d76' : '#1890ff',
+                  backgroundColor: props.backgroundImage ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
+                  borderColor: props.backgroundImage ? 'var(--border-color)' : 'var(--accent-color)',
+                  color: props.backgroundImage ? 'var(--text-secondary)' : 'var(--accent-color)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -2267,7 +2270,10 @@ export const FigmaStyleMenu = ({
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, source-code-pro, monospace',
                   fontSize: 11,
                   lineHeight: 1.3,
-                  resize: 'none'
+                  resize: 'none',
+                  backgroundColor: 'var(--bg-primary)',
+                  borderColor: 'var(--border-color)',
+                  color: 'var(--text-primary)'
                 }}
                 readOnly
               />
@@ -2378,9 +2384,10 @@ export const FigmaStyleMenu = ({
               fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, source-code-pro, monospace',
               fontSize: 14,
               lineHeight: 1.5,
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #e9ecef',
-              borderRadius: 6
+              backgroundColor: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 6,
+              color: 'var(--text-primary)'
             }}
           />
         </div>

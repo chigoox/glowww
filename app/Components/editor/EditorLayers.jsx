@@ -108,12 +108,27 @@ const CustomLayerHeader = () => {
         }
         return ref;
       }}
-      className={`
-        flex items-center px-2 py-1 cursor-pointer hover:bg-gray-100 transition-colors
-        ${isSelected ? 'bg-blue-100 border-l-4 border-blue-500' : ''}
-        ${isHovered ? 'bg-gray-50' : ''}
-      `}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      className="flex items-center px-2 py-1 cursor-pointer transition-colors"
+      style={{ 
+        paddingLeft: `${depth * 16 + 8}px`,
+        background: isSelected 
+          ? 'var(--bg-tertiary)' 
+          : isHovered 
+            ? 'var(--bg-secondary)' 
+            : 'transparent',
+        borderLeft: isSelected ? '4px solid var(--accent-color)' : 'none',
+        color: 'var(--text-primary)'
+      }}
+      onMouseEnter={(e) => {
+        if (!isSelected) {
+          e.target.style.background = 'var(--bg-secondary)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected) {
+          e.target.style.background = 'transparent';
+        }
+      }}
       onClick={handleSelect}
     >
       {/* Expand/Collapse Button */}
@@ -122,7 +137,19 @@ const CustomLayerHeader = () => {
           <Button
             type="text"
             size="small"
-            className="!p-0 !w-4 !h-4 !min-w-0 hover:bg-gray-200"
+            className="!p-0 !w-4 !h-4 !min-w-0"
+            style={{ 
+              color: 'var(--text-secondary)',
+              background: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'var(--bg-tertiary)';
+              e.target.style.color = 'var(--text-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'transparent';
+              e.target.style.color = 'var(--text-secondary)';
+            }}
             icon={expanded ? <DownOutlined /> : <RightOutlined />}
             onClick={(e) => {
               e.stopPropagation();
@@ -135,7 +162,10 @@ const CustomLayerHeader = () => {
       </div>
 
       {/* Component Icon */}
-      <span className="mr-2 text-sm text-gray-500">
+      <span 
+        className="mr-2 text-sm"
+        style={{ color: 'var(--text-secondary)' }}
+      >
         {hasChildren ? 
           (expanded ? <FolderOpenOutlined /> : <FolderOutlined />) : 
           <FileOutlined />
@@ -146,7 +176,10 @@ const CustomLayerHeader = () => {
       <span className="mr-2">{getComponentIcon(componentType)}</span>
 
       {/* Drag Handle */}
-      <span className="mr-2 text-gray-400 cursor-move text-xs">
+      <span 
+        className="mr-2 cursor-move text-xs"
+        style={{ color: 'var(--text-muted)' }}
+      >
         <DragOutlined />
       </span>
 
@@ -155,7 +188,7 @@ const CustomLayerHeader = () => {
         <EditableLayerName
           style={{
             fontSize: '12px',
-            color: '#374151',
+            color: 'var(--text-primary)',
             background: 'transparent',
             border: 'none',
             outline: 'none',
@@ -172,7 +205,17 @@ const CustomLayerHeader = () => {
               <Button
                 type="text"
                 size="small"
-                className="!p-0 !w-4 !h-4 !min-w-0 !text-red-500 hover:bg-red-50"
+                className="!p-0 !w-4 !h-4 !min-w-0"
+                style={{ 
+                  color: 'var(--error-color)',
+                  background: 'transparent'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = 'var(--bg-tertiary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'transparent';
+                }}
                 icon={<DeleteOutlined />}
                 onClick={handleDelete}
               />
@@ -214,21 +257,46 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
   // Check if we have any nodes
   if (!nodes || Object.keys(nodes).length === 0) {
     return (
-      <div className="p-4 text-center text-gray-500">
-        <FileOutlined className="text-2xl mb-2" />
+      <div 
+        className="p-4 text-center"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        <FileOutlined 
+          className="text-2xl mb-2"
+          style={{ color: 'var(--text-muted)' }}
+        />
         <div className="text-sm">No layers available</div>
-        <div className="text-xs mt-1">Add components to see the layer structure</div>
+        <div 
+          className="text-xs mt-1"
+          style={{ color: 'var(--text-muted)' }}
+        >Add components to see the layer structure</div>
       </div>
     );
   }
 
   return (
-    <div className=" max-h-[45rem] border shadow rounded h-screen flex flex-col bg-white">
+    <div 
+      className="max-h-[45rem] border shadow rounded h-screen flex flex-col"
+      style={{
+        background: 'var(--panel-bg)',
+        borderColor: 'var(--border-color)'
+      }}
+    >
       {/* Header */}
-      <div className="p-3 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-2">
-          <Text strong className="text-sm">Layers</Text>
-          <Text className="text-xs text-gray-500">
+      <div 
+        className="p-3 border-b"
+        style={{background: 'var(--panel-bg)', borderColor: 'var(--border-color)' }}
+      >
+        <div className="flex items-center justify-between mb-2" style={{background: 'var(--panel-bg)'}}>
+          <Text 
+            strong 
+            className="text-sm"
+            style={{ color: 'var(--text-primary)' }}
+          >Layers</Text>
+          <Text 
+            className="text-xs"
+            style={{ color: 'var(--text-secondary)' }}
+          >
             {Object.keys(nodes).length} items
           </Text>
         </div>
@@ -241,11 +309,18 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
           onChange={(e) => setSearchTerm(e.target.value)}
           allowClear
           className="text-xs"
+          style={{
+            background: 'var(--bg-secondary)',
+            borderColor: 'var(--border-color)',
+            color: 'var(--text-primary)'
+          }}
         />
       </div>
 
       {/* Layers Tree */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" style={{
+          background: 'var(--bg-secondary)'
+        }}>
         <Layers
           expandRootOnLoad={expandRootOnLoad}
           renderLayer={CustomLayer}
@@ -253,8 +328,17 @@ export const EditorLayers = ({ expandRootOnLoad = true }) => {
       </div>
 
       {/* Footer */}
-      <div className="p-2 border-t border-gray-200 bg-gray-50">
-        <Text className="text-xs text-gray-500">
+      <div 
+        className="p-2 border-t"
+        style={{
+          borderColor: 'var(--border-color)',
+          background: 'var(--bg-secondary)'
+        }}
+      >
+        <Text 
+          className="text-xs"
+          style={{ color: 'var(--text-secondary)' }}
+        >
           💡 Click to select • Drag to reorder • Double-click to rename
         </Text>
       </div>
