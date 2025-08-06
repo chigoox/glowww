@@ -547,8 +547,8 @@ const EditorSettingsModal = ({ visible, onClose }) => {
       body.classList.add('dark-theme');
       body.classList.remove('light-theme');
       
-      // Apply dark mode CSS variables - only for editor elements
-      root.style.setProperty('--bg-primary', '#ffffff');
+      // Apply dark mode CSS variables
+      root.style.setProperty('--bg-primary', '#141414');
       root.style.setProperty('--bg-secondary', '#1f1f1f');
       root.style.setProperty('--bg-tertiary', '#262626');
       root.style.setProperty('--text-primary', '#ffffff');

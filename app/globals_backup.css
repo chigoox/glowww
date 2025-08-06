@@ -1,0 +1,2055 @@
+@import "tailwindcss";
+
+/* Clean Theme System with CSS Variables */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  
+  /* Light theme (default) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-layout: #f8fafc;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --accent-color: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-bg: #dbeafe;
+  --accent-shadow: rgba(59, 130, 246, 0.2);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  
+  /* Editor specific colors */
+  --panel-bg: #ffffff;
+  --canvas-bg: #ffffff;
+  --selection-color: #3b82f6;
+  --hover-color: #60a5fa;
+  --guides-color: #3b82f6;
+  --distance-color: #f59e0b;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  
+  /* Color customization variables (can be overridden) */
+  --custom-canvas-bg: var(--canvas-bg);
+  --custom-panel-bg: var(--panel-bg);
+  --custom-selection-color: var(--selection-color);
+  --custom-hover-color: var(--hover-color);
+  --custom-guides-color: var(--guides-color);
+  --custom-distance-color: var(--distance-color);
+  --custom-grid-lines: #e0e0e0;
+  --custom-rulers-bg: #f5f5f5;
+  --custom-panel-accent: var(--accent-color);
+  --custom-panel-text: var(--text-primary);
+  --custom-panel-border: var(--border-color);
+}
+
+[data-theme="light"] {
+  /* Light theme (explicit) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-layout: #f8fafc;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --accent-color: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-bg: #dbeafe;
+  --accent-shadow: rgba(59, 130, 246, 0.2);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  
+  /* Editor specific colors */
+  --panel-bg: #ffffff;
+  --canvas-bg: #ffffff;
+  --selection-color: #3b82f6;
+  --hover-color: #60a5fa;
+  --guides-color: #3b82f6;
+  --distance-color: #f59e0b;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+}
+
+[data-theme="dark"] {
+  /* Dark theme */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #262626;
+  --bg-tertiary: #404040;
+  --bg-layout: #111111;
+  --text-primary: #f5f5f5;
+  --text-secondary: #d4d4d4;
+  --text-muted: #a3a3a3;
+  --border-color: #525252;
+  --accent-color: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-bg: #1e3a8a;
+  --accent-shadow: rgba(96, 165, 250, 0.2);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.8);
+  
+  /* Editor specific colors */
+  --panel-bg: #1f1f1f;
+  --canvas-bg: #0d1117;
+  --selection-color: #60a5fa;
+  --hover-color: #3b82f6;
+  --guides-color: #60a5fa;
+  --distance-color: #fbbf24;
+  --success-color: #34d399;
+  --warning-color: #fbbf24;
+  --error-color: #f87171;
+}
+
+/* Base styles that automatically adapt to theme */
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Comprehensive Ant Design component overrides */
+[data-theme="dark"] .ant-btn {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="dark"] .ant-btn:hover {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--accent-color) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ant-btn-primary {
+  background: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .ant-btn-primary:hover {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+  color: #ffffff !important;
+}
+
+.ant-btn {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+  transition: all 0.2s ease !important;
+}
+
+.ant-btn:hover {
+  background: var(--bg-secondary) !important;
+  border-color: var(--accent-color) !important;
+}
+
+.ant-btn-primary {
+  background: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+  color: #ffffff !important;
+}
+
+.ant-btn-primary:hover {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+}
+
+/* Modal theming */
+.ant-modal {
+  background: var(--custom-panel-bg) !important;
+}
+
+.ant-modal-content {
+  background: var(--custom-panel-bg) !important;
+  border: 1px solid var(--custom-panel-border) !important;
+}
+
+.ant-modal-header {
+  background: var(--custom-panel-bg) !important;
+  border-bottom: 1px solid var(--custom-panel-border) !important;
+}
+
+.ant-modal-title {
+  color: var(--custom-panel-text) !important;
+}
+
+.ant-modal-body {
+  background: var(--custom-panel-bg) !important;
+  color: var(--custom-panel-text) !important;
+}
+
+.ant-modal-footer {
+  background: var(--custom-panel-bg) !important;
+  border-top: 1px solid var(--custom-panel-border) !important;
+}
+
+/* Tabs theming */
+.ant-tabs {
+  color: var(--text-primary) !important;
+}
+
+.ant-tabs-nav {
+  background: var(--bg-secondary) !important;
+}
+
+.ant-tabs-tab {
+  color: var(--text-secondary) !important;
+}
+
+.ant-tabs-tab-active {
+  color: var(--accent-color) !important;
+}
+
+.ant-tabs-content-holder {
+  background: var(--bg-primary) !important;
+}
+
+/* Dropdown theming with improved dark mode */
+[data-theme="dark"] .ant-dropdown {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="dark"] .ant-dropdown-menu {
+  background: var(--panel-bg) !important;
+  border: none !important;
+}
+
+[data-theme="dark"] .ant-dropdown-menu-item {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ant-dropdown-menu-item:hover {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-dropdown {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.ant-dropdown-menu {
+  background: var(--panel-bg) !important;
+  border: none !important;
+}
+
+.ant-dropdown-menu-item {
+  color: var(--text-primary) !important;
+}
+
+.ant-dropdown-menu-item:hover {
+  background: var(--bg-secondary) !important;
+}
+
+/* Radio and Checkbox theming */
+.ant-radio-wrapper {
+  color: var(--text-primary) !important;
+}
+
+.ant-radio-checked .ant-radio-inner {
+  border-color: var(--accent-color) !important;
+  background-color: var(--accent-color) !important;
+}
+
+.ant-checkbox-wrapper {
+  color: var(--text-primary) !important;
+}
+
+.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+}
+
+/* Card theming */
+.ant-card {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.ant-card-head {
+  background: var(--bg-secondary) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+.ant-card-head-title {
+  color: var(--text-primary) !important;
+}
+
+.ant-card-body {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Alert theming */
+.ant-alert {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Form theming with improved dark mode */
+[data-theme="dark"] .ant-form-item-label > label {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ant-input {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ant-input:focus {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ant-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.ant-form-item-label > label {
+  color: var(--text-primary) !important;
+}
+
+.ant-input {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-input:focus {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Select theming */
+.ant-select {
+  color: var(--text-primary) !important;
+}
+
+.ant-select-selector {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-select-dropdown {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+.ant-select-item {
+  color: var(--text-primary) !important;
+}
+
+.ant-select-item:hover {
+  background: var(--bg-secondary) !important;
+}
+
+.ant-select-item-option-selected {
+  background: var(--bg-tertiary) !important;
+  color: var(--accent-color) !important;
+}
+
+/* Tooltip theming */
+.ant-tooltip {
+  color: var(--text-primary) !important;
+}
+
+.ant-tooltip-inner {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* Tree theming */
+.ant-tree {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-tree-node-content-wrapper {
+  color: var(--text-primary) !important;
+}
+
+.ant-tree-node-content-wrapper:hover {
+  background: var(--bg-secondary) !important;
+}
+
+.ant-tree-node-selected {
+  background: var(--bg-tertiary) !important;
+}
+
+/* Switch theming */
+.ant-switch {
+  background: var(--border-color) !important;
+}
+
+.ant-switch-checked {
+  background: var(--accent-color) !important;
+}
+
+/* Slider theming */
+.ant-slider-rail {
+  background: var(--border-color) !important;
+}
+
+.ant-slider-track {
+  background: var(--accent-color) !important;
+}
+
+.ant-slider-handle {
+  border-color: var(--accent-color) !important;
+  background: var(--accent-color) !important;
+}
+
+/* Color Picker theming */
+.ant-color-picker {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.ant-color-picker-panel {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Custom editor component theming */
+.editor-panel {
+  background: var(--custom-panel-bg) !important;
+  border-color: var(--custom-panel-border) !important;
+  color: var(--custom-panel-text) !important;
+}
+
+.editor-canvas {
+  background: var(--custom-canvas-bg) !important;
+}
+
+.editor-toolbar {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.editor-dropdown {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Grid controls theming */
+.grid-controls {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.grid-controls button {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.grid-controls button:hover {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--accent-color) !important;
+}
+
+.ant-tabs-tab {
+  color: var(--text-secondary) !important;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-tabs-tab:hover {
+  color: var(--text-primary) !important;
+}
+
+.ant-tabs-tab-active {
+  color: var(--text-primary) !important;
+  background: var(--panel-bg) !important;
+  border-color: var(--panel-accent) !important;
+}
+
+.ant-tabs-content-holder {
+  background: var(--panel-bg) !important;
+}
+
+.ant-tabs-tabpane {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Card theming */
+.ant-card {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-card-head {
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-card-head-title {
+  color: var(--text-primary) !important;
+}
+
+.ant-card-body {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Form theming */
+.ant-form-item-label > label {
+  color: var(--text-primary) !important;
+}
+
+.ant-form-item-explain-error {
+  color: var(--error-color) !important;
+}
+
+/* Input theming */
+.ant-input {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-input:hover,
+.ant-input:focus {
+  border-color: var(--panel-accent) !important;
+  background: var(--bg-primary) !important;
+}
+
+.ant-input-number {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-input-number:hover,
+.ant-input-number:focus {
+  border-color: var(--panel-accent) !important;
+}
+
+.ant-input-number-input {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Select theming */
+.ant-select-selector {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-select-selection-item {
+  color: var(--text-primary) !important;
+}
+
+.ant-select-arrow {
+  color: var(--text-secondary) !important;
+}
+
+/* Switch theming */
+.ant-switch {
+  background: var(--bg-tertiary) !important;
+}
+
+.ant-switch-checked {
+  background: var(--panel-accent) !important;
+}
+
+/* Slider theming */
+.ant-slider {
+  color: var(--text-primary) !important;
+}
+
+.ant-slider-rail {
+  background: var(--bg-tertiary) !important;
+}
+
+.ant-slider-track {
+  background: var(--panel-accent) !important;
+}
+
+.ant-slider-handle {
+  border: 2px solid var(--panel-accent) !important;
+  background: var(--bg-primary) !important;
+}
+
+.ant-slider-dot {
+  background: var(--bg-tertiary) !important;
+  border: 2px solid var(--border-color) !important;
+}
+
+.ant-slider-dot-active {
+  border-color: var(--panel-accent) !important;
+}
+
+.ant-slider-mark-text {
+  color: var(--text-secondary) !important;
+}
+
+/* Radio theming */
+.ant-radio-wrapper {
+  color: var(--text-primary) !important;
+}
+
+.ant-radio-inner {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-radio-checked .ant-radio-inner {
+  background: var(--panel-accent) !important;
+  border-color: var(--panel-accent) !important;
+}
+
+.ant-radio-checked .ant-radio-inner::after {
+  background: var(--bg-primary) !important;
+}
+
+/* Button theming */
+.ant-btn {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-btn:hover {
+  background: var(--bg-secondary) !important;
+  border-color: var(--panel-accent) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-btn-primary {
+  background: var(--panel-accent) !important;
+  border-color: var(--panel-accent) !important;
+  color: #ffffff !important;
+}
+
+.ant-btn-primary:hover {
+  background: color-mix(in srgb, var(--panel-accent) 85%, white) !important;
+  border-color: color-mix(in srgb, var(--panel-accent) 85%, white) !important;
+}
+
+.ant-btn-danger {
+  background: var(--error-color) !important;
+  border-color: var(--error-color) !important;
+  color: #ffffff !important;
+}
+
+.ant-btn-danger:hover {
+  background: color-mix(in srgb, var(--error-color) 85%, white) !important;
+  border-color: color-mix(in srgb, var(--error-color) 85%, white) !important;
+}
+
+/* Alert theming */
+.ant-alert {
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-alert-info {
+  background: color-mix(in srgb, var(--panel-accent) 10%, var(--bg-primary)) !important;
+  border-color: var(--panel-accent) !important;
+}
+
+.ant-alert-warning {
+  background: color-mix(in srgb, var(--warning-color) 10%, var(--bg-primary)) !important;
+  border-color: var(--warning-color) !important;
+}
+
+.ant-alert-message {
+  color: var(--text-primary) !important;
+}
+
+.ant-alert-description {
+  color: var(--text-secondary) !important;
+}
+
+/* Spin loading theming */
+.ant-spin {
+  color: var(--panel-accent) !important;
+}
+
+.ant-spin-text {
+  color: var(--text-primary) !important;
+}
+
+/* Divider theming */
+.ant-divider {
+  border-color: var(--border-color) !important;
+}
+
+/* Space theming */
+.ant-space-item {
+  color: var(--text-primary) !important;
+}
+
+/* Additional theming for dropdowns and selects */
+.ant-select-dropdown {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-select-item {
+  color: var(--text-primary) !important;
+  background: var(--panel-bg) !important;
+}
+
+.ant-select-item:hover {
+  background: var(--bg-secondary) !important;
+}
+
+.ant-select-item-option-selected {
+  background: var(--panel-accent) !important;
+  color: #ffffff !important;
+}
+
+.ant-select-item-option-active {
+  background: var(--bg-secondary) !important;
+}
+
+/* Theming for color picker */
+.ant-color-picker-trigger {
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-primary) !important;
+}
+
+.ant-color-picker-color-block {
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-color-picker-panel {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* Theming for dividers */
+.ant-divider {
+  border-color: var(--border-color) !important;
+}
+
+/* Theming for tooltips */
+.ant-tooltip {
+  color: var(--text-primary) !important;
+}
+
+.ant-tooltip-inner {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-tooltip-arrow::before {
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* Theming for spin loading */
+.ant-spin {
+  color: var(--panel-accent) !important;
+}
+
+.ant-spin-text {
+  color: var(--text-primary) !important;
+}
+
+/* Theming for form items */
+.ant-form-item-explain-error {
+  color: var(--error-color) !important;
+}
+
+/* Theming for tabs */
+.ant-tabs-content {
+  background: var(--panel-bg) !important;
+}
+
+.ant-tabs-tabpane {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Global dark theme body styling */
+body.dark-theme {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+body.light-theme {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Ensure modals get proper z-index and theming */
+.ant-modal-mask {
+  background: rgba(0, 0, 0, 0.45) !important;
+}
+
+.dark-theme .ant-modal-mask {
+  background: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* Theming for dropdown menus */
+.ant-dropdown {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-dropdown-menu {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-dropdown-menu-item {
+  color: var(--text-primary) !important;
+}
+
+.ant-dropdown-menu-item:hover {
+  background: var(--bg-secondary) !important;
+}
+
+/* Theming for input number controls */
+.ant-input-number-handler-wrap {
+  background: var(--bg-secondary) !important;
+  border-left: 1px solid var(--border-color) !important;
+}
+
+.ant-input-number-handler {
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.ant-input-number-handler:hover {
+  color: var(--panel-accent) !important;
+}
+
+/* Theming for grid controls and overlay panels */
+.glow-grid-controls,
+.glow-snap-controls,
+.editor-overlay-panel {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Theming for editor panels */
+.editor-panel,
+.layers-panel,
+.properties-panel {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.editor-panel-header {
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Target specific editor components with bg-white patterns */
+.dark-theme *[class*="toolbox"] .bg-white,
+.dark-theme *[class*="toolbox-component"] .bg-white,
+.dark-theme [class*="figma-component-drawer"] .bg-white,
+.dark-theme .editor-layers .bg-white,
+.dark-theme .style-menu .bg-white {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme *[class*="toolbox"] .bg-gray-50,
+.dark-theme *[class*="toolbox-component"] .bg-gray-50,
+.dark-theme [class*="figma-component-drawer"] .bg-gray-50,
+.dark-theme .editor-layers .bg-gray-50,
+.dark-theme .style-menu .bg-gray-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme *[class*="toolbox"] .bg-slate-50,
+.dark-theme *[class*="toolbox-component"] .bg-slate-50,
+.dark-theme [class*="figma-component-drawer"] .bg-slate-50,
+.dark-theme .editor-layers .bg-slate-50,
+.dark-theme .style-menu .bg-slate-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Direct targeting of editor UI components with Tailwind classes */
+.dark-theme .editor-container .bg-white,
+.dark-theme .editor-interface .bg-white,
+.dark-theme [id*="editor"] .bg-white,
+.dark-theme [class*="editor"] .bg-white {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .editor-container .bg-gray-50,
+.dark-theme .editor-interface .bg-gray-50,
+.dark-theme [id*="editor"] .bg-gray-50,
+.dark-theme [class*="editor"] .bg-gray-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .editor-container .bg-slate-50,
+.dark-theme .editor-interface .bg-slate-50,
+.dark-theme [id*="editor"] .bg-slate-50,
+.dark-theme [class*="editor"] .bg-slate-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Target top bar specifically */
+.dark-theme [class*="top-bar"] .bg-white,
+.dark-theme [class*="topbar"] .bg-white,
+.dark-theme .top-bar .bg-white {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme [class*="top-bar"] .bg-gray-50,
+.dark-theme [class*="topbar"] .bg-gray-50,
+.dark-theme .top-bar .bg-gray-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Target all bg-white, bg-gray-50, bg-slate-50 within Editor page */
+body.dark-theme [data-testid*="editor"] .bg-white,
+body.dark-theme .editor-page .bg-white,
+body.dark-theme .editor-interface .bg-white,
+body.dark-theme .editor-workspace .bg-white {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark-theme [data-testid*="editor"] .bg-gray-50,
+body.dark-theme .editor-page .bg-gray-50,
+body.dark-theme .editor-interface .bg-gray-50,
+body.dark-theme .editor-workspace .bg-gray-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark-theme [data-testid*="editor"] .bg-slate-50,
+body.dark-theme .editor-page .bg-slate-50,
+body.dark-theme .editor-interface .bg-slate-50,
+body.dark-theme .editor-workspace .bg-slate-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* More aggressive targeting for the entire page when in editor */
+body.dark-theme:has([data-page="editor"]) .bg-white:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark-theme:has([data-page="editor"]) .bg-gray-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark-theme:has([data-page="editor"]) .bg-slate-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Direct targeting of Editor page structure - Both /Editor and /Editor/site */
+.dark-theme .h-screen.overflow-hidden.bg-gray-50,
+.dark-theme .h-screen.flex.flex-col {
+  background: var(--bg-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden .bg-white,
+.dark-theme .h-screen.flex.flex-col .bg-white {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden .bg-gray-50,
+.dark-theme .h-screen.flex.flex-col .bg-gray-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden .bg-slate-50,
+.dark-theme .h-screen.flex.flex-col .bg-slate-50 {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden .bg-gray-100,
+.dark-theme .h-screen.flex.flex-col .bg-gray-100 {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden .bg-gray-200,
+.dark-theme .h-screen.flex.flex-col .bg-gray-200 {
+  background: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Target both Editor pages' toolbars */
+.dark-theme .bg-white.border-b.border-gray-300,
+.dark-theme .bg-white.border-b.border-slate-200 {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override all Tailwind gray backgrounds in editor context */
+.dark-theme .h-screen.overflow-hidden [class*="bg-gray"] {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden [class*="bg-slate"] {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen.overflow-hidden [class*="bg-white"] {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Specific component targeting by partial class names */
+.dark-theme [class*="toolbox"]:not(.ant-modal):not(.ant-popover) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme [class*="layers"]:not(.ant-modal):not(.ant-popover) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme [class*="style-menu"]:not(.ant-modal):not(.ant-popover) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme [class*="top-bar"]:not(.ant-modal):not(.ant-popover) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Editor route-specific targeting */
+body.dark-theme[data-route*="editor"] .bg-white:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip),
+body.dark-theme[data-route*="Editor"] .bg-white:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark-theme[data-route*="editor"] .bg-gray-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip),
+body.dark-theme[data-route*="Editor"] .bg-gray-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark-theme[data-route*="editor"] .bg-gray-100:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip),
+body.dark-theme[data-route*="Editor"] .bg-gray-100:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Aggressive targeting for all editor UI elements */
+body.dark-theme .bg-white:has([class*="toolbox"]),
+body.dark-theme .bg-white:has([class*="layers"]),
+body.dark-theme .bg-white:has([class*="style"]),
+body.dark-theme .bg-gray-50:has([class*="toolbox"]),
+body.dark-theme .bg-gray-50:has([class*="layers"]),
+body.dark-theme .bg-gray-50:has([class*="style"]) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Fix all white borders and backgrounds in editor interface */
+.dark-theme .border-gray-200,
+.dark-theme .border-gray-300,
+.dark-theme .border-slate-200,
+.dark-theme .border-slate-300 {
+  border-color: var(--border-color) !important;
+}
+
+/* Target all remaining white backgrounds in editor areas */
+body.dark-theme .bg-white:not(.ant-modal-content):not(.ant-popover-content):not(.ant-dropdown):not(.ant-tooltip):not(.ant-color-picker) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Specifically target toolbox and style menu containers */
+.dark-theme [class*="w-64"].bg-white,
+.dark-theme [class*="flex-shrink-0"].bg-white,
+.dark-theme .bg-white.border-r,
+.dark-theme .bg-white.shadow-sm {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Fix style menu specifically */
+.dark-theme .figma-style-menu,
+.dark-theme [class*="style-menu"],
+.dark-theme .style-panel {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .figma-style-menu .bg-white,
+.dark-theme [class*="style-menu"] .bg-white,
+.dark-theme .style-panel .bg-white {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Nuclear option - target ALL white backgrounds in editor routes */
+.dark-theme .h-screen *[style*="background: #fff"],
+.dark-theme .h-screen *[style*="background:#fff"],
+.dark-theme .h-screen *[style*="background: white"],
+.dark-theme .h-screen *[style*="background:white"] {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .h-screen *[style*="background: #f8fafd"],
+.dark-theme .h-screen *[style*="background:#f8fafd"] {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Target specific StyleMenu and Toolbox containers */
+.dark-theme div[style*="background: #fff"],
+.dark-theme div[style*="background:#fff"],
+.dark-theme div[style*="background: white"] {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme div[style*="background: #f8fafd"],
+.dark-theme div[style*="background:#f8fafd"] {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override all gray borders to match dark theme - only in editor */
+.dark-theme .h-screen *[style*="border:"],
+.dark-theme .h-screen *[style*="border "] {
+  border-color: var(--border-color) !important;
+}
+
+/* Specific overrides for editor sidebar widths */
+.dark-theme .w-64.bg-white.border-r.border-gray-200.shadow-sm.flex-shrink-0.h-full.flex.flex-col {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override all hardcoded styles in FigmaStyleMenu and StyleMenu with !important */
+.dark-theme [style*="backgroundColor: #fafafa"],
+.dark-theme [style*="backgroundColor:#fafafa"],
+.dark-theme [style*="backgroundColor: #fcfcfc"],
+.dark-theme [style*="backgroundColor:#fcfcfc"],
+.dark-theme [style*="backgroundColor: #f5f5f5"],
+.dark-theme [style*="backgroundColor:#f5f5f5"],
+.dark-theme [style*="backgroundColor: #f8f9fa"],
+.dark-theme [style*="backgroundColor:#f8f9fa"],
+.dark-theme [style*="backgroundColor: #fafbfc"],
+.dark-theme [style*="backgroundColor:#fafbfc"] {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme [style*="backgroundColor: #fff"],
+.dark-theme [style*="backgroundColor:#fff"],
+.dark-theme [style*="backgroundColor: white"],
+.dark-theme [style*="backgroundColor:white"] {
+  background-color: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override hardcoded borders */
+.dark-theme [style*="borderBottom: 1px solid #f0f0f0"],
+.dark-theme [style*="border: 1px solid #e0e0e0"],
+.dark-theme [style*="border: 1px solid #eee"] {
+  border-color: var(--border-color) !important;
+}
+
+/* Additional TopBar white container targeting */
+.dark-theme .bg-white.rounded-lg.px-2\.5.py-1.shadow-sm,
+.dark-theme .bg-white.rounded-lg.px-1\.5.py-1.shadow-sm,
+.dark-theme .bg-white.rounded-lg {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Target all rounded containers with borders */
+.dark-theme .border.border-slate-200,
+.dark-theme .border-slate-200 {
+  border-color: var(--border-color) !important;
+}
+
+/* Target any remaining Ant Design components in editor */
+.dark-theme .ant-collapse,
+.dark-theme .ant-collapse-item,
+.dark-theme .ant-collapse-header,
+.dark-theme .ant-collapse-content {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .ant-collapse-content-box {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override any remaining white Form items */
+.dark-theme .ant-form-item,
+.dark-theme .ant-form-item-label,
+.dark-theme .ant-form-item-control {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+/* Ultra-aggressive targeting for any remaining white elements in editor */
+.dark-theme .h-screen .bg-white:not(.ant-modal-content):not(.ant-popover-content):not(.ant-dropdown-menu):not(.ant-tooltip):not(.ant-color-picker):not([class*="color-picker"]):not([class*="picker"]) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Target specific rounded white containers */
+.dark-theme .rounded-lg.bg-white,
+.dark-theme .bg-white.rounded-lg {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Make sure all text is visible in dark theme */
+.dark-theme .h-screen *:not(.ant-modal-content *):not(.ant-popover-content *):not(.ant-dropdown-menu *) {
+  color: var(--text-primary) !important;
+}
+
+/* Override any white Input backgrounds */
+.dark-theme .ant-input,
+.dark-theme .ant-input-number,
+.dark-theme .ant-select-selector {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .ant-input:focus,
+.dark-theme .ant-input-number:focus,
+.dark-theme .ant-select-focused .ant-select-selector {
+  background: var(--bg-secondary) !important;
+  border-color: var(--panel-accent) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Theming for editor canvas */
+.editor-canvas,
+.craft-canvas {
+  background: var(--canvas-background) !important;
+}
+
+/* Theming for layer items */
+.layer-item {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.layer-item:hover {
+  background: var(--bg-tertiary) !important;
+}
+
+.layer-item.selected {
+  background: var(--panel-accent) !important;
+  color: #ffffff !important;
+}
+
+/* Additional specificity for nested elements */
+.ant-modal .ant-tabs-nav::before {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.ant-modal .ant-form-item {
+  color: var(--text-primary) !important;
+}
+
+.ant-modal .ant-space {
+  color: var(--text-primary) !important;
+}
+
+/* Dark theme specific border overrides - only for editor panels */
+.dark-theme .editor-panel,
+.dark-theme .layers-panel,
+.dark-theme .properties-panel,
+.dark-theme .glow-grid-controls,
+.dark-theme .glow-snap-controls,
+.dark-theme .editor-overlay-panel {
+  background: var(--panel-bg) !important;
+  border: 1px solid #2a2a2a !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .editor-panel-header {
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid #2a2a2a !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .layer-item {
+  background: var(--bg-secondary) !important;
+  border: 1px solid #2a2a2a !important;
+  color: var(--text-primary) !important;
+}
+
+.dark-theme .layer-item:hover {
+  background: var(--bg-tertiary) !important;
+}
+
+.dark-theme .layer-item.selected {
+  background: var(--panel-accent) !important;
+  color: #ffffff !important;
+}
+
+/* Canvas theming only */
+.dark-theme .editor-canvas,
+.dark-theme .craft-canvas,
+.dark-theme [data-cy="canvas"],
+.dark-theme .canvas-container {
+  background: var(--canvas-background) !important;
+}
+
+/* Remove aggressive global theming */
+
+/* Force theme application to all text elements */
+.ant-modal *,
+.ant-dropdown *,
+.ant-tabs *,
+.ant-card * {
+  color: inherit !important;
+}
+
+/* Force background colors for editor panels only */
+.dark-theme .editor-panel,
+.dark-theme .layers-panel,
+.dark-theme .properties-panel,
+.dark-theme .toolbar-panel,
+.dark-theme .settings-panel {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Craft.js specific elements only */
+.dark-theme .craft-layer,
+.dark-theme .craft-panel,
+.dark-theme .craft-toolbar {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Canvas theming */
+.dark-theme .editor-canvas,
+.dark-theme .craft-canvas,
+.dark-theme [data-cy="canvas"],
+.dark-theme .canvas-container {
+  background: var(--canvas-background) !important;
+}
+
+/* Force theme application to all text elements */
+
+
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+
+
+@layer base {
+  .no-tailwindcss-base, .no-tailwindcss-base * , .no-tailwindcss-base > * {
+      font-size: revert;
+      font-weight: revert;
+      margin: revert;
+      display: revert;
+      vertical-align: revert;
+      max-width: revert;
+      height: revert;
+      border-width: revert;
+      border-style: revert;
+      border-color: revert;
+      outline: revert;
+      list-style: revert;
+      padding: revert;
+  }
+}
+
+:root {
+--BGColor: rgb(0, 0, 0);
+--BGColorL:color-mix(in srgb, var(--BGColor), white  10%);
+--AccentColor: #ffffff;
+--TextColor: rgb(0, 0, 0);
+--TextColor2: rgb(0, 0, 0);
+--TextColorM: rgb(0, 0, 0);
+--AccentColorLight: color-mix(in srgb, var(--AccentColor) 60%, white);
+--AccentColorLight2: color-mix(in srgb, var(--AccentColor) 70%, white);
+--AccentColorDark:color-mix(in srgb, var(--AccentColor) 60%, black);
+--AccentColorDark2:color-mix(in srgb, var(--AccentColor), black 90%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* width */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: whitesmoke;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: rgb(42, 42, 42);
+  border-radius: 30px;
+
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: gray;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.hidescroll::-webkit-scrollbar {
+  display: none;
+}
+
+.bg-black-900 {
+
+  background-color: #070707;
+}
+
+.bg-black-800 {
+
+  background-color: #131313;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.hidescroll {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+body {
+  background-color: white;
+}
+
+.trans-slow {
+  transition: all 1000ms ease-in-out;
+}
+
+.trans-slow-2x {
+  transition: all 2000ms ease-in-out;
+}
+
+.trans-mid {
+  transition: all 750ms ease-in-out;
+}
+
+.trans {
+  transition: all 500ms ease-in-out;
+}
+
+.trans-fast {
+  transition: all 100ms ease-in-out;
+}
+
+
+
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.center-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.start-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.around {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.evenly {
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+}
+
+.between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0%;
+  }
+
+  to {
+    opacity: 100%;
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0%;
+    left: 100px;
+  }
+
+  to {
+    opacity: 100%;
+    left: 0px;
+  }
+}
+
+@keyframes fadeInZoom {
+  from {
+    opacity: 0%;
+    scale: 50%;
+  }
+
+  to {
+    opacity: 100%;
+    scale: 100%;
+  }
+}
+
+@keyframes fadeInBottom {
+  from {
+    opacity: 0%;
+    top: 100px;
+  }
+
+  to {
+    opacity: 100%;
+    top: 0px;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0%;
+    bottom: 100px;
+  }
+
+  to {
+    opacity: 100%;
+    bottom: 0px;
+  }
+}
+
+@keyframes zoom {
+  from {
+    scale: 115%;
+  }
+
+  to {
+    bottom: 100%;
+  }
+}
+
+.zoom {
+  animation: zoom 2s ease-in-out;
+}
+
+.fadeIn {
+
+  animation: fadeIn 2s ease-in-out;
+}
+
+.fadeInRight {
+  position: relative;
+  animation: fadeInRight 2s ease-in-out;
+}
+
+.fadeInZoom {
+  position: relative;
+  animation: fadeInZoom 2s ease-in-out;
+}
+
+.fadeInZoomx2 {
+  position: relative;
+  animation: fadeInZoom 0.9s ease-in;
+}
+
+.fadeInBottom {
+  position: relative;
+  animation: fadeInBottom 2s ease-in-out;
+}
+
+.fadeInUp {
+  position: relative;
+  animation: fadeInUp 2s ease-in-out;
+}
+
+
+/* 
+
+used for Carouse
+*/
+
+
+.embla {
+  max-width: 48rem;
+  margin: auto;
+  --slide-height: 19rem;
+  --slide-spacing: 2rem;
+  --slide-size: 70%;
+}
+.embla__viewport {
+  overflow: hidden;
+}
+.embla__container {
+  display: flex;
+  touch-action: pan-y pinch-zoom;
+  margin-left: calc(var(--slide-spacing) * -1);
+}
+.embla__slide {
+  transform: translate3d(0, 0, 0);
+  flex: 0 0 var(--slide-size);
+  min-width: 0;
+  padding-left: var(--slide-spacing);
+}
+.embla__slide__number {
+  box-shadow: inset 0 0 0 0.2rem var(--detail-medium-contrast);
+  border-radius: 1.8rem;
+  font-size: 4rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--slide-height);
+  user-select: none;
+}
+
+/* Chrome, Safari, Edge, Opera  remove number arrow on input*/
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Craft.js Layers theming */
+[data-craftjs="Layers"] {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-craftjs="Layers"] * {
+  color: var(--text-primary) !important;
+}
+
+[data-craftjs="Layers"] .craftjs-layer {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-craftjs="Layers"] .craftjs-layer:hover {
+  background: var(--bg-secondary) !important;
+}
+
+[data-craftjs="Layers"] .craftjs-layer-selected {
+  background: var(--accent-bg) !important;
+  color: var(--accent-color) !important;
+}
+
+/* Alternative selectors for Layers */
+.craft-layer, .craft-layers, [class*="craft"][class*="layer"] {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.craft-layer:hover, .craft-layers:hover {
+  background: var(--bg-secondary) !important;
+}
+
+/* Snap grid text visibility fix */
+.snap-grid-text, .snap-text {
+  color: var(--text-primary) !important;
+  text-shadow: 0 0 3px var(--panel-bg);
+}
+
+/* Additional layer panel fixes */
+[data-theme="dark"] .editor-layers * {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .editor-layers button {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* Toolbox dark mode enhancements */
+[data-theme="dark"] .figma-component-drawer .ant-drawer-body {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .toolbox-component {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] .toolbox-component:hover {
+  background: var(--bg-secondary) !important;
+  border-color: var(--accent-color) !important;
+}
+
+/* Snap controls better theming */
+[data-theme="dark"] .ant-popover {
+  background: var(--panel-bg) !important;
+}
+
+[data-theme="dark"] .ant-popover-content {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] .ant-popover-inner {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Force dark backgrounds for all editor panels */
+[data-theme="dark"] .figma-component-drawer,
+[data-theme="dark"] .toolbox-component,
+[data-theme="dark"] .editor-layers {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* MINIMAL TARGETED FIXES ONLY */
+
+/* Snap controls text visibility */
+[data-theme="dark"] .backdrop-blur-sm.rounded-xl.shadow-2xl.border .ant-typography {
+  color: var(--text-primary) !important;
+}
+
+/* Remove any global overrides that affect user components */
+
+/* Craft.js layers specific dark mode */
+[data-theme="dark"] .craftjs-layers,
+[data-theme="dark"] [data-craftjs="Layers"],
+[data-theme="dark"] .craft-layer-tree,
+[data-theme="dark"] .craft-layer {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .craft-layer:hover,
+[data-theme="dark"] .craftjs-layer:hover {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .craft-layer-selected,
+[data-theme="dark"] .craftjs-layer-selected {
+  background: var(--accent-bg) !important;
+  color: var(--accent-color) !important;
+}
+
+/* Ensure all nested layer elements are themed */
+[data-theme="dark"] .editor-layers * {
+  color: var(--text-primary) !important;
+}
+
+/* Additional FigmaStyleMenu panel overrides */
+[data-theme="dark"] .figma-style-panel,
+[data-theme="dark"] .style-panel {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Force all inputs to have dark theme in dark mode */
+[data-theme="dark"] .ant-input,
+[data-theme="dark"] .ant-input-number,
+[data-theme="dark"] .ant-select-selector {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .ant-input:focus,
+[data-theme="dark"] .ant-input-number:focus,
+[data-theme="dark"] .ant-select-focused .ant-select-selector {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 0 2px var(--accent-shadow) !important;
+}
+
+/* Typography component overrides */
+[data-theme="dark"] .ant-typography {
+  color: var(--text-primary) !important;
+}
+
+/* Slider component overrides */
+[data-theme="dark"] .ant-slider {
+  background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .ant-slider-track {
+  background: var(--accent-color) !important;
+}
+
+[data-theme="dark"] .ant-slider-handle {
+  border-color: var(--accent-color) !important;
+  background: var(--accent-color) !important;
+}
+
+/* Switch component overrides */
+[data-theme="dark"] .ant-switch {
+  background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .ant-switch-checked {
+  background: var(--accent-color) !important;
+}
+
+/* AGGRESSIVE DARK MODE OVERRIDES - High Specificity */
+/* IMPORTANT: Only apply to editor interface, NOT user content components */
+
+/* Force all text elements to be white in dark mode - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .editor-interface *:not([data-user-component]):not([data-user-component] *) {
+  --text-color: var(--text-primary) !important;
+}
+
+/* Snap Controls - Force white text */
+[data-theme="dark"] .ant-popover *:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .ant-typography:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .ant-typography *:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-primary) !important;
+}
+
+/* ToolBox - Force dark backgrounds - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .toolbox-component:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .figma-component-drawer:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .figma-component-drawer *:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .ant-drawer-body:not([data-user-component]):not([data-user-component] *) {
+  background: var(--panel-bg) !important;
+  background-color: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Layers Panel - Force dark backgrounds - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .editor-layers:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .editor-layers *:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .craftjs-layers:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .craftjs-layers *:not([data-user-component]):not([data-user-component] *) {
+  background: var(--panel-bg) !important;
+  background-color: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override any white backgrounds in dark mode - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .bg-white:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background: white"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color: white"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background: #fff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color: #fff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background: #ffffff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color: #ffffff"]:not([data-user-component]):not([data-user-component] *) {
+  background: var(--panel-bg) !important;
+  background-color: var(--panel-bg) !important;
+}
+
+/* Override any black text in dark mode - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .text-black:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: black"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: #000"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: #000000"]:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-primary) !important;
+}
+
+/* Force all gray text to be properly themed - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .text-gray-400:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-500:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-600:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: #666"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: #999"]:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-secondary) !important;
+}
+
+/* SNAP CONTROLS SPECIFIC TARGETING */
+[data-theme="dark"] .backdrop-blur-sm.rounded-xl.shadow-2xl.border {
+  background: var(--panel-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .backdrop-blur-sm.rounded-xl.shadow-2xl.border * {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .backdrop-blur-sm.rounded-xl.shadow-2xl.border .text-xs {
+  color: var(--text-secondary) !important;
+}
+
+/* TOOLBOX SPECIFIC TARGETING - More aggressive */
+[data-theme="dark"] div[style*="position: fixed"][style*="bottom"] {
+  background: var(--panel-bg) !important;
+}
+
+[data-theme="dark"] div[style*="borderRadius: 32px"][style*="backgroundColor"] {
+  background: var(--panel-bg) !important;
+  background-color: var(--panel-bg) !important;
+}
+
+/* LAYERS PANEL SPECIFIC TARGETING */
+[data-theme="dark"] .editor-layers.rounded-lg.shadow-lg {
+  background: var(--panel-bg) !important;
+  background-color: var(--panel-bg) !important;
+}
+
+/* TARGET SPECIFIC INLINE STYLES THAT MIGHT BE OVERRIDING */
+[data-theme="dark"] [style*="#ffffff"],
+[data-theme="dark"] [style*="#fff"],
+[data-theme="dark"] [style*="white"] {
+  background: var(--panel-bg) !important;
+  background-color: var(--panel-bg) !important;
+}
+
+/* Tailwind class overrides for dark mode */
+[data-theme="dark"] .bg-white {
+  background-color: var(--panel-bg) !important;
+}
+
+[data-theme="dark"] .text-black {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .border-gray-200 {
+  border-color: var(--border-color) !important;
+}
+
+/* FINAL COMPREHENSIVE OVERRIDES - EXCLUDE USER COMPONENTS */
+
+/* Any element with inline white background - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] [style*="backgroundColor: #ffffff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="backgroundColor:#ffffff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="backgroundColor: #fff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="backgroundColor:#fff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color: #ffffff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color:#ffffff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color: #fff"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="background-color:#fff"]:not([data-user-component]):not([data-user-component] *) {
+  background-color: var(--panel-bg) !important;
+}
+
+/* Any element with inline black text - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] [style*="color: #000000"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color:#000000"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: #000"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color:#000"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color: black"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] [style*="color:black"]:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-primary) !important;
+}
+
+/* Force Ant Design Text components - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .ant-typography:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .ant-typography-caption:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .ant-typography-title:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-primary) !important;
+}
+
+/* Target any remaining Tailwind classes - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .text-gray-400:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-500:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-600:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-700:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-800:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .text-gray-900:not([data-user-component]):not([data-user-component] *) {
+  color: var(--text-secondary) !important;
+}
+
+/* Target any remaining background classes - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] .bg-gray-50:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .bg-gray-100:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .bg-gray-200:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] .bg-gray-300:not([data-user-component]):not([data-user-component] *) {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Ultra-specific targeting for remaining issues - EXCLUDE USER COMPONENTS */
+[data-theme="dark"] div[class*="toolbox"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] div[class*="layers"]:not([data-user-component]):not([data-user-component] *),
+[data-theme="dark"] div[class*="snap"]:not([data-user-component]):not([data-user-component] *) {
+  background: var(--panel-bg) !important;
+  color: var(--text-primary) !important;
+}
