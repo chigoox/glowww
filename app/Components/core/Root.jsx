@@ -163,7 +163,8 @@ placeContent,
   href,
   placeholder,
   title,
-  id,
+  id='ROOT',
+  name='ROOT',
   className,
   target,
   rel,
@@ -205,7 +206,14 @@ placeContent,
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
-  
+
+  useEffect(() => {
+//setid props for the root element
+    if (RootRef.current) {
+      RootRef.current.id = nodeId;
+    }
+  }, [nodeId]);
+
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
@@ -584,7 +592,7 @@ placeContent,
       }}
       data-cy="editor-root"
       data-editor="true"
-      id={id}
+      id={id} 
       title={title}
       role={role}
       aria-label={ariaLabel}
@@ -597,6 +605,7 @@ placeContent,
       spellCheck={spellCheck}
       translate={translate}
       dir={dir}
+      name={'ROOT'}
       lang={lang}
       hidden={hidden}
       onMouseEnter={false ? undefined : () => {
@@ -743,6 +752,8 @@ Root.craft = {
     
     // Basic Properties
     className: "",
+    id: "ROOT", 
+    name: "ROOT",
     disabled: false,
     hidden: false,
     tabIndex: 0,
