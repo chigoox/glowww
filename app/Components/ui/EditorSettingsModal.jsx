@@ -488,8 +488,8 @@ const EditorSettingsModal = ({ visible, onClose }) => {
                 onChange={(e) => {
                   const mode = e.target.value;
                   updateSetting('theme.mode', mode);
-                  // Apply theme immediately
-                  applyTheme(mode);
+                  // Apply theme immediately and reset custom colors to match theme
+                  applyTheme(mode, true);
                 }}
                 style={{ width: '100%' }}
               >
@@ -531,8 +531,8 @@ const EditorSettingsModal = ({ visible, onClose }) => {
     </div>
   );
 
-  // Apply theme function
-  const applyTheme = (mode) => {
+  // Apply theme function with option to preserve custom colors
+  const applyTheme = (mode, resetCustomColors = false) => {
     const root = document.documentElement;
     const body = document.body;
     
@@ -560,43 +560,45 @@ const EditorSettingsModal = ({ visible, onClose }) => {
       root.style.setProperty('--canvas-bg', '#0f0f0f');
       root.style.setProperty('--canvas-background', '#0f0f0f');
       
-      // Apply dark presets to color settings (only if colors haven't been manually set)
-      const darkPresets = {
-        canvas: {
-          background: '#0f0f0f',
-          gridLines: '#2a2a2a',
-          rulers: '#262626'
-        },
-        panels: {
-          background: '#1f1f1f',
-          border: '#2a2a2a',
-          text: '#ffffff',
-          accent: '#1890ff'
-        },
-        components: {
-          selection: '#40a9ff',
-          hover: '#69c0ff',
-          guides: '#1890ff',
-          distance: '#ff7a45'
-        },
-        interface: {
-          primary: '#ffffff',
-          secondary: '#bfbfbf',
-          disabled: '#595959',
-          success: '#73d13d',
-          warning: '#ffc53d',
-          error: '#ff7875'
-        }
-      };
-      
-      // Apply dark presets to settings
-      Object.entries(darkPresets).forEach(([category, colors]) => {
-        Object.entries(colors).forEach(([colorKey, colorValue]) => {
-          updateSetting(`colors.${category}.${colorKey}`, colorValue);
-          // Also apply to CSS variables immediately
-          root.style.setProperty(`--${category.replace('s', '')}-${colorKey.replace(/([A-Z])/g, '-$1').toLowerCase()}`, colorValue);
+      // Only apply color presets if user wants to reset custom colors
+      if (resetCustomColors) {
+        const darkPresets = {
+          canvas: {
+            background: '#0f0f0f',
+            gridLines: '#2a2a2a',
+            rulers: '#262626'
+          },
+          panels: {
+            background: '#1f1f1f',
+            border: '#2a2a2a',
+            text: '#ffffff',
+            accent: '#1890ff'
+          },
+          components: {
+            selection: '#40a9ff',
+            hover: '#69c0ff',
+            guides: '#1890ff',
+            distance: '#ff7a45'
+          },
+          interface: {
+            primary: '#ffffff',
+            secondary: '#bfbfbf',
+            disabled: '#595959',
+            success: '#73d13d',
+            warning: '#ffc53d',
+            error: '#ff7875'
+          }
+        };
+        
+        // Apply dark presets to settings
+        Object.entries(darkPresets).forEach(([category, colors]) => {
+          Object.entries(colors).forEach(([colorKey, colorValue]) => {
+            updateSetting(`colors.${category}.${colorKey}`, colorValue);
+            // Also apply to CSS variables immediately
+            root.style.setProperty(`--${category.replace('s', '')}-${colorKey.replace(/([A-Z])/g, '-$1').toLowerCase()}`, colorValue);
+          });
         });
-      });
+      }
       
     } else {
       root.classList.add('light-theme');
@@ -617,43 +619,45 @@ const EditorSettingsModal = ({ visible, onClose }) => {
       root.style.setProperty('--canvas-bg', '#ffffff');
       root.style.setProperty('--canvas-background', '#ffffff');
       
-      // Apply light presets to color settings
-      const lightPresets = {
-        canvas: {
-          background: '#ffffff',
-          gridLines: '#e0e0e0',
-          rulers: '#f5f5f5'
-        },
-        panels: {
-          background: '#fafafa',
-          border: '#d9d9d9',
-          text: '#000000',
-          accent: '#1890ff'
-        },
-        components: {
-          selection: '#0088ff',
-          hover: '#40a9ff',
-          guides: '#0066ff',
-          distance: '#ff6600'
-        },
-        interface: {
-          primary: '#000000',
-          secondary: '#666666',
-          disabled: '#bfbfbf',
-          success: '#52c41a',
-          warning: '#faad14',
-          error: '#ff4d4f'
-        }
-      };
-      
-      // Apply light presets to settings
-      Object.entries(lightPresets).forEach(([category, colors]) => {
-        Object.entries(colors).forEach(([colorKey, colorValue]) => {
-          updateSetting(`colors.${category}.${colorKey}`, colorValue);
-          // Also apply to CSS variables immediately
-          root.style.setProperty(`--${category.replace('s', '')}-${colorKey.replace(/([A-Z])/g, '-$1').toLowerCase()}`, colorValue);
+      // Only apply color presets if user wants to reset custom colors
+      if (resetCustomColors) {
+        const lightPresets = {
+          canvas: {
+            background: '#ffffff',
+            gridLines: '#e0e0e0',
+            rulers: '#f5f5f5'
+          },
+          panels: {
+            background: '#fafafa',
+            border: '#d9d9d9',
+            text: '#000000',
+            accent: '#1890ff'
+          },
+          components: {
+            selection: '#0088ff',
+            hover: '#40a9ff',
+            guides: '#0066ff',
+            distance: '#ff6600'
+          },
+          interface: {
+            primary: '#000000',
+            secondary: '#666666',
+            disabled: '#bfbfbf',
+            success: '#52c41a',
+            warning: '#faad14',
+            error: '#ff4d4f'
+          }
+        };
+        
+        // Apply light presets to settings
+        Object.entries(lightPresets).forEach(([category, colors]) => {
+          Object.entries(colors).forEach(([colorKey, colorValue]) => {
+            updateSetting(`colors.${category}.${colorKey}`, colorValue);
+            // Also apply to CSS variables immediately
+            root.style.setProperty(`--${category.replace('s', '')}-${colorKey.replace(/([A-Z])/g, '-$1').toLowerCase()}`, colorValue);
+          });
         });
-      });
+      }
     }
     
     // Force re-render of Ant Design components
@@ -971,34 +975,43 @@ const EditorSettingsModal = ({ visible, onClose }) => {
     </div>
   );
 
-  // Apply initial theme on mount and when modal becomes visible
+  // Apply initial theme only on first mount, not when modal opens
   useEffect(() => {
-    if (!loading && visible && settings.theme) {
-      applyTheme(settings.theme.mode);
+    if (!loading && settings.theme && !visible) {
+      // Only apply theme when modal is not visible (initial app load)
+      // Don't reset custom colors on initial load
+      applyTheme(settings.theme.mode, false);
     }
-  }, [loading, visible, settings.theme?.mode]);
+  }, [loading, settings.theme?.mode]);
 
-  // Apply theme on settings change
+  // Apply theme only when theme mode actually changes (user interaction)
+  const [previousThemeMode, setPreviousThemeMode] = useState(null);
   useEffect(() => {
-    if (!loading) {
-      applyTheme(settings.theme?.mode || 'light');
+    if (!loading && settings.theme?.mode && settings.theme.mode !== previousThemeMode) {
+      // Only apply theme when user actively changes it
+      if (previousThemeMode !== null) {
+        // Don't reset custom colors unless it's from the Theme tab
+        applyTheme(settings.theme.mode, false);
+      }
+      setPreviousThemeMode(settings.theme.mode);
     }
-  }, [settings.theme?.mode, loading]);
+  }, [settings.theme?.mode, loading, previousThemeMode]);
 
   // Listen for system theme changes
   useEffect(() => {
     if (settings.theme.mode === 'auto') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = () => applyTheme('auto');
+      const handleChange = () => applyTheme('auto', false); // Don't reset custom colors on system change
       
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
   }, [settings.theme.mode]);
 
-  // Apply color customizations to CSS variables
+  // Apply color customizations to CSS variables only when colors actually change
+  const [previousColors, setPreviousColors] = useState(null);
   useEffect(() => {
-    if (!loading && settings.colors) {
+    if (!loading && settings.colors && JSON.stringify(settings.colors) !== JSON.stringify(previousColors)) {
       const root = document.documentElement;
       
       // Apply canvas colors
@@ -1038,13 +1051,16 @@ const EditorSettingsModal = ({ visible, onClose }) => {
         root.style.setProperty('--error-color', settings.colors.interface.error);
       }
       
+      // Update previous colors to prevent re-application
+      setPreviousColors(settings.colors);
+      
       // Force repaint of components
       setTimeout(() => {
         const event = new Event('colorchange');
         window.dispatchEvent(event);
       }, 50);
     }
-  }, [settings.colors, loading]);
+  }, [settings.colors, loading, previousColors]);
 
   // Performance Settings Tab
   const PerformanceTab = () => (
