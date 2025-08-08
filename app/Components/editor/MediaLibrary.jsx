@@ -175,9 +175,9 @@ const URLInputForm = ({ onSelect, onClose, onAddToLibrary }) => {
   };
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ padding: 16, userSelect: 'text' }}>
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, userSelect: 'text' }}>
           Media URL
         </label>
         <input
@@ -190,13 +190,18 @@ const URLInputForm = ({ onSelect, onClose, onAddToLibrary }) => {
             padding: '8px 12px',
             border: '1px solid #d9d9d9',
             borderRadius: '6px',
-            fontSize: '14px'
+            fontSize: '14px',
+            userSelect: 'text',
+            WebkitUserSelect: 'text',
+            MozUserSelect: 'text'
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onSelect={(e) => e.stopPropagation()}
         />
       </div>
       
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, userSelect: 'text' }}>
           Display Name (Optional)
         </label>
         <input
@@ -209,22 +214,27 @@ const URLInputForm = ({ onSelect, onClose, onAddToLibrary }) => {
             padding: '8px 12px',
             border: '1px solid #d9d9d9',
             borderRadius: '6px',
-            fontSize: '14px'
+            fontSize: '14px',
+            userSelect: 'text',
+            WebkitUserSelect: 'text',
+            MozUserSelect: 'text'
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onSelect={(e) => e.stopPropagation()}
         />
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'text' }}>
           <input
             type="checkbox"
             checked={saveToLibrary}
             onChange={(e) => setSaveToLibrary(e.target.checked)}
             style={{ marginRight: 4 }}
           />
-          <span style={{ fontWeight: 500 }}>Save to Library</span>
+          <span style={{ fontWeight: 500, userSelect: 'text' }}>Save to Library</span>
         </label>
-        <div style={{ fontSize: '12px', color: '#666', marginLeft: 20, marginTop: 4 }}>
+        <div style={{ fontSize: '12px', color: '#666', marginLeft: 20, marginTop: 4, userSelect: 'text' }}>
           When enabled, this media will be saved to your uploads for reuse in future projects
         </div>
       </div>
@@ -696,14 +706,14 @@ const MediaLibrary = ({
     <Modal
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{title}</span>
-          <div style={{ fontSize: '12px', color: '#666', textAlign: 'right' }}>
+          <span style={{ userSelect: 'text' }}>{title}</span>
+          <div style={{ fontSize: '12px', color: '#666', textAlign: 'right', userSelect: 'text' }}>
             {loadingSubscription ? (
               <div>Loading subscription...</div>
             ) : subscription ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span>
+                  <span style={{ userSelect: 'text' }}>
                     {subscription.tier === SUBSCRIPTION_TIERS.FREE && '🆓'} 
                     {subscription.tier === SUBSCRIPTION_TIERS.PRO && '⭐'} 
                     {subscription.tier === SUBSCRIPTION_TIERS.ADMIN && '👑'} 
@@ -720,7 +730,7 @@ const MediaLibrary = ({
                     </Button>
                   )}
                 </div>
-                <div>
+                <div style={{ userSelect: 'text' }}>
                   Storage: {storageInfo.usedDisplay} / {storageInfo.limitDisplay} ({storageInfo.percentage}%)
                 </div>
                 <div style={{ 
@@ -738,11 +748,11 @@ const MediaLibrary = ({
                     transition: 'width 0.3s'
                   }} />
                 </div>
-                <div style={{ fontSize: '10px', marginTop: 2 }}>
+                <div style={{ fontSize: '10px', marginTop: 2, userSelect: 'text' }}>
                   Images: {subscription.usage.imageCount}/{subscription.limits.maxImages === -1 ? '∞' : subscription.limits.maxImages} • 
                   Videos: {subscription.usage.videoCount}/{subscription.limits.maxVideos === -1 ? '∞' : subscription.limits.maxVideos}
                   {subscription.tier === SUBSCRIPTION_TIERS.ADMIN && (
-                    <div style={{ color: '#722ed1', marginTop: 2 }}>
+                    <div style={{ color: '#722ed1', marginTop: 2, userSelect: 'text' }}>
                       👑 Admin - Unlimited Access
                     </div>
                   )}
@@ -758,8 +768,18 @@ const MediaLibrary = ({
       onCancel={onClose}
       footer={null}
       width={900}
-      style={{ top: 20 }}
+      style={{ 
+        top: 20,
+        // Allow text selection in the modal
+        userSelect: 'text'
+      }}
       zIndex={99999}
+      // Prevent the modal from interfering with text selection
+      modalRender={(modal) => (
+        <div style={{ userSelect: 'text' }}>
+          {modal}
+        </div>
+      )}
     >
       {/* Subscription Status Alerts */}
       {subscription && (
@@ -852,18 +872,18 @@ const MediaLibrary = ({
                       {uploading ? 'Uploading...' : 'Upload Images'}
                     </AntButton>
                   </Upload>
-                  <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
+                  <div style={{ marginTop: 8, color: '#666', fontSize: '12px', userSelect: 'text' }}>
                     Supports: JPG, PNG, GIF, WebP • 
                     {subscription ? `Max size: ${formatStorageSize(subscription.limits.maxImageSize)}` : 'Max size: 2MB'} • 
                     Multiple files allowed • Images will be compressed for optimal storage
                     {subscription && subscription.tier === SUBSCRIPTION_TIERS.FREE && (
-                      <div style={{ color: '#1890ff', marginTop: 4 }}>
+                      <div style={{ color: '#1890ff', marginTop: 4, userSelect: 'text' }}>
                         ⭐ Upgrade to Pro for larger files and unlimited uploads!
                       </div>
                     )}
                   </div>
                   {uploading && (
-                    <div style={{ marginTop: 8, color: '#1890ff', fontSize: '12px' }}>
+                    <div style={{ marginTop: 8, color: '#1890ff', fontSize: '12px', userSelect: 'text' }}>
                       Processing file... Please wait.
                     </div>
                   )}
@@ -927,10 +947,10 @@ const MediaLibrary = ({
                               style={{ opacity: 0.8 }}
                             />
                           </div>
-                          <div style={{ padding: 8, fontSize: 12, textAlign: 'center' }}>
-                            <div>{image.name.length > 20 ? image.name.substring(0, 20) + '...' : image.name}</div>
+                          <div style={{ padding: 8, fontSize: 12, textAlign: 'center', userSelect: 'text' }}>
+                            <div style={{ userSelect: 'text' }}>{image.name.length > 20 ? image.name.substring(0, 20) + '...' : image.name}</div>
                             {image.isFromURL && (
-                              <div style={{ color: '#1890ff', fontSize: '10px', marginTop: 2 }}>
+                              <div style={{ color: '#1890ff', fontSize: '10px', marginTop: 2, userSelect: 'text' }}>
                                 From URL
                               </div>
                             )}
@@ -963,7 +983,7 @@ const MediaLibrary = ({
                         alt={image.name}
                         style={{ width: '100%', height: 120, objectFit: 'cover' }}
                       />
-                      <div style={{ padding: 8, fontSize: 12, textAlign: 'center' }}>
+                      <div style={{ padding: 8, fontSize: 12, textAlign: 'center', userSelect: 'text' }}>
                         {image.name}
                       </div>
                     </div>
@@ -1002,18 +1022,18 @@ const MediaLibrary = ({
                       {uploading ? 'Uploading...' : 'Upload Videos'}
                     </AntButton>
                   </Upload>
-                  <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
+                  <div style={{ marginTop: 8, color: '#666', fontSize: '12px', userSelect: 'text' }}>
                     Supports: MP4, WebM, MOV, AVI • 
                     {subscription ? `Max size: ${formatStorageSize(subscription.limits.maxVideoSize)}` : 'Max size: 10MB'} • 
                     Multiple files allowed
                     {subscription && subscription.tier === SUBSCRIPTION_TIERS.FREE && (
-                      <div style={{ color: '#1890ff', marginTop: 4 }}>
+                      <div style={{ color: '#1890ff', marginTop: 4, userSelect: 'text' }}>
                         ⭐ Upgrade to Pro for larger files and unlimited uploads!
                       </div>
                     )}
                   </div>
                   {uploading && (
-                    <div style={{ marginTop: 8, color: '#1890ff', fontSize: '12px' }}>
+                    <div style={{ marginTop: 8, color: '#1890ff', fontSize: '12px', userSelect: 'text' }}>
                       Processing video... This may take a moment for larger files.
                     </div>
                   )}
@@ -1103,9 +1123,9 @@ const MediaLibrary = ({
                               style={{ opacity: 0.8 }}
                             />
                           </div>
-                          <div style={{ padding: 8, fontSize: 12, textAlign: 'center' }}>
-                            <div>{video.name.length > 25 ? video.name.substring(0, 25) + '...' : video.name}</div>
-                            <div style={{ color: '#999', fontSize: '10px' }}>
+                          <div style={{ padding: 8, fontSize: 12, textAlign: 'center', userSelect: 'text' }}>
+                            <div style={{ userSelect: 'text' }}>{video.name.length > 25 ? video.name.substring(0, 25) + '...' : video.name}</div>
+                            <div style={{ color: '#999', fontSize: '10px', userSelect: 'text' }}>
                               {video.isFromURL ? 'From URL' : `${(video.size / 1024 / 1024).toFixed(1)} MB`}
                             </div>
                           </div>
@@ -1150,7 +1170,7 @@ const MediaLibrary = ({
                           }}
                         />
                       </div>
-                      <div style={{ padding: 8, fontSize: 12, textAlign: 'center' }}>
+                      <div style={{ padding: 8, fontSize: 12, textAlign: 'center', userSelect: 'text' }}>
                         {video.name}
                       </div>
                     </div>
@@ -1185,7 +1205,7 @@ const MediaLibrary = ({
                   borderRadius: 6,
                   borderLeft: '4px solid #1890ff'
                 }}>
-                  <div style={{ fontWeight: 500, marginBottom: 8 }}>Quick Test:</div>
+                  <div style={{ fontWeight: 500, marginBottom: 8, userSelect: 'text' }}>Quick Test:</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {(type === 'both' || type === 'images') && (
                       <AntButton 

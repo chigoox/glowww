@@ -3,14 +3,14 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../utils/context/ContextMenu";
-import useEditorDisplay from "../utils/context/useEditorDisplay";
-import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../editor/SnapPositionHandle";
-import { snapGridSystem } from "../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import ContextMenu from "../../utils/context/ContextMenu";
+import useEditorDisplay from "../../utils/context/useEditorDisplay";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 
-export const Box = ({
+export const GridBox = ({
   
   // Layout & Position
   width = "200px",
@@ -236,9 +236,9 @@ placeContent,
           const nodes = query.getNodes();
           console.log('🔍 Available nodes:', Object.keys(nodes));
           
-          // Find all Box containers - use only Craft.js isCanvas() method
+          // Find all GridBox containers - use only Craft.js isCanvas() method
           const containers = Object.entries(nodes).filter(([id, node]) => {
-            const isBox = node.data.displayName === 'Box';
+            const isBox = node.data.displayName === 'GridBox';
             const canAcceptDrops = query.node(id).isCanvas();
             
             console.log(`📦 Checking node ${id} (${node.data.displayName}):`, {
@@ -356,7 +356,7 @@ placeContent,
     setContextMenu({ visible: false, x: 0, y: 0 });
   };
 
-  // Function to update box position for portal positioning
+  // Function to update GridBox position for portal positioning
   const updateBoxPosition = () => {
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
@@ -438,7 +438,7 @@ placeContent,
     prevParentRef.current = parent;
   }, [parent, nodeId, setProp, query, editorActions]);
 
-  // Update box position when selected or hovered changes
+  // Update GridBox position when selected or hovered changes
   useEffect(() => {
     if (isSelected || isHovered) {
       updateBoxPosition();
@@ -1163,8 +1163,8 @@ const PortalControls = ({
 };
 
 // Define default props for Craft.js - these will be the initial values
-Box.craft = {
-  displayName: "Box",
+GridBox.craft = {
+  displayName: "GridBox",
   // Canvas property for containers - MUST BE AT ROOT LEVEL FOR CRAFT.JS
   canvas: true,
   props: {
@@ -1271,7 +1271,57 @@ Box.craft = {
   },
    custom: {
     styleMenu: {
-      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border', 'overflow', 'className', 'html']
+      supportedProps: [
+        // Layout & Position
+        'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+        'display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
+        'visibility', 'float', 'clear', 'boxSizing',
+        
+        // Overflow & Scroll
+        'overflow', 'overflowX', 'overflowY', 'resize',
+        
+        // Spacing - All sides
+        'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'marginX', 'marginY',
+        'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'paddingX', 'paddingY',
+        
+        // Border - All sides and properties
+        'border', 'borderWidth', 'borderStyle', 'borderColor',
+        'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+        'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
+        'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+        'borderCollapse', 'borderSpacing',
+        
+        // Border Radius - All corners
+        'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
+        'borderBottomLeftRadius', 'borderBottomRightRadius',
+        
+        // Typography
+        'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'fontStretch',
+        'lineHeight', 'letterSpacing', 'wordSpacing', 'textAlign', 'textDecoration',
+        'textTransform', 'textIndent', 'textShadow', 'verticalAlign', 'whiteSpace',
+        'wordBreak', 'wordWrap',
+        
+        // Grid Container Properties
+        'gridTemplateColumns', 'gridTemplateRows', 'gridTemplateAreas', 'gridAutoFlow',
+        'gridAutoColumns', 'gridAutoRows', 'gap', 'rowGap', 'columnGap',
+        'justifyItems', 'alignItems', 'justifyContent', 'alignContent', 'placeItems', 'placeContent',
+        
+        // Grid Item Properties
+        'gridColumn', 'gridRow', 'gridColumnStart', 'gridColumnEnd', 'gridRowStart', 'gridRowEnd',
+        'gridArea', 'justifySelf', 'alignSelf', 'placeSelf',
+        
+        // Colors & Backgrounds
+        'color', 'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
+        'backgroundRepeat', 'backgroundPosition', 'backgroundAttachment', 'backgroundClip', 'backgroundOrigin',
+        
+        // Effects
+        'boxShadow', 'opacity', 'transform',
+        
+        // HTML Attributes
+        'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',
+        'contentEditable', 'draggable', 'spellCheck', 'translate', 'dir', 'lang',
+        'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy'
+      ]
     }
   }
 };

@@ -3,20 +3,20 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../utils/context/ContextMenu";
-import { useContextMenu } from "../utils/hooks/useContextMenu";
-import useEditorDisplay from "../utils/context/useEditorDisplay";
-import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../editor/SnapPositionHandle";
-import { snapGridSystem } from "../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/context/useEditorDisplay";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 
 export const Text = ({
   // Content
   text = "Edit this text",
   
   // Layout & Position
-  width = "auto",
+  width = "16rem",
   height = "auto",
   minWidth,
   maxWidth,
@@ -1532,7 +1532,7 @@ Text.craft = {
     text: "Edit this text",
     
     // Layout & Position
-    width: "auto",
+    width: "16rem",
     height: "auto",
     minWidth: "",
     maxWidth: "",

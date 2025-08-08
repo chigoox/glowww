@@ -1,226 +1,134 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../utils/context/ContextMenu";
-import useEditorDisplay from "../utils/context/useEditorDisplay";
-import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../editor/SnapPositionHandle";
-import { snapGridSystem } from "../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { createPortal } from 'react-dom';
+import MediaLibrary from '../../editor/MediaLibrary';
+import ContextMenu from "../../utils/context/ContextMenu";
+import useEditorDisplay from "../../utils/craft/useEditorDisplay";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 
-export const FlexBox = ({
+const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+
+export const Image = ({
+  // Basic Image Properties
+  src = placeholderURL,
+  alt = "Image",
   
-  // Layout & Position
-  width = "200px",
-  height = "200px",
-  minWidth = "200px",
+  // Layout & Dimensions
+  width = 300,
+  height = 200,
+  minWidth = 50,
   maxWidth,
-  minHeight = "200px",
+  minHeight = 50,
   maxHeight,
   display = "block",
+  
+  // Positioning
   position = "relative",
   top,
   right,
   bottom,
   left,
   zIndex = 1,
-  visibility = "visible",
-  float = "none",
-  clear = "none",
-  boxSizing = "content-box",
-  
-  // Overflow & Scroll
-  overflow = "visible",
-  overflowX = "visible",
-  overflowY = "visible",
-  resize = "none",
   
   // Spacing
-  margin = "5px 0",
-  marginTop,
-  marginRight,
-  marginBottom,
-  marginLeft,
-  marginX,
-  marginY,
+  margin = 0,
   padding = 0,
-  paddingTop,
-  paddingRight,
-  paddingBottom,
-  paddingLeft,
-  paddingX,
-  paddingY,
   
   // Border
-  border = "none",
   borderWidth = 0,
-  borderStyle = "solid",
-  borderColor = "#000000",
-  borderTopWidth,
-  borderRightWidth,
-  borderBottomWidth,
-  borderLeftWidth,
-  borderTopStyle,
-  borderRightStyle,
-  borderBottomStyle,
-  borderLeftStyle,
-  borderTopColor,
-  borderRightColor,
-  borderBottomColor,
-  borderLeftColor,
-  borderCollapse = "separate",
-  borderSpacing = "0",
-  
-  // Border Radius
-  borderRadius = 0,
-  borderTopLeftRadius,
-  borderTopRightRadius,
-  borderBottomLeftRadius,
-  borderBottomRightRadius,
-  
-  // Typography
-  fontFamily = "Arial",
-  fontSize = 16,
-  fontWeight = "400",
-  fontStyle = "normal",
-  fontVariant = "normal",
-  fontStretch = "normal",
-  lineHeight = 1.4,
-  letterSpacing = 0,
-  wordSpacing = 0,
-  textAlign = "left",
-  textDecoration = "none",
-  textTransform = "none",
-  textIndent = 0,
-  textShadow = "",
-  verticalAlign = "baseline",
-  whiteSpace = "normal",
-  wordBreak = "normal",
-  wordWrap = "normal",
-  
-  // Colors & Backgrounds
-  color = "#000000",
-  backgroundColor = "white",
-  background = "white",
-  backgroundImage = "",
-  backgroundSize = "auto",
-  backgroundRepeat = "repeat",
-  backgroundPosition = "0% 0%",
-  backgroundAttachment = "scroll",
-  backgroundClip = "border-box",
-  backgroundOrigin = "padding-box",
-  
-  // Flexbox
-  flexDirection = "row",
-  alignItems = "stretch",
-  alignContent = "stretch",
-  justifyContent = "flex-start",
-  gap = 0,
-
-  // Flexbox Item Properties
-flex,
-flexWrap,
-flexGrow,
-flexShrink, 
-flexBasis,
-alignSelf,
-order,
-
-  // CSS Grid Container Properties
-gridTemplateColumns,
-gridTemplateRows,
-gridTemplateAreas,
-gridAutoFlow = "row",
-gridAutoColumns,
-gridAutoRows,
-
-// CSS Grid Item Properties
-gridColumn,
-gridRow,
-gridColumnStart,
-gridColumnEnd,
-gridRowStart,
-gridRowEnd,
-gridArea,
-rowGap ,
-columnGap,
-
-// Grid Alignment
-justifyItems = "stretch",
-justifySelf,
-placeSelf,
-placeItems,
-placeContent,
+  borderStyle = "solid", 
+  borderColor = "#e0e0e0",
+  borderRadius = 4,
   
   // Effects
   boxShadow = "none",
-  transform = "none",
   opacity = 1,
   filter = "none",
   
-  // Basic Properties
-  src,
-  alt,
-  href,
-  placeholder,
-  title,
+  // Image Specific
+  objectFit = "cover",
+  objectPosition = "center",
+  
+  // HTML Attributes
+  className = "",
   id,
-  className,
-  target,
-  rel,
-  type,
-  value,
-  name,
-  disabled = false,
-  required = false,
-  readonly = false,
-  multiple = false,
-  checked = false,
-  selected = false,
-  hidden = false,
-  tabIndex = 0,
-  accessKey,
-  contentEditable = false,
-  draggable = false,
-  spellCheck = true,
-  translate = 'yes',
-  dir = "auto",
-  lang,
-  role,
-  ariaLabel,
-  ariaDescribedBy,
-  ariaLabelledBy,
-
-  children 
+  title,
 }) => {
   const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
     parent: node.data.parent,
   }));
-  const { actions: editorActions, query } = useEditor();
+  const { actions, query } = useEditor();
   
-  // Use snap functionality
+  // Snap functionality exactly like working components (GridBox, FlexBox, Box)
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
   
   // Use multi-selection functionality
   const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
   
+  // Track parent changes to reset position properties with GridBox-style logic
+  const prevParentRef = useRef(parent);
+
+  useEffect(() => {
+    // Only process if parent actually changed (not initial mount)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Image ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
+      
+      // Wait longer than the centered drag positioning (600ms) before resetting
+      // This allows useCenteredContainerDrag to apply its centered positioning first
+      setTimeout(() => {
+        // Check if position was already set by centered drag (absolute position with left/top set)
+        const currentNode = query.node(nodeId);
+        if (currentNode) {
+          const currentProps = currentNode.get().data.props;
+          const hasPositioning = currentProps.position === 'absolute' && 
+                                (currentProps.left !== undefined || currentProps.top !== undefined);
+          
+          if (hasPositioning) {
+            console.log('🎯 Image position already set by centered drag system, skipping reset');
+            return; // Don't reset if centered positioning was applied
+          }
+        }
+        
+        // Reset position properties to default only if no positioning was applied
+        setProp(props => {
+          // Only reset if position properties were actually set
+          if (props.top !== undefined || props.left !== undefined || 
+              props.right !== undefined || props.bottom !== undefined) {
+            console.log('🔄 Resetting Image position properties after container move (no centered positioning detected)');
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            // Keep position as relative for normal flow
+            props.position = "relative";
+          }
+        });
+      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp, query]);
+  
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
-  const cardRef = useRef(null);
+  const imageRef = useRef(null);
   const dragRef = useRef(null);
+  const [isClient, setIsClient] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
-  
-  // Track previous parent to detect container changes
-  const prevParentRef = useRef(parent);
-  
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+
   // Context menu state
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
 
@@ -268,9 +176,9 @@ placeContent,
   };
 
   // Function to update box position for portal positioning
-  const updateBoxPosition = () => {
-    if (cardRef.current) {
-      const rect = cardRef.current.getBoundingClientRect();
+  const updateBoxPosition = useCallback(() => {
+    if (imageRef.current) {
+      const rect = imageRef.current.getBoundingClientRect();
       setBoxPosition({
         top: rect.top + window.scrollY,
         left: rect.left + window.scrollX,
@@ -278,71 +186,36 @@ placeContent,
         height: rect.height
       });
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     const connectElements = () => {
-      if (cardRef.current) {
-        snapConnect(cardRef.current); // Connect for selection with snap functionality
+      if (imageRef.current) {
+        snapConnect(imageRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
         drag(dragRef.current); // Connect to standard Craft.js drag
       }
     };
 
+    // Always attempt to connect elements
     connectElements();
     
-    // Also reconnect when the component is selected
-    if (isSelected) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(connectElements, 10);
-      return () => clearTimeout(timer);
-    }
-  }, [snapConnect, drag, isSelected]);
-
-  // Detect parent changes and reset position properties
-  useEffect(() => {
-    // Skip the initial render (when prevParentRef.current is first set)
-    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
-      // Parent has changed - element was moved to a different container
-      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
-      
-      // Wait longer than the centered drag positioning (600ms) before resetting
-      // This allows useCenteredContainerDrag to apply its centered positioning first
-      setTimeout(() => {
-        // Check if position was already set by centered drag (absolute position with left/top set)
-        const currentNode = query.node(nodeId);
-        if (currentNode) {
-          const currentProps = currentNode.get().data.props;
-          const hasPositioning = currentProps.position === 'absolute' && 
-                                (currentProps.left !== undefined || currentProps.top !== undefined);
-          
-          if (hasPositioning) {
-            console.log('🎯 Position already set by centered drag system, skipping reset');
-            return; // Don't reset if centered positioning was applied
-          }
-        }
-        
-        // Reset position properties to default only if no positioning was applied
-        editorActions.history.throttle(500).setProp(nodeId, (props) => {
-          // Only reset if position properties were actually set
-          if (props.top !== undefined || props.left !== undefined || 
-              props.right !== undefined || props.bottom !== undefined) {
-            console.log('🔄 Resetting position properties after container move (no centered positioning detected)');
-            props.top = undefined;
-            props.left = undefined;
-            props.right = undefined;
-            props.bottom = undefined;
-            // Keep position as relative for normal flow
-            props.position = "relative";
-          }
-        });
-      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
-    }
+    // Also reconnect when the component is selected or when nodeId changes
+    const timer = setTimeout(() => {
+      connectElements();
+      // Reduce logging frequency for connector re-establishment
+      if (Math.random() < 0.1) { // Only log 10% of the time
+        console.log('🔗 Connectors re-established for Image node:', nodeId);
+      }
+    }, 100); // Give DOM time to settle
     
-    // Update the ref for next comparison
-    prevParentRef.current = parent;
-  }, [parent, nodeId, setProp, query, editorActions]);
+    return () => clearTimeout(timer);
+  }, [snapConnect, drag, isSelected, nodeId]); // Exact same dependencies as working components
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -361,20 +234,21 @@ placeContent,
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [isSelected, isHovered]);
+  }, [isSelected, isHovered, updateBoxPosition]);
 
   // Handle resize start
   const handleResizeStart = (e, direction) => {
     e.stopPropagation();
     e.preventDefault();
     
+    // Prevent any other interactions during resize
+    setIsResizing(true);
+    
     const startX = e.clientX;
     const startY = e.clientY;
-    const rect = cardRef.current.getBoundingClientRect();
+    const rect = imageRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
-    
-    setIsResizing(true);
 
     // Register all elements for snapping during resize
     const nodes = query.getNodes();
@@ -459,11 +333,15 @@ placeContent,
       }
       
       // Apply minimum constraints
-      newWidth = Math.max(newWidth, 50);
-      newHeight = Math.max(newHeight, 20);
+      newWidth = Math.max(newWidth, minWidth || 50);
+      newHeight = Math.max(newHeight, minHeight || 50);
+      
+      // Apply maximum constraints if set
+      if (maxWidth) newWidth = Math.min(newWidth, maxWidth);
+      if (maxHeight) newHeight = Math.min(newHeight, maxHeight);
 
       // Get current position for snap calculations
-      const currentRect = cardRef.current.getBoundingClientRect();
+      const currentRect = imageRef.current.getBoundingClientRect();
       const editorRoot = document.querySelector('[data-editor="true"]');
       if (editorRoot) {
         const editorRect = editorRoot.getBoundingClientRect();
@@ -529,7 +407,7 @@ placeContent,
       }
       
       // Update dimensions using Craft.js throttled setProp for smooth history
-      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+      actions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -552,52 +430,60 @@ placeContent,
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle custom drag for position changes - REPLACED by SnapPositionHandle
-  // const handleDragStart = (e) => {
-  //   e.stopPropagation();
-  //   e.preventDefault();
-  //   
-  //   const startX = e.clientX;
-  //   const startY = e.clientY;
-  //   const currentTop = parseInt(top) || 0;
-  //   const currentLeft = parseInt(left) || 0;
-  //   
-  //   setIsDragging(true);
-  //   
-  //   const handleMouseMove = (moveEvent) => {
-  //     const deltaX = moveEvent.clientX - startX;
-  //     const deltaY = moveEvent.clientY - startY;
-  //     
-  //     // Update position using Craft.js throttled setProp for smooth history
-  //     editorActions.history.throttle(200).setProp(nodeId, (props) => {
-  //       props.left = currentLeft + deltaX;
-  //       props.top = currentTop + deltaY;
-  //     });
-  //   };
-  //   
-  //   const handleMouseUp = () => {
-  //     setIsDragging(false);
-  //     document.removeEventListener('mousemove', handleMouseMove);
-  //     document.removeEventListener('mouseup', handleMouseUp);
-  //   };
-  //   
-  //   document.addEventListener('mousemove', handleMouseMove);
-  //   document.addEventListener('mouseup', handleMouseUp);
-  // };
+  // Handle custom drag for position changes
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const currentTop = parseInt(top) || 0;
+    const currentLeft = parseInt(left) || 0;
+    
+    setIsDragging(true);
+    
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      // Update position using Craft.js setProp
+      setProp(props => {
+        props.left = currentLeft + deltaX;
+        props.top = currentTop + deltaY;
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
-  // Helper function to process values (add px to numbers where appropriate)
+  // Handle media selection from library
+  const handleMediaSelect = (item, itemType) => {
+    if (itemType === 'image') {
+      setProp(props => {
+        props.src = item.url;
+        props.alt = item.name || 'Selected image';
+      });
+    }
+  };
+
+  // Helper function to process values
   const processValue = (value, property) => {
-    if (value === undefined || value === null) return undefined;
-    if (value === "") return undefined;
-    if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight', 'flexGrow', 'flexShrink', 'order'].includes(property)) {
+    if (value === undefined || value === null || value === "") return undefined;
+    if (typeof value === 'number' && !['opacity', 'zIndex'].includes(property)) {
       return `${value}px`;
     }
     return value;
   };
 
-   // Build computed styles
+  // Build computed styles
   const computedStyles = {
-    // Layout & Position
     width: processValue(width, 'width'),
     height: processValue(height, 'height'),
     minWidth: processValue(minWidth, 'minWidth'),
@@ -611,162 +497,52 @@ placeContent,
     bottom: processValue(bottom, 'bottom'),
     left: processValue(left, 'left'),
     zIndex,
-    visibility,
-    float,
-    clear,
-    boxSizing,
-    
-    // Overflow - ensure valid values are always set
-    // Overflow - handle precedence correctly (overflow should override overflowX/Y)
-    ...(overflow && overflow !== "visible" 
-      ? {
-          // When overflow is explicitly set, it overrides X and Y
-          overflow: overflow
-        }
-      : {
-          // When overflow is not set or is "visible", use individual X and Y values
-          overflowX: overflowX || "visible",
-          overflowY: overflowY || "visible"
-        }
-    ),
-    resize,
-    
-    // Spacing - handle individual sides or combined values
-    margin: marginTop || marginRight || marginBottom || marginLeft || marginX || marginY 
-      ? `${processValue(marginTop, 'marginTop') || 0} ${processValue(marginRight, 'marginRight') || 0} ${processValue(marginBottom, 'marginBottom') || 0} ${processValue(marginLeft, 'marginLeft') || 0}`
-      : processValue(margin, 'margin'),
-    padding: paddingTop || paddingRight || paddingBottom || paddingLeft || paddingX || paddingY
-      ? `${processValue(paddingTop, 'paddingTop') || 0} ${processValue(paddingRight, 'paddingRight') || 0} ${processValue(paddingBottom, 'paddingBottom') || 0} ${processValue(paddingLeft, 'paddingLeft') || 0}`
-      : processValue(padding, 'padding'),
-    
-    // Border - use individual values if set, otherwise use combined
-    borderWidth: borderTopWidth !== undefined || borderRightWidth !== undefined || borderBottomWidth !== undefined || borderLeftWidth !== undefined
-      ? `${processValue(borderTopWidth || borderWidth, 'borderWidth')} ${processValue(borderRightWidth || borderWidth, 'borderWidth')} ${processValue(borderBottomWidth || borderWidth, 'borderWidth')} ${processValue(borderLeftWidth || borderWidth, 'borderWidth')}`
-      : processValue(borderWidth, 'borderWidth'),
-    borderStyle: borderTopStyle || borderRightStyle || borderBottomStyle || borderLeftStyle
-      ? `${borderTopStyle || borderStyle} ${borderRightStyle || borderStyle} ${borderBottomStyle || borderStyle} ${borderLeftStyle || borderStyle}`
-      : borderStyle,
-    borderColor: borderTopColor || borderRightColor || borderBottomColor || borderLeftColor
-      ? `${borderTopColor || borderColor} ${borderRightColor || borderColor} ${borderBottomColor || borderColor} ${borderLeftColor || borderColor}`
-      : borderColor,
-    border: border !== "none" ? border : undefined,
-    borderCollapse,
-    borderSpacing,
-    
-    // Border Radius
-    borderRadius: borderTopLeftRadius !== undefined || borderTopRightRadius !== undefined || borderBottomLeftRadius !== undefined || borderBottomRightRadius !== undefined
-      ? `${processValue(borderTopLeftRadius || borderRadius, 'borderRadius')} ${processValue(borderTopRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomLeftRadius || borderRadius, 'borderRadius')}`
-      : processValue(borderRadius, 'borderRadius'),
-    
-    // Typography
-    fontFamily,
-    fontSize: processValue(fontSize, 'fontSize'),
-    fontWeight,
-    fontStyle,
-    fontVariant,
-    fontStretch,
-    lineHeight,
-    letterSpacing: processValue(letterSpacing, 'letterSpacing'),
-    wordSpacing: processValue(wordSpacing, 'wordSpacing'),
-    textAlign,
-    textDecoration,
-    textTransform,
-    textIndent: processValue(textIndent, 'textIndent'),
-    textShadow: textShadow || undefined,
-    verticalAlign,
-    whiteSpace,
-    wordBreak,
-    wordWrap,
-    
-    // Colors & Backgrounds
-    color,
-    backgroundColor: backgroundColor !== "white" ? backgroundColor : (background !== "white" ? background : "white"),
-    backgroundImage: backgroundImage || undefined,
-    backgroundSize,
-    backgroundRepeat,
-    backgroundPosition,
-    backgroundAttachment,
-    backgroundClip,
-    backgroundOrigin,
-    
-    // Flexbox
-    flexDirection,
-    flexWrap,
-    alignItems,
-    justifyContent,
-    alignContent,
-    gap: processValue(gap, 'gap'),
-    rowGap: processValue(rowGap, 'gap'),
-    columnGap: processValue(columnGap, 'gap'),
-
-    // Flexbox Item Properties  
-    flex,
-    flexGrow,
-    flexShrink,
-    flexBasis: processValue(flexBasis, 'flexBasis'),
-    alignSelf,
-    order,
-
-    // CSS Grid
-gridTemplateColumns,
-gridTemplateRows,
-gridTemplateAreas,
-gridAutoFlow,
-gridAutoColumns,
-gridAutoRows,
-gridColumn,
-gridRow,
-gridColumnStart,
-gridColumnEnd,
-gridRowStart,
-gridRowEnd,
-gridArea,
-justifyItems,
-justifySelf,
-placeSelf,
-placeItems,
-placeContent,
-    
-    // Effects
+    margin: processValue(margin, 'margin'),
+    padding: processValue(padding, 'padding'),
+    borderWidth: processValue(borderWidth, 'borderWidth'),
+    borderStyle,
+    borderColor,
+    borderRadius: processValue(borderRadius, 'borderRadius'),
     boxShadow: boxShadow !== "none" ? boxShadow : undefined,
-    transform: transform !== "none" ? transform : undefined,
     opacity,
     filter: filter !== "none" ? filter : undefined,
+    objectFit,
+    objectPosition,
   };
 
-
-  // Remove undefined values, but preserve important properties that should always be applied
-  const importantProperties = ['overflow', 'overflowX', 'overflowY', 'display', 'position', 'visibility'];
+  // Remove undefined values
   Object.keys(computedStyles).forEach(key => {
-    if (computedStyles[key] === undefined && !importantProperties.includes(key)) {
+    if (computedStyles[key] === undefined) {
       delete computedStyles[key];
     }
   });
 
+  // Don't render until client-side
+  if (!isClient) {
+    return (
+      <div style={computedStyles}>
+        <img
+          src={src}
+          alt={alt}
+          style={{ width: '100%', height: '100%', objectFit, objectPosition, }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
-      ref={cardRef}
+      ref={imageRef}
       style={{
-        ...computedStyles,
         position: 'relative',
-        cursor: 'default'
+        cursor: 'default',
+        userSelect: 'none',
+        pointerEvents: 'auto',
+        ...computedStyles
       }}
       id={id}
       title={title}
-      role={role}
-      aria-label={ariaLabel}
-      aria-describedby={ariaDescribedBy}
-      aria-labelledby={ariaLabelledBy}
-      tabIndex={tabIndex}
-      accessKey={accessKey}
-      contentEditable={contentEditable}
-      draggable={draggable}
-      spellCheck={spellCheck}
-      translate={translate}
-      dir={dir}
-      lang={lang}
-      hidden={hidden}
       onMouseEnter={hideEditorUI ? undefined : () => {
         setIsHovered(true);
         updateBoxPosition();
@@ -774,6 +550,13 @@ placeContent,
       onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
       onClick={(e) => {
         if (!hideEditorUI) {
+          // Prevent selection during resize operations
+          if (isResizing) {
+            e.stopPropagation();
+            e.preventDefault();
+            return;
+          }
+          
           if (e.ctrlKey || e.metaKey) {
             e.stopPropagation();
             e.preventDefault();
@@ -790,18 +573,48 @@ placeContent,
       }}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
-      {/* Portal controls rendered outside this container to avoid overflow clipping (hide in preview mode) */}
-      {isSelected && !hideEditorUI && (
+      {/* Portal controls rendered outside this container to avoid overflow clipping */}
+      {isClient && isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
           handleResizeStart={handleResizeStart}
+          handleEditClick={() => setShowMediaLibrary(true)}
           nodeId={nodeId}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
         />
       )}
-      {children}
+
+      {/* Main image */}
+      <img
+        src={src}
+        alt={alt}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit,
+          objectPosition,
+          display: 'block',
+          pointerEvents: 'none', // Allow clicks to pass through to parent for selection,
+          borderRadius: borderRadius,
+          opacity: opacity,
+
+        }}
+        onError={(e) => {
+          // Fallback to placeholder if image fails to load
+          e.target.src = placeholderURL;
+        }}
+      />
+
+      {/* Media Library Modal */}
+      <MediaLibrary
+        visible={showMediaLibrary}
+        onClose={() => setShowMediaLibrary(false)}
+        onSelect={handleMediaSelect}
+        type="images" // Only show images for Image component
+        title="Select Image"
+      />
       
       {/* Context Menu - hide in preview mode */}
       {!hideEditorUI && (
@@ -816,17 +629,18 @@ placeContent,
   );
 };
 
-// Portal Controls Component - renders outside of the Box to avoid overflow clipping
+// Portal Controls Component - renders outside of the Image to avoid overflow clipping
 const PortalControls = ({ 
   boxPosition, 
-  dragRef, 
+  dragRef,
   handleResizeStart,
+  handleEditClick,
   nodeId,
   isDragging,
   setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
-  
+
   return createPortal(
     <div
       style={{
@@ -837,7 +651,7 @@ const PortalControls = ({
         zIndex: 99999
       }}
     >
-      {/* Combined pill-shaped drag controls */}
+      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
       <div
         style={{
           position: 'absolute',
@@ -856,15 +670,17 @@ const PortalControls = ({
           zIndex: 10000
         }}
       >
-        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
+        {/* Left section - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-cy="move-handle"
           data-handle-type="move"
+          data-craft-node-id={nodeId}
           className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
-            padding: '2px',
+            padding: '4px 8px',
             borderRadius: '14px 0 0 14px',
             cursor: 'grab',
             display: 'flex',
@@ -879,13 +695,34 @@ const PortalControls = ({
           📦 MOVE
         </div>
         
-        {/* Right half - POS (Custom position drag with snapping) */}
+        {/* Middle section - EDIT */}
+        <div
+          style={{
+            background: '#722ed1',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onClick={handleEditClick}
+          title="Change image"
+        >
+          🖼️ EDIT
+        </div>
+        
+        {/* Right section - POS (Custom position drag with snapping) */}
         <SnapPositionHandle
           nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
-            padding: '4px',
+            padding: '4px 8px',
             borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
@@ -927,6 +764,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize"
       />
 
@@ -946,6 +785,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize"
       />
 
@@ -965,6 +806,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize"
       />
 
@@ -984,10 +827,11 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'se')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize"
       />
 
-      {/* Edge resize handles - beautiful semi-transparent style */}
       {/* Top edge */}
       <div
         style={{
@@ -1003,6 +847,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'n')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize height"
       />
 
@@ -1021,6 +867,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 's')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize height"
       />
 
@@ -1039,6 +887,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'w')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize width"
       />
 
@@ -1057,6 +907,8 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'e')}
+        onMouseUp={(e) => e.stopPropagation()}
+        onMouseMove={(e) => e.stopPropagation()}
         title="Resize width"
       />
     </div>,
@@ -1064,160 +916,84 @@ const PortalControls = ({
   );
 };
 
-// Define default props for Craft.js - these will be the initial values
-FlexBox.craft = {
-  displayName: "FlexBox",
-  // Canvas property for containers - THIS MUST BE AT ROOT LEVEL
-  canvas: true,
+// CraftJS configuration
+Image.craft = {
+  displayName: "Image",
   props: {
-    // Layout & Position
-    width: "200px",
-    height: "200px",
-    minHeight: "200px",
-    minWidth: "200px",
-    display: "block",
+    src: placeholderURL,
+    alt: "Image",
+    width: 300,
+    height: 200,
+    minWidth: 50,
+    maxWidth: 10000,
+    minHeight: 50,
+    maxHeight: 10000,
     position: "relative",
     top: 0,
-    right: 0,
-    bottom: 0,
     left: 0,
     zIndex: 1,
-    visibility: "visible",
-    float: "none",
-    clear: "none",
-    boxSizing: "content-box",
-    
-    // Overflow
-    overflow: "visible",
-    overflowX: "visible",
-    overflowY: "visible",
-    resize: "none",
-    
-    // Spacing
-    margin: "none",
-    padding: '0',
-    
-    // Border
-    border: "none",
+    margin: 0,
+    padding: 0,
     borderWidth: 0,
     borderStyle: "solid",
-    borderColor: "#000000",
-    borderCollapse: "separate",
-    borderSpacing: "0",
-    borderRadius: 0,
-    
-    // Typography
-    fontFamily: "Arial",
-    fontSize: 16,
-    fontWeight: "400",
-    fontStyle: "normal",
-    lineHeight: 1.4,
-    letterSpacing: 0,
-    wordSpacing: 0,
-    textAlign: "left",
-    textDecoration: "none",
-    textTransform: "none",
-    textIndent: 0,
-    verticalAlign: "baseline",
-    whiteSpace: "normal",
-    wordBreak: "normal",
-    wordWrap: "normal",
-    
-    // Colors & Backgrounds
-    color: "#000000",
-    backgroundColor: "white",
-    backgroundSize: "auto",
-    backgroundRepeat: "repeat",
-    backgroundPosition: "0% 0%",
-    backgroundAttachment: "scroll",
-    
-    // Flexbox - Extended
-    flexDirection: "row",
-    flexWrap: "nowrap", 
-    alignItems: "stretch",
-    justifyContent: "flex-start",
-    alignContent: "stretch",
-    gap: 0,
-    rowGap: 0,
-    columnGap: 0,
-
-    // CSS Grid
-    gridAutoFlow: "row",
-    justifyItems: "stretch",
-    
-    // Effects
+    borderColor: "#e0e0e0",
+    borderRadius: 4,
     boxShadow: "none",
-    transform: "none",
     opacity: 1,
-    
-    // Basic Properties
+    objectFit: "cover",
+    objectPosition: "center",
+    title: "",
     className: "",
-    disabled: false,
-    hidden: false,
-    tabIndex: 0,
-    contentEditable: false,
-    draggable: false,
-    spellCheck: true,
-    translate: 'yes',
-    dir: "auto"
   },
-    rules: {
+  rules: {
     canDrag: () => true,
-    canDrop: (node, parent) => true,
-    canMoveIn: () => true,
-    canMoveOut: () => true
-    },
-     custom: {
+    canDrop: () => true,
+    canMoveIn: () => false,
+    canMoveOut: () => true,
+  },
+  custom: {
     styleMenu: {
-    supportedProps: [
-      // Layout & Position
-      'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
-      'display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
-      'visibility', 'float', 'clear', 'boxSizing',
-      
-      // Overflow & Scroll
-      'overflow', 'overflowX', 'overflowY', 'resize',
-      
-      // Spacing - All sides
-      'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'marginX', 'marginY',
-      'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'paddingX', 'paddingY',
-      
-      // Border - All sides and properties
-      'border', 'borderWidth', 'borderStyle', 'borderColor',
-      'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
-      'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
-      'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-      'borderCollapse', 'borderSpacing',
-      
-      // Border Radius - All corners
-      'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
-      'borderBottomLeftRadius', 'borderBottomRightRadius',
-      
-      // Typography
-      'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'fontStretch',
-      'lineHeight', 'letterSpacing', 'wordSpacing', 'textAlign', 'textDecoration',
-      'textTransform', 'textIndent', 'textShadow', 'verticalAlign', 'whiteSpace',
-      'wordBreak', 'wordWrap',
-      
-      // Flexbox Container Properties
-      'flexDirection', 'flexWrap', 'justifyContent', 'alignItems', 'alignContent',
-      'gap', 'rowGap', 'columnGap',
-      
-      // Flexbox Item Properties
-      'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'order',
-      
-      // Colors & Backgrounds
-      'color', 'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
-      'backgroundRepeat', 'backgroundPosition', 'backgroundAttachment', 'backgroundClip', 'backgroundOrigin',
-      
-      // Effects
-      'boxShadow', 'opacity', 'transform',
-      
-      // HTML Attributes
-      'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',
-      'contentEditable', 'draggable', 'spellCheck', 'translate', 'dir', 'lang',
-      'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy', 
-    ]
+      supportedProps: [
+        // Image Properties
+        "src",
+        "alt",
+        "objectFit",
+        "objectPosition",
+
+        'borderRadius','border',
+        
+        // Size & Position
+        "width",
+        "height",
+        "minWidth",
+        "maxWidth", 
+        "minHeight",
+        "maxHeight",
+        "position",
+        "top",
+        "left",
+        "zIndex",
+        
+        // Spacing
+        "margin",
+        "padding",
+        
+        // Visual Styling
+        "borderWidth",
+        "borderStyle", 
+        "borderColor",
+        "borderRadius",
+        "boxShadow",
+        "opacity",
+
+        // Border Radius - All corners
+        'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
+        'borderBottomLeftRadius', 'borderBottomRightRadius',
+        
+        // HTML Attributes
+        "title",
+        "className"
+      ]
+    }
   }
-}
 };

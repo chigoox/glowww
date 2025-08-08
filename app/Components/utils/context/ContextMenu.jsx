@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Card, Slider, ColorPicker, Button, Tooltip, Divider } from 'antd';
+import { Card, Slider, ColorPicker, Button, Tooltip, Divider, ConfigProvider, theme } from 'antd';
 import { 
   BorderOutlined, 
   RadiusUprightOutlined, 
@@ -23,17 +23,18 @@ import {
 } from '@ant-design/icons';
 import { useEditor, useNode } from '@craftjs/core';
 import { useMultiSelect } from './MultiSelectContext';
-import { Box } from '../../user/Box';
-import { Text } from '../../user/Text';
-import { Button as CustomButton } from '../../user/Button';
-import { Image } from '../../user/Image';
-import { FlexBox } from '../../user/FlexBox';
-import { GridBox } from '../../user/GridBox';
-import { Paragraph } from '../../user/Paragraph';
-import { Video } from '../../user/Video';
-import { Carousel } from '../../user/Carousel';
+import { useTheme } from '../../theme/ThemeProvider';
+import { Box } from '../../user/Layout/Box';
+import { Text } from '../../user/Text/Text';
+import { Button as CustomButton } from '../../user/Interactive/Button';
+import { Image } from '../../user/Media/Image';
+import { FlexBox } from '../../user/Layout/FlexBox';
+import { GridBox } from '../../user/Layout/GridBox';
+import { Paragraph } from '../../user/Text/Paragraph';
+import { Video } from '../../user/Media/Video';
+import { Carousel } from '../../user/Media/Carousel';
 import { FormInput } from '../../user/Input';
-import { Link } from '../../user/Link';
+import { Link } from '../../user/Interactive/Link';
 import { Form } from '../../user/Advanced/Form';
 import { ShopFlexBox } from '../../user/Advanced/ShopFlexBox';
 import { useRecentComponents } from '../craft/useRecentComponents';
@@ -47,15 +48,93 @@ const ContextMenu = ({
   const { actions, query } = useEditor();
   const { selectedNodes, isMultiSelecting } = useMultiSelect();
   const { recentComponents, addToRecent, clearRecent } = useRecentComponents();
+  const { effectiveTheme } = useTheme();
   const menuRef = useRef(null);
   const drawerRef = useRef(null);
+  const [hasTextSelection, setHasTextSelection] = useState(false);
   
+  // Theme-aware styles
+  const isDark = effectiveTheme === 'dark';
+  const themeStyles = {
+    background: isDark 
+      ? 'rgba(26, 26, 26, 0.95)' 
+      : 'rgba(255, 255, 255, 0.95)',
+    border: isDark 
+      ? '1px solid #525252' 
+      : '1px solid #e2e8f0',
+    textColor: isDark ? '#f5f5f5' : '#1e293b',
+    textColorSecondary: isDark ? '#d4d4d4' : '#64748b',
+    cardBackground: isDark ? '#1f1f1f' : '#ffffff',
+    shadowColor: isDark 
+      ? 'rgba(0, 0, 0, 0.8)' 
+      : 'rgba(0, 0, 0, 0.15)',
+    backdropFilter: 'blur(20px) saturate(180%)',
+    hoverBackground: isDark ? '#404040' : '#f5f5f5'
+  };
+  
+  // Apply global CSS for tooltips to follow theme
+  useEffect(() => {
+    if (visible) {
+      const style = document.createElement('style');
+      style.id = 'context-menu-tooltip-override';
+      style.textContent = `
+        .ant-tooltip {
+          z-index: 99999999 !important;
+        }
+        .ant-tooltip-inner {
+          background: ${isDark ? '#1f1f1f' : '#ffffff'} !important;
+          color: ${themeStyles.textColor} !important;
+          border: 1px solid ${isDark ? '#525252' : '#e2e8f0'} !important;
+        }
+        .ant-tooltip-arrow::before {
+          background: ${isDark ? '#1f1f1f' : '#ffffff'} !important;
+          border: 1px solid ${isDark ? '#525252' : '#e2e8f0'} !important;
+        }
+        /* Force better contrast for Ant Design icons in context menu */
+        .ant-btn .anticon {
+          color: ${themeStyles.textColor} !important;
+        }
+        .ant-btn:hover .anticon {
+          color: ${themeStyles.textColor} !important;
+        }
+        /* Ensure all spans within buttons inherit text color */
+        .ant-btn span {
+          color: inherit !important;
+        }
+      `;
+      document.head.appendChild(style);
+      
+      return () => {
+        const existingStyle = document.getElementById('context-menu-tooltip-override');
+        if (existingStyle) {
+          document.head.removeChild(existingStyle);
+        }
+      };
+    }
+  }, [visible, isDark, themeStyles]);
+
   // Determine which nodes to operate on (memoized to prevent infinite re-renders)
   const operationNodes = useMemo(() => {
     return isMultiSelecting && selectedNodes.size > 0 
       ? Array.from(selectedNodes) 
       : targetNodeId ? [targetNodeId] : [];
   }, [isMultiSelecting, selectedNodes, targetNodeId]);
+
+  // Determine if the target node is a Text node (for Copy Text action)
+  const isTextTarget = useMemo(() => {
+    try {
+      if (!targetNodeId) return false;
+      const node = query.node(targetNodeId).get();
+      if (!node || !node.data) return false;
+      // Prefer displayName, but also check for text prop presence
+      const display = node.data.displayName || node.data.type?.name;
+      const hasTextProp = !!node.data.props?.text;
+      const hasContentProp = !!node.data.props?.content; // e.g., Paragraph
+      return display === 'Text' || display === 'Paragraph' || hasTextProp || hasContentProp;
+    } catch {
+      return false;
+    }
+  }, [query, targetNodeId]);
   
  
   
@@ -207,6 +286,22 @@ const ContextMenu = ({
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [visible, onClose, showComponentDrawer]);
+
+  // Track if there is any current DOM text selection (to hint Copy Text availability)
+  useEffect(() => {
+    if (!visible) return;
+    const handleSelectionChange = () => {
+      try {
+        const sel = window.getSelection();
+        setHasTextSelection(!!sel && sel.toString().length > 0);
+      } catch {
+        setHasTextSelection(false);
+      }
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    handleSelectionChange();
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [visible]);
 
   // Handle recent components lock toggle
   const toggleRecentLock = () => {
@@ -612,6 +707,80 @@ const ContextMenu = ({
     onClose();
   };
 
+  // Copy selected text or the Text node's content to the OS clipboard
+  const copyTextContent = async () => {
+    try {
+      let textToCopy = '';
+      // 1) Prefer any active user selection
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.toString()) {
+        textToCopy = sel.toString();
+      }
+      // 2) Fallback to the node's text prop if available
+      if (!textToCopy && targetNodeId) {
+        const node = query.node(targetNodeId).get();
+        const props = node?.data?.props || {};
+        if (props.text) {
+          textToCopy = props.text;
+        } else if (props.content) {
+          // Strip HTML to plain text for rich content
+          const tmp = document.createElement('div');
+          tmp.innerHTML = props.content;
+          textToCopy = tmp.textContent || tmp.innerText || '';
+        }
+      }
+
+      if (!textToCopy) {
+        console.warn('No text available to copy');
+        onClose();
+        return;
+      }
+
+      // Use modern clipboard API with fallback
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = textToCopy;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      
+      // Show success feedback
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${isDark ? '#52c41a' : '#f6ffed'};
+        color: ${isDark ? '#fff' : '#52c41a'};
+        border: 1px solid ${isDark ? 'rgba(255,255,255,0.2)' : '#b7eb8f'};
+        padding: 8px 16px;
+        border-radius: 8px;
+        z-index: 999999;
+        font-size: 14px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      `;
+      notification.textContent = `✓ Text copied: "${textToCopy.substring(0, 30)}${textToCopy.length > 30 ? '...' : ''}"`;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 2000);
+    } catch (err) {
+      console.error('Error copying text:', err);
+    }
+    onClose();
+  };
+
   // Update style property
   const updateStyle = (property, value) => {
     if (operationNodes.length > 0 && !lockedControls.has(property)) {
@@ -718,41 +887,82 @@ const ContextMenu = ({
   if (!visible) return null;
 
   return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 99999,
-        pointerEvents: 'none'
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorText: themeStyles.textColor,
+          colorTextSecondary: themeStyles.textColorSecondary,
+          colorBgElevated: themeStyles.cardBackground,
+          colorBorder: isDark ? '#525252' : '#e2e8f0',
+          colorBgContainer: themeStyles.cardBackground,
+        },
+        components: {
+          Tooltip: {
+            colorBgSpotlight: isDark ? '#1f1f1f' : '#ffffff',
+            colorTextLightSolid: themeStyles.textColor,
+          },
+          Slider: {
+            colorText: themeStyles.textColor,
+          },
+        }
       }}
     >
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 99999,
+          pointerEvents: 'none'
+        }}
+      >
       <Card
         ref={menuRef}
         style={{
           position: 'absolute',
           top: position.y,
           left: position.x,
-          width: 220, // Slimmer width
+          width: 260,
           pointerEvents: 'auto',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-          borderRadius: 8,
+          boxShadow: `0 20px 40px ${themeStyles.shadowColor}`,
+          borderRadius: 16,
           overflow: 'hidden',
-          border: '1px solid #e8e8e8',
-          zIndex: 999 // Ensure tooltips appear above everything
+          border: themeStyles.border,
+          background: themeStyles.background,
+          backdropFilter: themeStyles.backdropFilter,
+          zIndex: 999,
+          // Prevent text selection on the menu itself, but allow on inputs
+          userSelect: 'none'
         }}
-        bodyStyle={{ padding: 12 }}
+        bodyStyle={{ 
+          padding: 16,
+          background: 'transparent',
+          color: themeStyles.textColor
+        }}
+        // Allow text selection on the card content for copying
+        onMouseDown={(e) => {
+          // Only prevent if not clicking on selectable text elements
+          const target = e.target;
+          const isSelectableText = target.tagName === 'INPUT' || 
+                                  target.tagName === 'TEXTAREA' || 
+                                  target.contentEditable === 'true' ||
+                                  target.closest('.selectable-text');
+          if (!isSelectableText) {
+            e.preventDefault();
+          }
+        }}
       >
         {/* Color Pickers (Top Right) */}
         <div style={{ 
           position: 'absolute', 
-          top: 12, 
-          right: 12,
+          top: 16, 
+          right: 16,
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
+          gap: 6,
           zIndex: 99999999999
         }}>
           {/* Background Color Picker */}
@@ -768,39 +978,44 @@ const ContextMenu = ({
               showText={false}
               size="small"
               style={{
-                width: 24,
-                height: 24,
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                border: `2px solid ${themeStyles.border}`,
+                boxShadow: `0 2px 8px ${themeStyles.shadowColor}`,
                 zIndex: 99999999999,
               }}
             />
           </Tooltip>
         </div>
 
-        {/* Recent Components Section */}
-        <div style={{ marginBottom: 12, marginRight: 40 }}>
+  {/* Quick Add - Recent/Manual */}
+        <div style={{ marginBottom: 16, marginRight: 48 }}>
           <div style={{ 
-            fontSize: 10, 
-            color: '#8c8c8c', 
-            marginBottom: 6,
-            fontWeight: 500,
+            fontSize: 11, 
+            color: themeStyles.textColorSecondary, 
+            marginBottom: 8,
+            fontWeight: 600,
             textTransform: 'uppercase',
-            letterSpacing: 0.5,
+            letterSpacing: 0.8,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            Quick Add ({isRecentLocked ? 'Manual' : 'Recent'})
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span className="selectable-text" style={{ color: themeStyles.textColorSecondary }}>Quick Add ({isRecentLocked ? 'Manual' : 'Recent'})</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {/* Lock/Unlock button for recent components */}
               <Button 
                 size="small" 
                 type="text" 
                 style={{ 
                   fontSize: 10, 
-                  padding: '2px 4px', 
-                  height: 16,
-                  color: isRecentLocked ? '#1890ff' : '#8c8c8c',
-                  fontWeight: 'bold'
+                  padding: '2px 6px', 
+                  height: 18,
+                  color: isRecentLocked ? '#1890ff' : themeStyles.textColorSecondary,
+                  fontWeight: 'bold',
+                  background: isRecentLocked ? 'rgba(24, 144, 255, 0.1)' : 'transparent',
+                  borderRadius: 4
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -817,9 +1032,11 @@ const ContextMenu = ({
                 type="text" 
                 style={{ 
                   fontSize: 10, 
-                  padding: '2px 4px', 
-                  height: 16,
-                  color: showComponentDrawer ? '#1890ff' : '#8c8c8c'
+                  padding: '2px 6px', 
+                  height: 18,
+                  color: showComponentDrawer ? '#1890ff' : themeStyles.textColorSecondary,
+                  background: showComponentDrawer ? 'rgba(24, 144, 255, 0.1)' : 'transparent',
+                  borderRadius: 4
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -835,7 +1052,13 @@ const ContextMenu = ({
                 <Button 
                   size="small" 
                   type="text" 
-                  style={{ fontSize: 8, padding: '0 4px', height: 16 }}
+                  style={{ 
+                    fontSize: 8, 
+                    padding: '0 6px', 
+                    height: 18,
+                    color: themeStyles.textColorSecondary,
+                    borderRadius: 4
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     clearRecent();
@@ -847,7 +1070,7 @@ const ContextMenu = ({
               )}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             {displayComponents.map((comp, index) => (
                     
               <Tooltip key={comp.name} zIndex={99999} title={`Add ${comp.name}`}>
@@ -855,15 +1078,30 @@ const ContextMenu = ({
                   shape="circle"
                   size="small"
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: 36,
+                    height: 36,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: 'bold',
-                    background: recentComponents.length > 0 && index < recentComponents.length ? '#e6f7ff' : '#f5f5f5',
-                    border: recentComponents.length > 0 && index < recentComponents.length ? '1px solid #91d5ff' : '1px solid #d9d9d9'
+                    background: recentComponents.length > 0 && index < recentComponents.length 
+                      ? (isDark ? 'rgba(24, 144, 255, 0.2)' : '#e6f7ff')
+                      : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
+                    border: recentComponents.length > 0 && index < recentComponents.length 
+                      ? (isDark ? '1px solid rgba(24, 144, 255, 0.5)' : '1px solid #91d5ff')
+                      : `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                    color: themeStyles.textColor,
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                    e.currentTarget.style.boxShadow = `0 4px 12px ${themeStyles.shadowColor}`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
                   }}
                   onClick={() => {
                     // For recent components, we only have name and icon, so pass the name
@@ -883,35 +1121,122 @@ const ContextMenu = ({
         </div>
 
         {/* Context Actions */}
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={{ 
-            fontSize: 10, 
-            color: '#8c8c8c', 
-            marginBottom: 6,
-            fontWeight: 500,
+            fontSize: 11, 
+            color: themeStyles.textColorPrimary, 
+            marginBottom: 8,
+            fontWeight: 600,
             textTransform: 'uppercase',
-            letterSpacing: 0.5
+            letterSpacing: 0.8
           }}>
-            Actions
+            <span className="selectable-text" style={{ color: themeStyles.textColorSecondary }}>Actions</span>
           </div>
           <div style={{ 
             display: 'flex', 
-            gap: 4
+            gap: 6,
+            flexWrap: 'wrap'
           }}>
             <Tooltip zIndex={99999} title="Cut">
-              <Button size="small" icon={<ScissorOutlined />} onClick={cutNode} style={{ width: 28, height: 28 }} />
+              <Button 
+                size="small" 
+                icon={<ScissorOutlined />} 
+                onClick={cutNode} 
+                style={{ 
+                  width: 32, 
+                  height: 32,
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa',
+                  border: `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                  color: themeStyles.textColor,
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }} 
+              />
             </Tooltip>
-            <Tooltip zIndex={99999} title="Copy">
-              <Button size="small" icon={<CopyOutlined />} onClick={copyNode} style={{ width: 28, height: 28 }} />
+            <Tooltip zIndex={99999} title="Copy component">
+              <Button 
+                size="small" 
+                icon={<CopyOutlined />} 
+                onClick={copyNode} 
+                style={{ 
+                  width: 32, 
+                  height: 32,
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa',
+                  border: `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                  color: themeStyles.textColor,
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }} 
+              />
             </Tooltip>
+            {(isTextTarget || hasTextSelection) && (
+              <Tooltip zIndex={99999} title={hasTextSelection ? 'Copy selected text' : 'Copy text content'}>
+                <Button 
+                  size="small" 
+                  onClick={copyTextContent} 
+                  style={{ 
+                    width: 32, 
+                    height: 32,
+                    background: isDark ? 'rgba(82, 196, 26, 0.2)' : '#f6ffed',
+                    border: isDark ? '1px solid rgba(82, 196, 26, 0.5)' : '1px solid #b7eb8f',
+                    color: isDark ? '#73d13d' : '#52c41a',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  T
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip zIndex={99999} title="Paste">
-              <Button size="small" icon={<SnippetsOutlined />} onClick={pasteNode} style={{ width: 28, height: 28 }} />
+              <Button 
+                size="small" 
+                icon={<SnippetsOutlined />} 
+                onClick={pasteNode} 
+                style={{ 
+                  width: 32, 
+                  height: 32,
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa',
+                  border: `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                  color: themeStyles.textColor,
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }} 
+              />
             </Tooltip>
             <Tooltip zIndex={99999} title="Duplicate">
-              <Button size="small" icon={<CopyFilled />} onClick={duplicateNode} style={{ width: 28, height: 28 }} />
+              <Button 
+                size="small" 
+                icon={<CopyFilled />} 
+                onClick={duplicateNode} 
+                style={{ 
+                  width: 32, 
+                  height: 32,
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa',
+                  border: `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                  color: themeStyles.textColor,
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }} 
+              />
             </Tooltip>
             <Tooltip zIndex={99999} title="Delete">
-              <Button size="small" icon={<DeleteOutlined />} onClick={deleteNode} danger style={{ width: 28, height: 28 }} />
+              <Button 
+                size="small" 
+                icon={<DeleteOutlined />} 
+                onClick={deleteNode} 
+                style={{ 
+                  width: 32, 
+                  height: 32,
+                  background: isDark ? 'rgba(255, 77, 79, 0.2)' : '#fff2f0',
+                  border: isDark ? '1px solid rgba(255, 77, 79, 0.5)' : '1px solid #ffccc7',
+                  color: '#ff4d4f',
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }} 
+              />
             </Tooltip>
           </div>
         </div>
@@ -919,21 +1244,21 @@ const ContextMenu = ({
         {/* Style Controls - All on one line */}
         <div>
           <div style={{ 
-            fontSize: 10, 
-            color: '#8c8c8c', 
-            marginBottom: 6,
-            fontWeight: 500,
+            fontSize: 11, 
+            color: themeStyles.textColorSecondary, 
+            marginBottom: 8,
+            fontWeight: 600,
             textTransform: 'uppercase',
-            letterSpacing: 0.5
+            letterSpacing: 0.8
           }}>
-            Style Controls
+            <span className="selectable-text" style={{ color: themeStyles.textColorSecondary }}>Style Controls</span>
           </div>
           
           {/* Control Buttons - Single Row */}
           <div style={{ 
             display: 'flex', 
-            gap: 2,
-            marginBottom: 8,
+            gap: 4,
+            marginBottom: 12,
             flexWrap: 'wrap'
           }}>
             {controlButtons.map((control) => (
@@ -947,45 +1272,25 @@ const ContextMenu = ({
                       setActiveControl(activeControl === control.key ? null : control.key);
                     }}
                     style={{ 
-                      width: 28,
-                      height: 28,
-                      fontSize: 10,
-                      opacity: lockedControls.has(control.key) ? 0.6 : 1
+                      width: 32,
+                      height: 32,
+                      fontSize: 12,
+                      opacity: lockedControls.has(control.key) ? 0.6 : 1,
+                      background: activeControl === control.key 
+                        ? '#1890ff'
+                        : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa'),
+                      border: activeControl === control.key 
+                        ? '1px solid #1890ff'
+                        : `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                      color: activeControl === control.key 
+                        ? '#fff'
+                        : themeStyles.textColor,
+                      borderRadius: 8,
+                      transition: 'all 0.2s ease'
                     }}
                     disabled={lockedControls.has(control.key)}
                   />
                 </Tooltip>
-                
-                {/* Stroke Color Picker - positioned at bottom right of stroke control */}
-                {control.key === 'stroke' && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: -2,
-                    right: 10, // Offset to avoid overlap with lock button
-                    zIndex: 99999999999
-                  }}>
-                    <Tooltip title="Stroke Color" placement="top">
-                      <ColorPicker
-                        zIndex={99999}
-                        value={styleValues.strokeColor}
-                        onChange={(color) => {
-                          const colorStr = color.toHexString();
-                          setStyleValues(prev => ({ ...prev, strokeColor: colorStr }));
-                          updateStyle('strokeColor', colorStr);
-                        }}
-                        showText={false}
-                        size="small"
-                        style={{
-                          width: 12,
-                          height: 12,
-                          border: '1px solid #fff',
-                          borderRadius: '50%',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                        }}
-                      />
-                    </Tooltip>
-                  </div>
-                )}
                 
                 {/* Lock button overlay */}
                 <Button
@@ -1000,12 +1305,15 @@ const ContextMenu = ({
                     position: 'absolute',
                     top: -2,
                     right: -2,
-                    width: 12,
-                    height: 12,
-                    fontSize: 8,
+                    width: 14,
+                    height: 14,
+                    fontSize: 9,
                     color: lockedControls.has(control.key) ? '#ff4d4f' : '#52c41a',
                     padding: 0,
-                    lineHeight: 1
+                    lineHeight: 1,
+                    background: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)',
+                    borderRadius: '50%',
+                    border: `1px solid ${lockedControls.has(control.key) ? '#ff4d4f' : '#52c41a'}`
                   }}
                 />
               </div>
@@ -1015,29 +1323,59 @@ const ContextMenu = ({
           {/* Active Control Slider */}
           {activeControl && (
             <div style={{ 
-              background: '#f8f8f8', 
-              padding: 8, 
-              borderRadius: 6,
-              border: '1px solid #e8e8e8'
+              background: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f8f8f8', 
+              padding: 12, 
+              borderRadius: 8,
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
             }}>
               <div style={{ 
-                fontSize: 10, 
-                color: '#595959', 
-                marginBottom: 4,
+                fontSize: 11, 
+                color: themeStyles.textColor, 
+                marginBottom: 6,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 fontWeight: 500
               }}>
-                <span>{controlButtons.find(c => c.key === activeControl)?.label}</span>
-                <span style={{ 
-                  fontWeight: 600,
-                  fontSize: 11,
-                  color: '#1890ff'
-                }}>
-                  {styleValues[activeControl]}
-                  {activeControl === 'rotation' ? '°' : activeControl === 'zIndex' || activeControl === 'order' ? '' : 'px'}
+                <span className="selectable-text" style={{ color: themeStyles.textColor }}>
+                  {controlButtons.find(c => c.key === activeControl)?.label}
                 </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {/* Stroke Color Picker - show only when stroke control is active */}
+                  {activeControl === 'stroke' && (
+                    <Tooltip title="Stroke Color" placement="top">
+                      <ColorPicker
+                        zIndex={99999}
+                        value={styleValues.strokeColor}
+                        onChange={(color) => {
+                          const colorStr = color.toHexString();
+                          setStyleValues(prev => ({ ...prev, strokeColor: colorStr }));
+                          updateStyle('strokeColor', colorStr);
+                        }}
+                        showText={false}
+                        size="small"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          border: `2px solid ${themeStyles.textColor}`,
+                          borderRadius: '50%',
+                          boxShadow: `0 2px 6px ${themeStyles.shadowColor}`
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                  <span style={{ 
+                    fontWeight: 600,
+                    fontSize: 12,
+                    color: '#1890ff',
+                    background: isDark ? 'rgba(24, 144, 255, 0.1)' : 'rgba(24, 144, 255, 0.08)',
+                    padding: '2px 6px',
+                    borderRadius: 4
+                  }} className="selectable-text">
+                    {styleValues[activeControl]}
+                    {activeControl === 'rotation' ? '°' : activeControl === 'zIndex' || activeControl === 'order' ? '' : 'px'}
+                  </span>
+                </div>
               </div>
               <Slider
                 min={controlButtons.find(c => c.key === activeControl)?.min}
@@ -1050,6 +1388,14 @@ const ContextMenu = ({
                 }}
                 tooltip={{ open: false }}
                 size="small"
+                styles={{
+                  track: {
+                    background: isDark ? 'rgba(255, 255, 255, 0.2)' : '#f0f0f0'
+                  },
+                  rail: {
+                    background: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8'
+                  }
+                }}
               />
             </div>
           )}
@@ -1063,18 +1409,23 @@ const ContextMenu = ({
           style={{
             position: 'absolute',
             top: position.y,
-            left: position.x + 230, // Position to the right of main menu
-            width: 300,
-            maxHeight: 400,
+            left: position.x + 250, // Position to the right of main menu
+            width: 320,
+            maxHeight: 420,
             overflowY: 'auto',
             pointerEvents: 'auto',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
-            borderRadius: 8,
-            border: '1px solid #e8e8e8',
-            zIndex: 99999999999999,
-            background: '#fff'
+            boxShadow: `0 20px 40px ${themeStyles.shadowColor}`,
+            borderRadius: 16,
+            border: themeStyles.border,
+            background: themeStyles.background,
+            backdropFilter: themeStyles.backdropFilter,
+            zIndex: 99999999999999
           }}
-          bodyStyle={{ padding: 12 }}
+          bodyStyle={{ 
+            padding: 16,
+            background: 'transparent',
+            color: themeStyles.textColor
+          }}
           onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
           onMouseLeave={() => {
             // Close drawer when mouse leaves
@@ -1083,24 +1434,25 @@ const ContextMenu = ({
           }}
         >
           <div style={{ 
-            fontSize: 12, 
+            fontSize: 13, 
             fontWeight: 600, 
-            marginBottom: 12,
-            color: '#262626',
-            borderBottom: '1px solid #f0f0f0',
+            marginBottom: 16,
+            color: themeStyles.textColor,
+            borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #f0f0f0',
             paddingBottom: 8
           }}>
-            Component Slot Assignment
+            <span className="selectable-text" style={{ color: themeStyles.textColor }}>Component Slot Assignment</span>
           </div>
           
           {/* Slot indicators */}
           <div style={{ 
             display: 'flex', 
             gap: 8, 
-            marginBottom: 12,
-            padding: 8,
-            background: '#f8f8f8',
-            borderRadius: 6
+            marginBottom: 16,
+            padding: 12,
+            background: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f8f8f8',
+            borderRadius: 8,
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
           }}>
             {[1, 2, 3].map(slotNum => {
               const assignedComponent = manualSlots[slotNum];
@@ -1110,17 +1462,31 @@ const ContextMenu = ({
                   key={slotNum} 
                   style={{
                     flex: 1,
-                    height: 60,
+                    height: 64,
                     padding: 8,
-                    background: selectedComponentForSlot && !assignedComponent ? '#fff7e6' : '#fff',
-                    border: selectedComponentForSlot && !assignedComponent ? '2px dashed #ffa940' : '1px solid #e8e8e8',
-                    borderRadius: 4,
+                    background: selectedComponentForSlot && !assignedComponent 
+                      ? (isDark ? 'rgba(255, 165, 64, 0.2)' : '#fff7e6')
+                      : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa'),
+                    border: selectedComponentForSlot && !assignedComponent 
+                      ? (isDark ? '2px dashed rgba(255, 165, 64, 0.6)' : '2px dashed #ffa940')
+                      : (isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #e8e8e8'),
+                    borderRadius: 8,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 10,
-                    cursor: selectedComponentForSlot ? 'pointer' : 'default'
+                    cursor: selectedComponentForSlot ? 'pointer' : 'default',
+                    color: themeStyles.textColor,
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedComponentForSlot) {
+                      e.currentTarget.style.transform = 'scale(1.02)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1129,11 +1495,11 @@ const ContextMenu = ({
                     }
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Slot {slotNum}</div>
-                  <div style={{ fontSize: 16, marginBottom: 2 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4, color: themeStyles.textColor }} className="selectable-text">Slot {slotNum}</div>
+                  <div style={{ fontSize: 18, marginBottom: 2 }}>
                     {component?.icon || (selectedComponentForSlot ? '📍' : '❓')}
                   </div>
-                  <div style={{ fontSize: 9, color: '#666' }}>
+                  <div style={{ fontSize: 9, color: themeStyles.textColorSecondary }} className="selectable-text">
                     {assignedComponent || (selectedComponentForSlot ? 'Click here' : 'Empty')}
                   </div>
                 </Button>
@@ -1143,54 +1509,69 @@ const ContextMenu = ({
           
           {/* Component selection */}
           <div style={{ 
-            fontSize: 10, 
-            color: '#666', 
-            marginBottom: 8,
+            fontSize: 11, 
+            color: themeStyles.textColorSecondary, 
+            marginBottom: 12,
             fontWeight: 500
           }}>
-            {selectedComponentForSlot 
-              ? `Selected: ${selectedComponentForSlot} - Click a slot to assign` 
-              : 'Click a component to select it:'
-            }
+            <span className="selectable-text" style={{ color: themeStyles.textColorSecondary }}>
+              {selectedComponentForSlot 
+                ? `Selected: ${selectedComponentForSlot} - Click a slot to assign` 
+                : 'Click a component to select it:'
+              }
+            </span>
           </div>
           
           <div style={{ 
             display: 'grid', 
             gridTemplateColumns: 'repeat(4, 1fr)', 
-            gap: 6 
+            gap: 8 
           }}>
             {allComponents.map((comp) => (
               <Button
                 key={comp.name}
                 size="small"
                 style={{
-                  height: 50,
+                  height: 56,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 2,
-                  background: selectedComponentForSlot === comp.name ? '#e6f7ff' : '#fafafa',
-                  border: selectedComponentForSlot === comp.name ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                  borderRadius: 4,
-                  fontSize: 8,
-                  transition: 'all 0.2s ease'
+                  gap: 3,
+                  background: selectedComponentForSlot === comp.name 
+                    ? (isDark ? 'rgba(24, 144, 255, 0.2)' : '#e6f7ff')
+                    : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#fafafa'),
+                  border: selectedComponentForSlot === comp.name 
+                    ? (isDark ? '2px solid rgba(24, 144, 255, 0.8)' : '2px solid #1890ff')
+                    : (isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9'),
+                  borderRadius: 6,
+                  fontSize: 9,
+                  transition: 'all 0.2s ease',
+                  color: themeStyles.textColor
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.boxShadow = `0 4px 12px ${themeStyles.shadowColor}`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = 'none';
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedComponentForSlot(selectedComponentForSlot === comp.name ? null : comp.name);
                 }}
               >
-                <span style={{ fontSize: 14 }}>{comp.icon}</span>
-                <span>{comp.name}</span>
+                <span style={{ fontSize: 16 }}>{comp.icon}</span>
+                <span className="selectable-text" style={{ color: themeStyles.textColor }}>{comp.name}</span>
               </Button>
             ))}
           </div>
           
           <div style={{ 
-            marginTop: 12, 
-            paddingTop: 8, 
-            borderTop: '1px solid #f0f0f0',
+            marginTop: 16, 
+            paddingTop: 12, 
+            borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #f0f0f0',
             display: 'flex',
             gap: 8
           }}>
@@ -1200,14 +1581,21 @@ const ContextMenu = ({
                 e.stopPropagation();
                 setManualSlots({ 1: null, 2: null, 3: null });
               }}
-              style={{ flex: 1 }}
+              style={{ 
+                flex: 1,
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#fafafa',
+                border: `1px solid ${isDark ? '#525252' : '#d9d9d9'}`,
+                color: themeStyles.textColor,
+                borderRadius: 6
+              }}
             >
-              Clear All Slots
+              <span className="selectable-text" style={{ color: themeStyles.textColor }}>Clear All Slots</span>
             </Button>
           </div>
         </Card>
       )}
-    </div>,
+      </div>
+    </ConfigProvider>,
     document.body
   );
 };

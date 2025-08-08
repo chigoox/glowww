@@ -4,7 +4,7 @@ import { EditOutlined } from '@ant-design/icons';
 import { Element, useNode } from "@craftjs/core";
 import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
 import { useEffect, useState } from "react";
-import { FlexBox } from "../FlexBox";
+import { FlexBox } from "../Layout/FlexBox";
 import ContextMenu from "../../utils/context/ContextMenu";
 import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import useEditorDisplay from "../../utils/craft/useEditorDisplay";

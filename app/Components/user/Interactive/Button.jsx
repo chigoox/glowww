@@ -12,14 +12,14 @@ import {
   Switch, 
   message 
 } from 'antd';
-import { Text } from "./Text";
-import ContextMenu from "../utils/context/ContextMenu";
-import { useContextMenu } from "../utils/hooks/useContextMenu";
-import useEditorDisplay from "../utils/craft/useEditorDisplay";
-import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../editor/SnapPositionHandle";
-import { snapGridSystem } from "../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { Text } from "../Text/Text";
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/craft/useEditorDisplay";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 
 // Built-in action types
 const ACTION_TYPES = [

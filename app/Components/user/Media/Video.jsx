@@ -3,104 +3,74 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
-import MediaLibrary from '../editor/MediaLibrary';
-import ContextMenu from "../utils/context/ContextMenu";
-import useEditorDisplay from "../utils/craft/useEditorDisplay";
-import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../editor/SnapPositionHandle";
-import { snapGridSystem } from "../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import { PlayCircleOutlined } from '@ant-design/icons';
+import MediaLibrary from '../../editor/MediaLibrary';
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/context/useEditorDisplay";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
+import SnapPositionHandle from '../../editor/SnapPositionHandle';
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 
-const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
-
-export const Image = ({
-  // Basic Image Properties
-  src = placeholderURL,
-  alt = "Image",
+export const Video = ({
+  // Video Source
+  videoSrc = "https://www.youtube.com/watch?v=oASwMQDJPAw",
+  videoType = "url", // "url" | "file"
   
-  // Layout & Dimensions
-  width = 300,
-  height = 200,
-  minWidth = 50,
-  maxWidth,
-  minHeight = 50,
-  maxHeight,
+  // Video Properties
+  autoplay = false,
+  controls = true,
+  loop = false,
+  muted = false,
+  preload = "metadata", // "none" | "metadata" | "auto"
+  poster = "", // Thumbnail image
+  objectFit = "cover",
+  
+  // Layout & Position
+  width = "100%",
+  height = "auto",
+  minWidth = "",
+  maxWidth = "",
+  minHeight = "200px",
+  maxHeight = "",
   display = "block",
-  
-  // Positioning
   position = "relative",
-  top,
-  right,
-  bottom,
-  left,
+  top = "",
+  right = "",
+  bottom = "",
+  left = "",
   zIndex = 1,
   
   // Spacing
-  margin = 0,
-  padding = 0,
+  margin = "10px 0",
+  padding = "0",
   
   // Border
   borderWidth = 0,
-  borderStyle = "solid", 
+  borderStyle = "solid",
   borderColor = "#e0e0e0",
-  borderRadius = 4,
+  borderRadius = 8,
+  
+  // Background
+  backgroundColor = "#000000",
   
   // Effects
-  boxShadow = "none",
+  boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)",
   opacity = 1,
-  filter = "none",
-  
-  // Image Specific
-  objectFit = "cover",
-  objectPosition = "center",
   
   // HTML Attributes
   className = "",
-  id,
-  title,
+  id = "",
+  title = "",
 }) => {
   const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
     parent: node.data.parent,
   }));
-  const { actions, query } = useEditor();
-  
-  // Use snap functionality
-  const snapHook = useCraftSnap(nodeId);
-  
-  const { connectors: { snapConnect, snapDrag } = {} } = snapHook || {};
-  
-  // Use multi-selection functionality
-  const { addToSelection, addToSelectionWithKeys, removeFromSelection, isSelected: isMultiSelected, isMultiSelecting } = useMultiSelect();
-  
-  // Track parent changes to reset position properties
-  const prevParentRef = useRef(parent);
+  const { actions: editorActions, query } = useEditor();
 
-  useEffect(() => {
-    if (prevParentRef.current !== parent) {
-      console.log('Image: Parent changed, resetting position properties');
-      setProp(props => {
-        // Only reset if position properties were actually set
-        if (props.top !== undefined || props.left !== undefined || 
-            props.right !== undefined || props.bottom !== undefined) {
-          console.log('🔄 Resetting position properties after container move');
-          props.top = undefined;
-          props.left = undefined;
-          props.right = undefined;
-          props.bottom = undefined;
-          // Keep position as relative for normal flow
-          props.position = "relative";
-        }
-      });
-      prevParentRef.current = parent;
-    }
-  }, [parent, setProp]);
-  
-  // Use our shared editor display hook
-  const { hideEditorUI } = useEditorDisplay();
-
-  const imageRef = useRef(null);
+  const videoRef = useRef(null);
   const dragRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -108,57 +78,26 @@ export const Image = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  
+  // Track previous parent to detect container changes
+  const prevParentRef = useRef(parent);
+  
+  // Use our shared editor display hook
+  const { hideEditorUI } = useEditorDisplay();
 
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+  // Multi-selection hook
+  const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
 
-  // Handle context menu (right-click)
-  const handleContextMenu = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // If this element is not already selected, add it to the selection
-    if (!isMultiSelected(nodeId)) {
-      console.log('🎯 Right-click on unselected element, adding to selection:', nodeId);
-      addToSelection(nodeId);
-    }
-    
-    // Calculate position to keep menu on screen
-    const menuWidth = 320;
-    const menuHeight = 500;
-    let x = e.clientX;
-    let y = e.clientY;
-    
-    // Adjust if menu would go off right edge
-    if (x + menuWidth > window.innerWidth) {
-      x = window.innerWidth - menuWidth - 10;
-    }
-    
-    // Adjust if menu would go off bottom edge
-    if (y + menuHeight > window.innerHeight) {
-      y = window.innerHeight - menuHeight - 10;
-    }
-    
-    // Ensure minimum margins
-    x = Math.max(10, x);
-    y = Math.max(10, y);
-    
-    setContextMenu({
-      visible: true,
-      x: x,
-      y: y
-    });
-  };
+  // Snap functionality like GridBox
+  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
 
-  // Close context menu
-  const closeContextMenu = () => {
-    setContextMenu({ visible: false, x: 0, y: 0 });
-  };
+  // Context menu functionality
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
 
   // Function to update box position for portal positioning
   const updateBoxPosition = useCallback(() => {
-    if (imageRef.current) {
-      const rect = imageRef.current.getBoundingClientRect();
+    if (videoRef.current) {
+      const rect = videoRef.current.getBoundingClientRect();
       setBoxPosition({
         top: rect.top + window.scrollY,
         left: rect.left + window.scrollX,
@@ -174,38 +113,78 @@ export const Image = ({
 
   useEffect(() => {
     const connectElements = () => {
-      if (imageRef.current) {
-        // Use defensive connection with safety checks
-        let connectedRef = imageRef.current;
-        if (snapConnect && typeof snapConnect === 'function') {
-          connectedRef = snapConnect(connectedRef);
-        }
-        connect(connectedRef); // Connect for selection with snap functionality
+      if (videoRef.current) {
+        snapConnect(videoRef.current); // Connect for selection with snap functionality
       }
       if (dragRef.current) {
-        // Use defensive connection with safety checks
-        let connectedRef = dragRef.current;
-        if (snapDrag && typeof snapDrag === 'function') {
-          connectedRef = snapDrag(connectedRef);
-        }
-        drag(connectedRef); // Connect the drag handle with snap functionality
+        drag(dragRef.current); // Connect to standard Craft.js drag
       }
     };
 
-    // Always connect on mount and when dependencies change
+    // Always attempt to connect elements
     connectElements();
     
-    // Reconnect when selection state changes
-    const timer = setTimeout(connectElements, 50);
+    // Also reconnect when the component is selected or when nodeId changes
+    const timer = setTimeout(() => {
+      connectElements();
+      // Reduce logging frequency for connector re-establishment
+      if (Math.random() < 0.1) { // Only log 10% of the time
+        console.log('🔗 Connectors re-established for Video node:', nodeId);
+      }
+    }, 100); // Give DOM time to settle
+    
     return () => clearTimeout(timer);
-  }, [connect, drag, snapConnect, snapDrag]);
+  }, [snapConnect, drag, isSelected, nodeId]); // Exact same dependencies as working components
+
+  // Detect parent changes and reset position properties with GridBox-style logic
+  useEffect(() => {
+    // Skip the initial render (when prevParentRef.current is first set)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Video ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
+      
+      // Wait longer than the centered drag positioning (600ms) before resetting
+      // This allows useCenteredContainerDrag to apply its centered positioning first
+      setTimeout(() => {
+        // Check if position was already set by centered drag (absolute position with left/top set)
+        const currentNode = query.node(nodeId);
+        if (currentNode) {
+          const currentProps = currentNode.get().data.props;
+          const hasPositioning = currentProps.position === 'absolute' && 
+                                (currentProps.left !== undefined || currentProps.top !== undefined);
+          
+          if (hasPositioning) {
+            console.log('🎯 Video position already set by centered drag system, skipping reset');
+            return; // Don't reset if centered positioning was applied
+          }
+        }
+        
+        // Reset position properties to default only if no positioning was applied
+        setProp((props) => {
+          // Only reset if position properties were actually set
+          if (props.top !== undefined || props.left !== undefined || 
+              props.right !== undefined || props.bottom !== undefined) {
+            console.log('🔄 Resetting Video position properties after container move (no centered positioning detected)');
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            // Keep position as relative for normal flow
+            props.position = "relative";
+          }
+        });
+      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
+    }
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp, query]);
 
   // Update box position when selected or hovered changes
   useEffect(() => {
     if (isSelected || isHovered) {
       updateBoxPosition();
       
-      // Update position on scroll and resize
       const handleScroll = () => updateBoxPosition();
       const handleResize = () => updateBoxPosition();
       
@@ -224,14 +203,13 @@ export const Image = ({
     e.stopPropagation();
     e.preventDefault();
     
-    // Prevent any other interactions during resize
-    setIsResizing(true);
-    
     const startX = e.clientX;
     const startY = e.clientY;
-    const rect = imageRef.current.getBoundingClientRect();
+    const rect = videoRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
+    
+    setIsResizing(true);
 
     // Register all elements for snapping during resize
     const nodes = query.getNodes();
@@ -283,48 +261,42 @@ export const Image = ({
       let newWidth = startWidth;
       let newHeight = startHeight;
       
-      // Calculate new dimensions based on resize direction
       switch (direction) {
-        case 'se': // bottom-right
+        case 'se':
           newWidth = startWidth + deltaX;
           newHeight = startHeight + deltaY;
           break;
-        case 'sw': // bottom-left
+        case 'sw':
           newWidth = startWidth - deltaX;
           newHeight = startHeight + deltaY;
           break;
-        case 'ne': // top-right
+        case 'ne':
           newWidth = startWidth + deltaX;
           newHeight = startHeight - deltaY;
           break;
-        case 'nw': // top-left
+        case 'nw':
           newWidth = startWidth - deltaX;
           newHeight = startHeight - deltaY;
           break;
-        case 'e': // right edge
+        case 'e':
           newWidth = startWidth + deltaX;
           break;
-        case 'w': // left edge
+        case 'w':
           newWidth = startWidth - deltaX;
           break;
-        case 's': // bottom edge
+        case 's':
           newHeight = startHeight + deltaY;
           break;
-        case 'n': // top edge
+        case 'n':
           newHeight = startHeight - deltaY;
           break;
       }
       
-      // Apply minimum constraints
-      newWidth = Math.max(newWidth, minWidth || 50);
-      newHeight = Math.max(newHeight, minHeight || 50);
-      
-      // Apply maximum constraints if set
-      if (maxWidth) newWidth = Math.min(newWidth, maxWidth);
-      if (maxHeight) newHeight = Math.min(newHeight, maxHeight);
+      newWidth = Math.max(newWidth, 200);
+      newHeight = Math.max(newHeight, 150);
 
       // Get current position for snap calculations
-      const currentRect = imageRef.current.getBoundingClientRect();
+      const currentRect = videoRef.current.getBoundingClientRect();
       const editorRoot = document.querySelector('[data-editor="true"]');
       if (editorRoot) {
         const editorRect = editorRoot.getBoundingClientRect();
@@ -390,7 +362,7 @@ export const Image = ({
       }
       
       // Update dimensions using Craft.js throttled setProp for smooth history
-      actions.history.throttle(500).setProp(nodeId, (props) => {
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
       });
@@ -429,7 +401,6 @@ export const Image = ({
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
       
-      // Update position using Craft.js setProp
       setProp(props => {
         props.left = currentLeft + deltaX;
         props.top = currentTop + deltaY;
@@ -448,10 +419,11 @@ export const Image = ({
 
   // Handle media selection from library
   const handleMediaSelect = (item, itemType) => {
-    if (itemType === 'image') {
+    if (itemType === 'video') {
       setProp(props => {
-        props.src = item.url;
-        props.alt = item.name || 'Selected image';
+        props.videoSrc = item.url;
+        props.videoType = item.isExternal ? "url" : "file";
+        if (item.name) props.title = item.name;
       });
     }
   };
@@ -486,11 +458,9 @@ export const Image = ({
     borderStyle,
     borderColor,
     borderRadius: processValue(borderRadius, 'borderRadius'),
-    boxShadow: boxShadow !== "none" ? boxShadow : undefined,
+    backgroundColor,
+    boxShadow,
     opacity,
-    filter: filter !== "none" ? filter : undefined,
-    objectFit,
-    objectPosition,
   };
 
   // Remove undefined values
@@ -500,23 +470,145 @@ export const Image = ({
     }
   });
 
+  const getVideoElement = () => {
+    if (!videoSrc) return null;
+
+    // Check if it's a YouTube/Vimeo/other embed URL
+    if (videoSrc.includes('youtube.com') || videoSrc.includes('youtu.be')) {
+      let embedUrl = videoSrc;
+      if (videoSrc.includes('watch?v=')) {
+        const videoId = videoSrc.split('watch?v=')[1].split('&')[0];
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      } else if (videoSrc.includes('youtu.be/')) {
+        const videoId = videoSrc.split('youtu.be/')[1].split('?')[0];
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      }
+      
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <iframe
+            src={embedUrl}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              borderRadius: 'inherit',
+              pointerEvents: isSelected ? 'none' : 'auto'
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title={title || "Video"}
+          />
+          {isSelected && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+                cursor: 'grab',
+                backgroundColor: 'rgba(0,0,0,0.1)',
+                pointerEvents: 'auto'
+              }}
+              onMouseDown={e => e.stopPropagation()}
+            />
+          )}
+        </div>
+      );
+    }
+
+    if (videoSrc.includes('vimeo.com')) {
+      const videoId = videoSrc.split('vimeo.com/')[1].split('?')[0];
+      const embedUrl = `https://player.vimeo.com/video/${videoId}`;
+      
+      return (
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          <iframe
+            src={embedUrl}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              borderRadius: 'inherit',
+              pointerEvents: isSelected ? 'none' : 'auto'
+            }}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            title={title || "Video"}
+          />
+          {isSelected && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 10,
+                cursor: 'grab',
+                backgroundColor: 'rgba(0,0,0,0.1)',
+                pointerEvents: 'auto'
+              }}
+              onMouseDown={e => e.stopPropagation()}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // Regular video element for direct video files
+    return (
+      <video
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: objectFit,
+          borderRadius: 'inherit',
+          pointerEvents: isSelected ? 'none' : 'auto'
+        }}
+        autoPlay={autoplay}
+        controls={controls}
+        loop={loop}
+        muted={muted}
+        preload={preload}
+        poster={poster}
+        title={title}
+      >
+        <source src={videoSrc} />
+        Your browser does not support the video tag.
+      </video>
+    );
+  };
+
   // Don't render until client-side
   if (!isClient) {
     return (
       <div style={computedStyles}>
-        <img
-          src={src}
-          alt={alt}
-          style={{ width: '100%', height: '100%', objectFit, objectPosition, }}
-        />
+        {videoSrc ? getVideoElement() : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#f5f5f5',
+            color: '#999',
+            fontSize: '48px',
+            borderRadius: 'inherit'
+          }}>
+            <PlayCircleOutlined />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
-      ref={imageRef}
+      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected ? 'ring-2 ring-purple-500' : ''} ${className || ''}`}
+      ref={videoRef}
       style={{
         position: 'relative',
         cursor: 'default',
@@ -526,11 +618,6 @@ export const Image = ({
       }}
       id={id}
       title={title}
-      onMouseEnter={hideEditorUI ? undefined : () => {
-        setIsHovered(true);
-        updateBoxPosition();
-      }}
-      onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
       onClick={(e) => {
         if (!hideEditorUI) {
           // Prevent selection during resize operations
@@ -543,20 +630,18 @@ export const Image = ({
           if (e.ctrlKey || e.metaKey) {
             e.stopPropagation();
             e.preventDefault();
-            console.log('🎯 Ctrl+click detected on:', nodeId);
-            // Toggle selection - works even if no previous selection
-            if (isMultiSelected(nodeId)) {
-              removeFromSelection(nodeId);
-            } else {
-              addToSelection(nodeId);
-            }
+            toggleSelection(nodeId);
           }
-          // For regular clicks, let the global handler manage clearing/selecting
         }
       }}
+      onMouseEnter={hideEditorUI ? undefined : () => {
+        setIsHovered(true);
+        updateBoxPosition();
+      }}
+      onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
-      {/* Portal controls rendered outside this container to avoid overflow clipping */}
+      {/* Portal controls rendered outside this container - hide in preview mode */}
       {isClient && isSelected && !hideEditorUI && (
         <PortalControls
           boxPosition={boxPosition}
@@ -569,34 +654,39 @@ export const Image = ({
         />
       )}
 
-      {/* Main image */}
-      <img
-        src={src}
-        alt={alt}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit,
-          objectPosition,
-          display: 'block',
-          pointerEvents: 'none', // Allow clicks to pass through to parent for selection,
-          borderRadius: borderRadius,
-          opacity: opacity,
-
-        }}
-        onError={(e) => {
-          // Fallback to placeholder if image fails to load
-          e.target.src = placeholderURL;
-        }}
-      />
+      {/* Video Content */}
+      <div style={{
+        width: '100%',
+        height: height === 'auto' ? '100%' : '100%',
+        minHeight: processValue(minHeight, 'minHeight') || '200px',
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 'inherit'
+      }}>
+        {videoSrc ? getVideoElement() : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#f5f5f5',
+            color: '#999',
+            fontSize: '48px',
+            borderRadius: 'inherit'
+          }}>
+            <PlayCircleOutlined />
+          </div>
+        )}
+      </div>
 
       {/* Media Library Modal */}
       <MediaLibrary
         visible={showMediaLibrary}
         onClose={() => setShowMediaLibrary(false)}
         onSelect={handleMediaSelect}
-        type="images" // Only show images for Image component
-        title="Select Image"
+        type="videos" // Only show videos for Video component
+        title="Select Video"
       />
       
       {/* Context Menu - hide in preview mode */}
@@ -612,7 +702,7 @@ export const Image = ({
   );
 };
 
-// Portal Controls Component - renders outside of the Image to avoid overflow clipping
+// Portal Controls Component
 const PortalControls = ({ 
   boxPosition, 
   dragRef,
@@ -631,7 +721,7 @@ const PortalControls = ({
         top: 0,
         left: 0,
         pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999
+        zIndex: 99999 
       }}
     >
       {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
@@ -656,6 +746,10 @@ const PortalControls = ({
         {/* Left section - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-cy="move-handle"
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -690,9 +784,9 @@ const PortalControls = ({
             transition: 'background 0.2s ease'
           }}
           onClick={handleEditClick}
-          title="Change image"
+          title="Change video"
         >
-          🖼️ EDIT
+          🎬 EDIT
         </div>
         
         {/* Right section - POS (Custom position drag with snapping) */}
@@ -727,90 +821,34 @@ const PortalControls = ({
       </div>
 
       {/* Resize handles */}
-      {/* Top-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'nw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'nw')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
-        title="Resize"
-      />
+      {/* Corner handles */}
+      {[
+        { position: 'nw', cursor: 'nw-resize', top: -4, left: -4 },
+        { position: 'ne', cursor: 'ne-resize', top: -4, left: boxPosition.width - 4 },
+        { position: 'sw', cursor: 'sw-resize', top: boxPosition.height - 4, left: -4 },
+        { position: 'se', cursor: 'se-resize', top: boxPosition.height - 4, left: boxPosition.width - 4 }
+      ].map(handle => (
+        <div
+          key={handle.position}
+          style={{
+            position: 'absolute',
+            top: boxPosition.top + handle.top,
+            left: boxPosition.left + handle.left,
+            width: 8,
+            height: 8,
+            background: 'white',
+            border: '2px solid #1890ff',
+            borderRadius: '2px',
+            cursor: handle.cursor,
+            zIndex: 10001,
+            pointerEvents: 'auto'
+          }}
+          onMouseDown={(e) => handleResizeStart(e, handle.position)}
+          title="Resize"
+        />
+      ))}
 
-      {/* Top-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'ne-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'ne')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
-        title="Resize"
-      />
-
-      {/* Bottom-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'sw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'sw')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
-        title="Resize"
-      />
-
-      {/* Bottom-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'se-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'se')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
-        title="Resize"
-      />
-
+      {/* Edge handles - beautiful semi-transparent style */}
       {/* Top edge */}
       <div
         style={{
@@ -826,8 +864,6 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'n')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
         title="Resize height"
       />
 
@@ -846,8 +882,6 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 's')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
         title="Resize height"
       />
 
@@ -866,8 +900,6 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'w')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
         title="Resize width"
       />
 
@@ -886,8 +918,6 @@ const PortalControls = ({
           pointerEvents: 'auto'
         }}
         onMouseDown={(e) => handleResizeStart(e, 'e')}
-        onMouseUp={(e) => e.stopPropagation()}
-        onMouseMove={(e) => e.stopPropagation()}
         title="Resize width"
       />
     </div>,
@@ -895,34 +925,45 @@ const PortalControls = ({
   );
 };
 
-// CraftJS configuration
-Image.craft = {
-  displayName: "Image",
+// Craft configuration
+Video.craft = {
+  displayName: "Video",
   props: {
-    src: placeholderURL,
-    alt: "Image",
-    width: 300,
-    height: 200,
-    minWidth: 50,
-    maxWidth: 10000,
-    minHeight: 50,
-    maxHeight: 10000,
+    
+    videoSrc: "",
+    videoType: "url",
+    autoplay: false,
+    controls: true,
+    loop: false,
+    muted: false,
+    preload: "metadata",
+    poster: "",
+    objectFit: "cover",
+    width: "100%",
+    height: "auto",
+    minWidth: "",
+    maxWidth: "",
+    minHeight: "200px",
+    maxHeight: "",
+    display: "block",
     position: "relative",
-    top: 0,
-    left: 0,
+    top: "",
+    right: "",
+    bottom: "",
+    left: "",
     zIndex: 1,
-    margin: 0,
-    padding: 0,
+    margin: "10px 0",
+    padding: "0",
     borderWidth: 0,
     borderStyle: "solid",
     borderColor: "#e0e0e0",
-    borderRadius: 4,
-    boxShadow: "none",
+    borderRadius: 8,
+    backgroundColor: "#000000",
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
     opacity: 1,
-    objectFit: "cover",
-    objectPosition: "center",
-    title: "",
     className: "",
+    id: "",
+    title: "",
   },
   rules: {
     canDrag: () => true,
@@ -933,45 +974,52 @@ Image.craft = {
   custom: {
     styleMenu: {
       supportedProps: [
-        // Image Properties
-        "src",
-        "alt",
-        "objectFit",
-        "objectPosition",
-
-        'borderRadius','border',
+        // Video Properties
+        'videoSrc',
+        'autoplay',
+        'controls',
+        'loop',
+        'muted',
+        'preload',
+        'poster',
+        'objectFit',
         
-        // Size & Position
-        "width",
-        "height",
-        "minWidth",
-        "maxWidth", 
-        "minHeight",
-        "maxHeight",
-        "position",
-        "top",
-        "left",
-        "zIndex",
+        // Layout & Position
+        'width',
+        'height',
+        'minWidth',
+        'maxWidth',
+        'minHeight',
+        'maxHeight',
+        'display',
+        'position',
+        'top',
+        'right',
+        'bottom',
+        'left',
+        'zIndex',
         
         // Spacing
-        "margin",
-        "padding",
+        'margin',
+        'padding',
         
-        // Visual Styling
-        "borderWidth",
-        "borderStyle", 
-        "borderColor",
-        "borderRadius",
-        "boxShadow",
-        "opacity",
-
-        // Border Radius - All corners
-        'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
-        'borderBottomLeftRadius', 'borderBottomRightRadius',
+        // Border
+        'borderWidth',
+        'borderStyle',
+        'borderColor',
+        'borderRadius',
+        
+        // Background
+        'backgroundColor',
+        
+        // Effects
+        'boxShadow',
+        'opacity',
         
         // HTML Attributes
-        "title",
-        "className"
+        'className',
+        'id',
+        'title',
       ]
     }
   }

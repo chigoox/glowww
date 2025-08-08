@@ -3,10 +3,10 @@
 import { Element, useEditor } from "@craftjs/core";
 import { Button as ButtonAD, Typography, Drawer, Space, Tooltip } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { Box } from "./user/Box";
-import { FlexBox } from "./user/FlexBox";
-import { GridBox } from "./user/GridBox";
-import { Image } from "./user/Image";
+import { Box } from "./user/Layout/Box";
+import { FlexBox } from "./user/Layout/FlexBox";
+import { GridBox } from "./user/Layout/GridBox";
+import { Image } from "./user/Media/Image";
 import { useDropPositionCorrection } from './utils/drag-drop/useDropPositionCorrection';
 
 import { 
@@ -36,15 +36,15 @@ import {
   SelectOutlined,
   ToolOutlined
 } from "@ant-design/icons";
-import { Text } from "./user/Text";
-import { Button } from "./user/Button";
-import { Link } from "./user/Link";
-import { Paragraph } from "./user/Paragraph";
-import { Video } from "./user/Video";
+import { Text } from "./user/Text/Text";
+import { Button } from "./user/Interactive/Button";
+import { Link } from "./user/Interactive/Link";
+import { Paragraph } from "./user/Text/Paragraph";
+import { Video } from "./user/Media/Video";
 import { ShopFlexBox } from "./user/Advanced/ShopFlexBox";
 import { FormInput } from "./user/Input";
 import { Form } from "./user/Advanced/Form";
-import {Carousel} from "./user/Carousel";
+import {Carousel} from "./user/Media/Carousel";
 import { NavBar } from "./user/Nav/NavBar";
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {

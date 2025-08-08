@@ -3,14 +3,14 @@
 import React, { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
-import ContextMenu from "../utils/context/ContextMenu";
-import useEditorDisplay from "../utils/context/useEditorDisplay";
-import { useCraftSnap } from "../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../editor/SnapPositionHandle";
-import { snapGridSystem } from "../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
+import ContextMenu from "../../utils/context/ContextMenu";
+import useEditorDisplay from "../../utils/context/useEditorDisplay";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 
-export const GridBox = ({
+export const Box = ({
   
   // Layout & Position
   width = "200px",
@@ -72,6 +72,10 @@ export const GridBox = ({
   borderLeftColor,
   borderCollapse = "separate",
   borderSpacing = "0",
+  
+  // Stroke properties
+  stroke = "none",
+  strokeColor = "#000000",
   
   // Border Radius
   borderRadius = 0,
@@ -211,6 +215,91 @@ placeContent,
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
+  // DEBUG: Test if programmatic move works and test container switching
+  useEffect(() => {
+    if (typeof window !== 'undefined' && nodeId) {
+      window.testCraftMove = (fromNodeId, toNodeId) => {
+        try {
+          console.log(`Testing programmatic move: ${fromNodeId} -> ${toNodeId}`);
+          editorActions.move(fromNodeId, toNodeId, 0);
+          console.log('✅ Programmatic move successful');
+          return true;
+        } catch (error) {
+          console.error('❌ Programmatic move failed:', error);
+          return false;
+        }
+      };
+
+      // Test container switching functionality with improved diagnostics
+      window.testContainerSwitching = () => {
+        try {
+          const nodes = query.getNodes();
+          console.log('🔍 Available nodes:', Object.keys(nodes));
+          
+          // Find all Box containers - use only Craft.js isCanvas() method
+          const containers = Object.entries(nodes).filter(([id, node]) => {
+            const isBox = node.data.displayName === 'Box';
+            const canAcceptDrops = query.node(id).isCanvas();
+            
+            console.log(`📦 Checking node ${id} (${node.data.displayName}):`, {
+              isBox,
+              canAcceptDrops,
+              hasRules: !!query.node(id).rules,
+              canDrop: query.node(id).rules?.canDrop?.() || false,
+              canMoveIn: query.node(id).rules?.canMoveIn?.() || false,
+            });
+            return isBox && canAcceptDrops;
+          });
+          console.log('📦 Canvas-enabled containers:', containers.map(([id, node]) => id));
+          
+          // Find all draggable elements (exclude ROOT and containers)
+          const elements = Object.entries(nodes).filter(([id, node]) => {
+            const isNotRoot = node.data.displayName !== 'Root' && id !== 'ROOT';
+            const isNotCanvas = !query.node(id).isCanvas();
+            const canBeDragged = query.node(id).rules?.canDrag?.() || false;
+            
+            return isNotRoot && isNotCanvas && canBeDragged;
+          });
+          console.log('🔧 Draggable elements:', elements.map(([id, node]) => ({ id, name: node.data.displayName })));
+          
+          // Additional diagnostics: Check connector status
+          window.testConnectors = () => {
+            elements.forEach(([id, node]) => {
+              const domElement = node.dom;
+              if (domElement) {
+                console.log(`🔗 Connector status for ${id}:`, {
+                  hasDom: !!domElement,
+                  hasDataCraftNodeId: domElement.getAttribute('data-craft-node-id'),
+                  craftDataAttribute: domElement.getAttribute('data-craft'),
+                  classList: Array.from(domElement.classList || [])
+                });
+              }
+            });
+          };
+          
+          if (containers.length >= 2 && elements.length >= 1) {
+            const [elementId] = elements[0];
+            const [containerId] = containers[1]; // Move to second container
+            
+            console.log(`🚚 Testing container switch: moving ${elementId} (${nodes[elementId].data.displayName}) to ${containerId} (${nodes[containerId].data.displayName})`);
+            editorActions.move(elementId, containerId, 0);
+            console.log('✅ Container switching test successful');
+            return true;
+          } else {
+            console.log('❌ Not enough canvas containers or draggable elements for testing', {
+              containers: containers.length,
+              elements: elements.length
+            });
+            return false;
+          }
+        } catch (error) {
+          console.error('❌ Container switching test failed:', error);
+          return false;
+        }
+      };
+    }
+  }, [nodeId, editorActions, query]);
+
   const cardRef = useRef(null);
   const dragRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -290,15 +379,20 @@ placeContent,
       }
     };
 
+    // Always attempt to connect elements
     connectElements();
     
-    // Also reconnect when the component is selected
-    if (isSelected) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(connectElements, 10);
-      return () => clearTimeout(timer);
-    }
-  }, [snapConnect, snapDrag, isSelected]);
+    // Also reconnect when the component is selected or when nodeId changes
+    const timer = setTimeout(() => {
+      connectElements();
+      // Reduce logging frequency for connector re-establishment
+      if (Math.random() < 0.1) { // Only log 10% of the time
+        console.log('🔗 Connectors re-established for node:', nodeId);
+      }
+    }, 100); // Give DOM time to settle
+    
+    return () => clearTimeout(timer);
+  }, [snapConnect, drag, isSelected, nodeId]); // Back to standard Craft.js drag
 
   // Detect parent changes and reset position properties
   useEffect(() => {
@@ -653,6 +747,10 @@ placeContent,
     borderCollapse,
     borderSpacing,
     
+    // Stroke properties (using -webkit-text-stroke for text stroke effects or outline for general stroke)
+    WebkitTextStroke: stroke !== "none" ? `${processValue(stroke, 'stroke')} ${strokeColor}` : undefined,
+    outline: stroke !== "none" ? `${processValue(stroke, 'stroke')} solid ${strokeColor}` : undefined,
+    
     // Border Radius
     borderRadius: borderTopLeftRadius !== undefined || borderTopRightRadius !== undefined || borderBottomLeftRadius !== undefined || borderBottomRightRadius !== undefined
       ? `${processValue(borderTopLeftRadius || borderRadius, 'borderRadius')} ${processValue(borderTopRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomLeftRadius || borderRadius, 'borderRadius')}`
@@ -749,7 +847,6 @@ placeContent,
       ref={cardRef}
       style={{
         ...computedStyles,
-        position: 'relative',
         cursor: 'default'
       }}
       id={id}
@@ -859,6 +956,9 @@ const PortalControls = ({
         {/* Left half - MOVE (Craft.js drag) - Now interactive */}
         <div
           ref={dragRef}
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -1063,9 +1163,9 @@ const PortalControls = ({
 };
 
 // Define default props for Craft.js - these will be the initial values
-GridBox.craft = {
-  displayName: "GridBox",
-  // Canvas property for containers - THIS MUST BE AT ROOT LEVEL
+Box.craft = {
+  displayName: "Box",
+  // Canvas property for containers - MUST BE AT ROOT LEVEL FOR CRAFT.JS
   canvas: true,
   props: {
     // Layout & Position
@@ -1103,6 +1203,10 @@ GridBox.craft = {
     borderCollapse: "separate",
     borderSpacing: "0",
     borderRadius: 0,
+    
+    // Stroke
+    stroke: "none",
+    strokeColor: "#000000",
     
     // Typography
     fontFamily: "Arial",
@@ -1167,57 +1271,7 @@ GridBox.craft = {
   },
    custom: {
     styleMenu: {
-      supportedProps: [
-        // Layout & Position
-        'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
-        'display', 'position', 'top', 'right', 'bottom', 'left', 'zIndex',
-        'visibility', 'float', 'clear', 'boxSizing',
-        
-        // Overflow & Scroll
-        'overflow', 'overflowX', 'overflowY', 'resize',
-        
-        // Spacing - All sides
-        'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'marginX', 'marginY',
-        'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'paddingX', 'paddingY',
-        
-        // Border - All sides and properties
-        'border', 'borderWidth', 'borderStyle', 'borderColor',
-        'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
-        'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
-        'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-        'borderCollapse', 'borderSpacing',
-        
-        // Border Radius - All corners
-        'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
-        'borderBottomLeftRadius', 'borderBottomRightRadius',
-        
-        // Typography
-        'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'fontStretch',
-        'lineHeight', 'letterSpacing', 'wordSpacing', 'textAlign', 'textDecoration',
-        'textTransform', 'textIndent', 'textShadow', 'verticalAlign', 'whiteSpace',
-        'wordBreak', 'wordWrap',
-        
-        // Grid Container Properties
-        'gridTemplateColumns', 'gridTemplateRows', 'gridTemplateAreas', 'gridAutoFlow',
-        'gridAutoColumns', 'gridAutoRows', 'gap', 'rowGap', 'columnGap',
-        'justifyItems', 'alignItems', 'justifyContent', 'alignContent', 'placeItems', 'placeContent',
-        
-        // Grid Item Properties
-        'gridColumn', 'gridRow', 'gridColumnStart', 'gridColumnEnd', 'gridRowStart', 'gridRowEnd',
-        'gridArea', 'justifySelf', 'alignSelf', 'placeSelf',
-        
-        // Colors & Backgrounds
-        'color', 'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
-        'backgroundRepeat', 'backgroundPosition', 'backgroundAttachment', 'backgroundClip', 'backgroundOrigin',
-        
-        // Effects
-        'boxShadow', 'opacity', 'transform',
-        
-        // HTML Attributes
-        'id', 'className', 'title', 'hidden', 'tabIndex', 'accessKey',
-        'contentEditable', 'draggable', 'spellCheck', 'translate', 'dir', 'lang',
-        'role', 'ariaLabel', 'ariaDescribedBy', 'ariaLabelledBy'
-      ]
+      supportedProps: ['width', 'height', 'margin', 'padding', 'backgroundColor', 'borderRadius', 'border', 'overflow', 'className', 'html']
     }
   }
 };

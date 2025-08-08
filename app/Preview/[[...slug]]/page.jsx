@@ -5,19 +5,19 @@ import { useParams } from 'next/navigation';
 import { Editor, Element, Frame } from "@craftjs/core";
 
 // Import all user components for rendering
-import { Box } from '../../Components/user/Box';
-import { FlexBox } from '../../Components/user/FlexBox';
-import { Text } from '../../Components/user/Text';
-import { GridBox } from '../../Components/user/GridBox';
-import { Image } from '../../Components/user/Image';
-import { Button } from '../../Components/user/Button';
-import { Link } from '../../Components/user/Link';
-import { Paragraph } from '../../Components/user/Paragraph';
-import { Video } from '../../Components/user/Video';
+import { Box } from '../../Components/user/Layout/Box';
+import { FlexBox } from '../../Components/user/Layout/FlexBox';
+import { Text } from '../../Components/user/Text/Text';
+import { GridBox } from '../../Components/user/Layout/GridBox';
+import { Image } from '../../Components/user/Media/Image';
+import { Button } from '../../Components/user/Interactive/Button';
+import { Link } from '../../Components/user/Interactive/Link';
+import { Paragraph } from '../../Components/user/Text/Paragraph';
+import { Video } from '../../Components/user/Media/Video';
 import { ShopFlexBox, ShopImage, ShopText } from '../../Components/user/Advanced/ShopFlexBox';
 import { FormInput } from '../../Components/user/Input';
 import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
-import { Carousel } from '../../Components/user/Carousel';
+import { Carousel } from '../../Components/user/Media/Carousel';
 import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
 import { Root } from '../../Components/core/Root';
 

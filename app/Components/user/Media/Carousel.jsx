@@ -3,13 +3,12 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useNode, useEditor, Element } from "@craftjs/core";
 import { createPortal } from 'react-dom';
-import ContextMenu from "../utils/context/ContextMenu";
-import { useContextMenu } from "../utils/hooks/useContextMenu";
-import useEditorDisplay from "../utils/craft/useEditorDisplay";
-import { useMultiSelect } from '../utils/context/MultiSelectContext';
-import { useCraftSnap } from '../utils/craft/useCraftSnap';
-import SnapPositionHandle from '../editor/SnapPositionHandle';
-import { snapGridSystem } from '../utils/grid/SnapGridSystem';
+import ContextMenu from "../../utils/context/ContextMenu";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import useEditorDisplay from "../../utils/craft/useEditorDisplay";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
+import { useCraftSnap } from '../../utils/craft/useCraftSnap';
+import SnapPositionHandle from '../../editor/SnapPositionHandle';
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -46,8 +45,8 @@ import {
   Tooltip,
   Divider
 } from 'antd';
-import { Paragraph } from "./Paragraph";
-import MediaLibrary from '../editor/MediaLibrary';
+import { Paragraph } from "../Text/Paragraph";
+import MediaLibrary from '../../editor/MediaLibrary';
 
 const { TabPane } = Tabs;
 
@@ -793,7 +792,7 @@ const CarouselSettingsModal = ({ visible, onClose, carousel, onUpdate }) => {
 // Main Carousel Component
 export const Carousel = ({
   // Layout & Position
-  width = "100%",
+  width = "32rem",
   height = 400,
   minWidth = 200,
   maxWidth,
@@ -882,24 +881,57 @@ export const Carousel = ({
     parent: node.data.parent,
   }));
   
-  // Track parent changes to reset position properties
+  // Use shared editor functionality (moved before useEffect that uses query)
+  const { actions: editorActions, query } = useEditor();
+
+  // Track parent changes to reset position properties with GridBox-style logic
   const prevParentRef = useRef(parent);
 
   useEffect(() => {
-    if (prevParentRef.current !== parent) {
-      console.log('Carousel: Parent changed, resetting position properties');
-      setProp(props => {
-        props.top = undefined;
-        props.left = undefined;
-        props.right = undefined;
-        props.bottom = undefined;
-        props.position = "relative";
-      });
-      prevParentRef.current = parent;
+    // Only process if parent actually changed (not initial mount)
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      // Parent has changed - element was moved to a different container
+      console.log(`📦 Carousel ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
+      
+      // Wait longer than the centered drag positioning (600ms) before resetting
+      // This allows useCenteredContainerDrag to apply its centered positioning first
+      setTimeout(() => {
+        // Check if position was already set by centered drag (absolute position with left/top set)
+        const currentNode = query.node(nodeId);
+        if (currentNode) {
+          const currentProps = currentNode.get().data.props;
+          const hasPositioning = currentProps.position === 'absolute' && 
+                                (currentProps.left !== undefined || currentProps.top !== undefined);
+          
+          if (hasPositioning) {
+            console.log('🎯 Carousel position already set by centered drag system, skipping reset');
+            return; // Don't reset if centered positioning was applied
+          }
+        }
+        
+        // Reset position properties to default only if no positioning was applied
+        setProp(props => {
+          // Only reset if position properties were actually set
+          if (props.top !== undefined || props.left !== undefined || 
+              props.right !== undefined || props.bottom !== undefined) {
+            console.log('🔄 Resetting Carousel position properties after container move (no centered positioning detected)');
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            // Keep position as relative for normal flow
+            props.position = "relative";
+          }
+        });
+      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
     }
-  }, [parent, setProp]);
+    
+    // Update the ref for next comparison
+    prevParentRef.current = parent;
+  }, [parent, nodeId, setProp, query]);
   
   const carouselRef = useRef(null);
+  const dragRef = useRef(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [internalCurrentSlide, setInternalCurrentSlide] = useState(currentSlide);
   const [isClient, setIsClient] = useState(false);
@@ -916,10 +948,8 @@ export const Carousel = ({
   const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
 
   // Snap functionality
-  const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
-
-  // Use shared editor functionality
-  const { actions: editorActions, query } = useEditor();
+  // Snap functionality like GridBox
+  const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
 
   // Function to update box position for portal positioning
   const updateBoxPosition = () => {
@@ -941,15 +971,27 @@ export const Carousel = ({
   useEffect(() => {
     const connectElements = () => {
       if (carouselRef.current) {
-        // Chain all connections properly
-        connect(drag(snapConnect(snapDrag(carouselRef.current))));
+        snapConnect(carouselRef.current); // Connect for selection with snap functionality
+      }
+      if (dragRef.current) {
+        drag(dragRef.current); // Connect to standard Craft.js drag
       }
     };
 
+    // Always attempt to connect elements
     connectElements();
-    const timer = setTimeout(connectElements, 50);
+    
+    // Also reconnect when the component is selected or when nodeId changes
+    const timer = setTimeout(() => {
+      connectElements();
+      // Reduce logging frequency for connector re-establishment
+      if (Math.random() < 0.1) { // Only log 10% of the time
+        console.log('🔗 Connectors re-established for Carousel node:', nodeId);
+      }
+    }, 100); // Give DOM time to settle
+    
     return () => clearTimeout(timer);
-  }, [connect, drag, snapConnect, snapDrag]);
+  }, [snapConnect, drag, selected, nodeId]); // Use 'selected' for Carousel as that's how it's defined
 
   // Update box position when selected or hovered changes
   useEffect(() => {
@@ -1288,12 +1330,7 @@ export const Carousel = ({
     <>
       <div
         className={`${selected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected ? 'ring-2 ring-purple-500' : ''} ${className}`}
-        ref={(el) => {
-          carouselRef.current = el;
-          if (el) {
-            connect(drag(snapConnect(snapDrag(el))));
-          }
-        }}
+        ref={carouselRef}
         style={{
           position: 'relative',
           cursor: 'default',
@@ -1527,6 +1564,10 @@ const PortalControls = ({
         {/* Left section - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-cy="move-handle"
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -1706,7 +1747,7 @@ const PortalControls = ({
 Carousel.craft = {
   displayName: "Carousel",
   props: {
-    width: "100%",
+    width: "64rem",
     height: 400,
     minWidth: 200,
     maxWidth: "",

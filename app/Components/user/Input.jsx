@@ -32,8 +32,8 @@ import {
   Space,
   Divider
 } from "antd";
-import { FlexBox } from "./FlexBox";
-import { Text } from "./Text";
+import { FlexBox } from "./Layout/FlexBox";
+import { Text } from "./Text/Text";
 
 export const FormInput = ({
     // Input properties
