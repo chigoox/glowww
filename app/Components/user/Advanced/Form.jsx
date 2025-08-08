@@ -168,7 +168,7 @@ export const Form = ({
     parent: node.data.parent,
   }));
 
-  const { actions: editorActions } = useEditor();
+  const { actions: editorActions, query } = useEditor();
   
   // Use snap functionality
   const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
@@ -176,22 +176,38 @@ export const Form = ({
   // Use multi-selection functionality
   const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
 
-  // Track parent changes to reset position properties
+  // Track parent changes and defer reset so correction hook can position first
   const prevParentRef = useRef(parent);
 
   useEffect(() => {
-    if (prevParentRef.current !== parent) {
-      console.log('Form: Parent changed, resetting position properties');
-      setProp(props => {
-        props.top = undefined;
-        props.left = undefined;
-        props.right = undefined;
-        props.bottom = undefined;
-        props.position = "relative";
-      });
-      prevParentRef.current = parent;
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      setTimeout(() => {
+        try {
+          const currentNode = query.node(nodeId);
+          if (currentNode) {
+            const currentProps = currentNode.get().data.props;
+            const hasPositioning = currentProps.position === 'absolute' &&
+              (currentProps.left !== undefined || currentProps.top !== undefined);
+            if (hasPositioning) return; // Skip reset if correction/centering already positioned
+          }
+        } catch (e) {}
+
+        editorActions.history.throttle(500).setProp(nodeId, (props) => {
+          if (
+            props.top !== undefined || props.left !== undefined ||
+            props.right !== undefined || props.bottom !== undefined
+          ) {
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            props.position = 'relative';
+          }
+        });
+      }, 700);
     }
-  }, [parent, setProp]);
+    prevParentRef.current = parent;
+  }, [parent, nodeId, query, editorActions]);
 
   // Component state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -340,21 +356,20 @@ useEffect(() => {
     { id: 'feedback', name: 'Customer Feedback' }
   ], []);
 
-  // Connect form element and setup drag
+  // Connectors: selection on main element; Craft drag on MOVE handle
   useEffect(() => {
-    if (formRef.current) {
-      const element = formRef.current;
-      connect(drag(element));
-    }
-  }, [connect, drag]);
-
-  // Connect snap functionality when selected
-  useEffect(() => {
-    if (formRef.current && isSelected) {
-      const element = formRef.current;
-      snapConnect(snapDrag(element));
-    }
-  }, [snapConnect, snapDrag, isSelected]);
+    const connectElements = () => {
+      if (formRef.current) {
+        snapConnect(formRef.current);
+      }
+      if (dragRef.current) {
+        drag(dragRef.current);
+      }
+    };
+    connectElements();
+    const t = setTimeout(connectElements, 100);
+    return () => clearTimeout(t);
+  }, [snapConnect, drag, isSelected, nodeId]);
 
   // Position tracking for portal controls
   const updateFormPosition = useCallback(() => {
@@ -1026,6 +1041,10 @@ const FormPortalControls = ({
         {/* Left - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-cy="move-handle"
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',

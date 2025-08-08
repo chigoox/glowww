@@ -468,6 +468,10 @@ const ButtonPortalControls = ({
         {/* Left - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-cy="move-handle"
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -780,22 +784,43 @@ export const Button = ({
   // Use multi-selection functionality
   const { isSelected: isMultiSelected, toggleSelection } = useMultiSelect();
   
-  // Track parent changes to reset position properties
+  // Track parent changes to reset position properties (deferred to not fight correction hook)
   const prevParentRef = useRef(parent);
 
   useEffect(() => {
-    if (prevParentRef.current !== parent) {
-      console.log('Button: Parent changed, resetting position properties');
-      setProp(props => {
-        props.top = undefined;
-        props.left = undefined;
-        props.right = undefined;
-        props.bottom = undefined;
-        props.position = "relative";
-      });
-      prevParentRef.current = parent;
+    // Skip initial render; only react to real parent changes
+    if (prevParentRef.current !== null && prevParentRef.current !== parent) {
+      setTimeout(() => {
+        try {
+          const currentNode = query.node(nodeId);
+          if (currentNode) {
+            const currentProps = currentNode.get().data.props;
+            const hasPositioning = currentProps.position === 'absolute' &&
+              (currentProps.left !== undefined || currentProps.top !== undefined);
+            if (hasPositioning) {
+              // Position already applied by centered drag/correction; don't reset
+              return;
+            }
+          }
+        } catch (e) {}
+
+        // Reset only if explicit positioning props exist
+        editorActions.history.throttle(500).setProp(nodeId, (props) => {
+          if (
+            props.top !== undefined || props.left !== undefined ||
+            props.right !== undefined || props.bottom !== undefined
+          ) {
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            props.position = 'relative';
+          }
+        });
+      }, 700);
     }
-  }, [parent, setProp]);
+    prevParentRef.current = parent;
+  }, [parent, nodeId, query, editorActions]);
   
   const buttonRef = useRef(null);
   const dragRef = useRef(null);
@@ -843,15 +868,19 @@ export const Button = ({
   useEffect(() => {
     const connectElements = () => {
       if (buttonRef.current) {
-        // Chain all connections properly
-        connect(drag(snapConnect(snapDrag(buttonRef.current))));
+        // Connect main element for selection (with snapping)
+        snapConnect(buttonRef.current);
+      }
+      if (dragRef.current) {
+        // Attach Craft.js drag to the dedicated MOVE handle
+        drag(dragRef.current);
       }
     };
 
     connectElements();
-    const timer = setTimeout(connectElements, 50);
+    const timer = setTimeout(connectElements, 100);
     return () => clearTimeout(timer);
-  }, [connect, drag, snapConnect, snapDrag]);
+  }, [snapConnect, drag, selected, nodeId]);
 
   // Update button position when hovered or selected changes
   useEffect(() => {

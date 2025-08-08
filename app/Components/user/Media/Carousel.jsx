@@ -9,6 +9,7 @@ import useEditorDisplay from "../../utils/craft/useEditorDisplay";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import { useCraftSnap } from '../../utils/craft/useCraftSnap';
 import SnapPositionHandle from '../../editor/SnapPositionHandle';
+import { snapGridSystem } from '../../utils/grid/SnapGridSystem';
 import { 
   EditOutlined, 
   PlusOutlined, 
@@ -1372,6 +1373,7 @@ export const Carousel = ({
             nodeId={nodeId}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
+            dragRef={dragRef}
           />
         )}
 
@@ -1528,7 +1530,8 @@ const PortalControls = ({
   handleEditClick,
   nodeId,
   isDragging,
-  setIsDragging
+  setIsDragging,
+  dragRef
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
 

@@ -466,6 +466,10 @@ const LinkPortalControls = ({
         {/* Left - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-cy="move-handle"
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -883,42 +887,50 @@ export const Link = ({
   useEffect(() => {
     const connectElements = () => {
       if (linkRef.current) {
-        // Chain all connections properly
-        connect(drag(snapConnect(snapDrag(linkRef.current))));
+        // Connect for selection only (with snap)
+        snapConnect(linkRef.current);
+      }
+      if (dragRef.current) {
+        // Attach Craft.js drag to MOVE handle
+        drag(dragRef.current);
       }
     };
 
     connectElements();
-    const timer = setTimeout(connectElements, 50);
+    const timer = setTimeout(connectElements, 100);
     return () => clearTimeout(timer);
-  }, [connect, drag, snapConnect, snapDrag]);
+  }, [snapConnect, drag, selected, nodeId]);
 
-  // Detect parent changes and reset position properties
+  // Detect parent changes and reset position properties (deferred to play well with correction hook)
   useEffect(() => {
-    // Skip the initial render (when prevParentRef.current is first set)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
-      // Parent has changed - element was moved to a different container
-      console.log(`📦 Link ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
-      
-      // Reset position properties to default
-      setProp((props) => {
-        // Only reset if position properties were actually set
-        if (props.top !== undefined || props.left !== undefined || 
-            props.right !== undefined || props.bottom !== undefined) {
-          console.log('🔄 Resetting position properties after container move');
-          props.top = undefined;
-          props.left = undefined;
-          props.right = undefined;
-          props.bottom = undefined;
-          // Keep position as relative for normal flow
-          props.position = "relative";
-        }
-      });
+      setTimeout(() => {
+        try {
+          const currentNode = query.node(nodeId);
+          if (currentNode) {
+            const currentProps = currentNode.get().data.props;
+            const hasPositioning = currentProps.position === 'absolute' &&
+              (currentProps.left !== undefined || currentProps.top !== undefined);
+            if (hasPositioning) return; // Don't reset if already positioned
+          }
+        } catch (e) {}
+
+        editorActions.history.throttle(500).setProp(nodeId, (props) => {
+          if (
+            props.top !== undefined || props.left !== undefined ||
+            props.right !== undefined || props.bottom !== undefined
+          ) {
+            props.top = undefined;
+            props.left = undefined;
+            props.right = undefined;
+            props.bottom = undefined;
+            props.position = 'relative';
+          }
+        });
+      }, 700);
     }
-    
-    // Update the ref for next comparison
     prevParentRef.current = parent;
-  }, [parent, nodeId, setProp]);
+  }, [parent, nodeId, query, editorActions]);
 
   // Update link position - only track when hovered or multi-selected
   useEffect(() => {
