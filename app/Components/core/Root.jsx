@@ -11,8 +11,8 @@ import MultiSelectBoundingBox from "../utils/selection/MultiSelectBoundingBox";
 
 export const Root = ({
   // Layout & Position
-  width = "full",
-  height = "auto",
+  width = "100%",
+  height = "100%",
   minWidth = '100%',
   maxWidth = '100%',
   minHeight,

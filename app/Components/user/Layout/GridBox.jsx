@@ -9,7 +9,6 @@ import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
-import PortalControls from "../support/PortalControls";
 
 export const GridBox = ({
   
@@ -914,7 +913,254 @@ placeContent,
   );
 };
 
+// Portal Controls Component - renders outside of the Box to avoid overflow clipping
+const PortalControls = ({ 
+  boxPosition, 
+  dragRef, 
+  handleResizeStart,
+  nodeId,
+  isDragging,
+  setIsDragging
+}) => {
+  if (typeof window === 'undefined') return null; // SSR check
+  
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none', // Allow clicks to pass through
+        zIndex: 99999
+      }}
+    >
+      {/* Combined pill-shaped drag controls */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 28,
+          left: boxPosition.left + boxPosition.width / 2,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          background: 'white',
+          borderRadius: '16px',
+          border: '2px solid #d9d9d9',
+          fontSize: '9px',
+          fontWeight: 'bold',
+          userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'auto', // Re-enable pointer events for this element
+          zIndex: 10000
+        }}
+      >
+        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
+        <div
+          ref={dragRef}
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          className="move-handle"
+          style={{
+            background: '#52c41a',
+            color: 'white',
+            padding: '2px',
+            borderRadius: '14px 0 0 14px',
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          title="Drag to move between containers"
+        >
+          📦 MOVE
+        </div>
+        
+        {/* Right half - POS (Custom position drag with snapping) */}
+        <SnapPositionHandle
+          nodeId={nodeId}
+          style={{
+            background: '#1890ff',
+            color: 'white',
+            padding: '4px',
+            borderRadius: '0 14px 14px 0',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            minWidth: '48px',
+            justifyContent: 'center',
+            transition: 'background 0.2s ease'
+          }}
+          onDragStart={(e) => {
+            setIsDragging(true);
+          }}
+          onDragMove={(e, { x, y, snapped }) => {
+            // Optional: Add visual feedback for snapping
+            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+          }}
+          onDragEnd={(e) => {
+            setIsDragging(false);
+          }}
+        >
+          ↕↔ POS
+        </SnapPositionHandle>
+      </div>
 
+      {/* Resize handles */}
+      {/* Top-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'nw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'nw')}
+        title="Resize"
+      />
+
+      {/* Top-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'ne-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'ne')}
+        title="Resize"
+      />
+
+      {/* Bottom-left corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'sw-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'sw')}
+        title="Resize"
+      />
+
+      {/* Bottom-right corner */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width - 4,
+          width: 8,
+          height: 8,
+          background: 'white',
+          border: '2px solid #1890ff',
+          borderRadius: '2px',
+          cursor: 'se-resize',
+          zIndex: 10001,
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'se')}
+        title="Resize"
+      />
+
+      {/* Edge resize handles - beautiful semi-transparent style */}
+      {/* Top edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'n-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'n')}
+        title="Resize height"
+      />
+
+      {/* Bottom edge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: boxPosition.top + boxPosition.height - 4,
+          left: boxPosition.left + boxPosition.width / 2 - 10,
+          width: 20,
+          height: 8,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 's-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 's')}
+        title="Resize height"
+      />
+
+      {/* Left edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'w-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'w')}
+        title="Resize width"
+      />
+
+      {/* Right edge */}
+      <div
+        style={{
+          position: 'absolute',
+          left: boxPosition.left + boxPosition.width - 4,
+          top: boxPosition.top + boxPosition.height / 2 - 10,
+          width: 8,
+          height: 20,
+          background: 'rgba(24, 144, 255, 0.3)',
+          cursor: 'e-resize',
+          zIndex: 9999,
+          borderRadius: '4px',
+          pointerEvents: 'auto'
+        }}
+        onMouseDown={(e) => handleResizeStart(e, 'e')}
+        title="Resize width"
+      />
+    </div>,
+    document.body
+  );
+};
 
 // Define default props for Craft.js - these will be the initial values
 GridBox.craft = {

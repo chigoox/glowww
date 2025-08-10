@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { useEditor } from '@craftjs/core';
+import { snapGridSystem } from "../grid/SnapGridSystem";
 
 const MultiSelectContext = createContext();
 
@@ -62,6 +63,10 @@ export const MultiSelectProvider = ({ children }) => {
     setSelectedNodes(new Set());
     setIsMultiSelecting(false);
     setBoundingBox(null);
+    // Ensure any lingering snap guides are cleared when selection is cleared
+    try {
+      snapGridSystem?.clearSnapIndicators?.();
+    } catch {}
   }, []);
 
   // Calculate bounding box for all selected elements
@@ -530,65 +535,98 @@ export const MultiSelectProvider = ({ children }) => {
     
     // Get node information for snap calculations
     const nodes = query.getNodes();
+    const isGroupMove = selectedNodes.size > 1;
+  const snapGroupToGuides = true; // Feature toggle: group snap using bounding box
+
+    // Helper to get a reliable current left/top regardless of how the component stores it
+    const getCurrentPosition = (nodeId, props) => {
+      // 1) Prefer numeric props
+      if (typeof props.left === 'number' && typeof props.top === 'number') {
+        return { left: props.left, top: props.top };
+      }
+      // 2) Try style strings
+      const styleLeft = props?.style?.left;
+      const styleTop = props?.style?.top;
+      if (typeof styleLeft === 'string' || typeof styleTop === 'string') {
+        const parsedLeft = parseFloat(styleLeft || '0');
+        const parsedTop = parseFloat(styleTop || '0');
+        if (!Number.isNaN(parsedLeft) || !Number.isNaN(parsedTop)) {
+          return { left: parsedLeft || 0, top: parsedTop || 0 };
+        }
+      }
+      // 3) Fall back to DOM geometry relative to offsetParent
+      try {
+        const node = nodes[nodeId];
+        const el = node?.dom;
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const parent = el.offsetParent || el.parentElement || document.body;
+          const parentRect = parent.getBoundingClientRect();
+          return { left: rect.left - parentRect.left, top: rect.top - parentRect.top };
+        }
+      } catch {}
+      return { left: 0, top: 0 };
+    };
     
+    // If group move and feature enabled, compute a snapped offset using the bounding box only
+    let groupDeltaX = deltaX;
+    let groupDeltaY = deltaY;
+    if (isGroupMove && snapGroupToGuides && boundingBox) {
+      const movedBox = {
+        left: boundingBox.left + deltaX,
+        top: boundingBox.top + deltaY,
+        width: boundingBox.width,
+        height: boundingBox.height
+      };
+      try {
+        const snap = snapGridSystem?.snapBoundingBoxToGuides?.(movedBox);
+        if (snap?.snapped) {
+          // Adjust deltas so the whole group moves to the snapped left while keeping Y unchanged
+          groupDeltaX = (snap.left - boundingBox.left);
+          groupDeltaY = (snap.top - boundingBox.top); // currently unchanged
+        }
+      } catch {}
+    }
+
     selectedNodes.forEach(nodeId => {
       actions.setProp(nodeId, (props) => {
-        // Get current position (handle both absolute and relative positioning)
-        const currentLeft = props.left || 0;
-        const currentTop = props.top || 0;
+        // Get current position robustly
+        const { left: currentLeft, top: currentTop } = getCurrentPosition(nodeId, props);
         
         // Calculate tentative new position
-        const tentativeLeft = currentLeft + deltaX;
-        const tentativeTop = currentTop + deltaY;
-        
-        // Get component dimensions for snap calculation
-        const node = nodes[nodeId];
-        let width = props.width || 100;
-        let height = props.height || 100;
-        
-        // Try to get actual dimensions from DOM if available
-        if (node && node.dom) {
-          const rect = node.dom.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            width = rect.width;
-            height = rect.height;
-          }
-        }
+  const tentativeLeft = currentLeft + groupDeltaX;
+  const tentativeTop = currentTop + groupDeltaY;
         
         let finalLeft = tentativeLeft;
         let finalTop = tentativeTop;
-        
-        // Apply snap grid system if available and enabled
-        if (window.snapGridSystem?.snapEnabled) {
-          console.log(`🔧 Applying snap to ${nodeId}:`, { 
-            tentative: { x: tentativeLeft, y: tentativeTop }, 
-            dimensions: { width, height },
-            snapSystemAvailable: !!window.snapGridSystem,
-            snapEnabled: window.snapGridSystem.snapEnabled
-          });
-          
+
+        // For group moves, do NOT snap each element individually to avoid collapsing to one line
+  if (!isGroupMove && window.snapGridSystem?.snapEnabled) {
+          // Get component dimensions for snap calculation
+          const node = nodes[nodeId];
+          let width = props.width || 100;
+          let height = props.height || 100;
+          if (node && node.dom) {
+            const rect = node.dom.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              width = rect.width;
+              height = rect.height;
+            }
+          }
           const snapResult = window.snapGridSystem.getSnapPosition(
             nodeId,
             tentativeLeft,
             tentativeTop,
             width,
-            height
+            height,
+            { guidesOnly: false }
           );
-          
           if (snapResult.snapped) {
             finalLeft = snapResult.x;
             finalTop = snapResult.y;
-            console.log(`📌 Snapped ${nodeId}: (${tentativeLeft}, ${tentativeTop}) -> (${finalLeft}, ${finalTop})`);
-          } else {
-            console.log(`🔧 No snap applied to ${nodeId}`);
           }
-        } else {
-          console.log(`❌ Snap grid system not available or disabled:`, {
-            snapSystemExists: !!window.snapGridSystem,
-            snapEnabled: window.snapGridSystem?.snapEnabled
-          });
         }
-        
+
         console.log(`📍 Moving ${nodeId}: (${currentLeft}, ${currentTop}) -> (${finalLeft}, ${finalTop})`);
         
         // Ensure absolute positioning and update position
@@ -616,37 +654,45 @@ export const MultiSelectProvider = ({ children }) => {
 
     selectedNodes.forEach(nodeId => {
       actions.setProp(nodeId, (props) => {
-        // Get current properties
-        const currentLeft = props.left || 0;
-        const currentTop = props.top || 0;
-        const currentWidth = props.width || 100;
-        const currentHeight = props.height || 100;
+        // Current numeric props with safe fallbacks
+        const currentLeft = typeof props.left === 'number' ? props.left : parseFloat(props?.style?.left || '0') || 0;
+        const currentTop = typeof props.top === 'number' ? props.top : parseFloat(props?.style?.top || '0') || 0;
+        const currentWidth = typeof props.width === 'number' ? props.width : parseFloat(props?.style?.width || '100') || 100;
+        const currentHeight = typeof props.height === 'number' ? props.height : parseFloat(props?.style?.height || '100') || 100;
 
-        // Calculate new position relative to scale origin
+        // Position relative to scale origin
         const relativeX = currentLeft - originX;
         const relativeY = currentTop - originY;
-        
-        const newLeft = originX + (relativeX * scaleX);
-        const newTop = originY + (relativeY * scaleY);
-        const newWidth = currentWidth * scaleX;
-        const newHeight = currentHeight * scaleY;
 
-        console.log(`🔍 Scaling ${nodeId}:`, {
-          current: { left: currentLeft, top: currentTop, width: currentWidth, height: currentHeight },
-          new: { left: newLeft, top: newTop, width: newWidth, height: newHeight }
-        });
+        let newLeft = originX + (relativeX * scaleX);
+        let newTop = originY + (relativeY * scaleY);
+        let newWidth = Math.max(10, currentWidth * scaleX);
+        let newHeight = Math.max(10, currentHeight * scaleY);
 
-        // Update properties
+        // Update
+        const nLeft = Math.round(newLeft);
+        const nTop = Math.round(newTop);
+        const nWidth = Math.round(newWidth);
+        const nHeight = Math.round(newHeight);
         props.position = 'absolute';
-        props.left = Math.round(newLeft);
-        props.top = Math.round(newTop);
-        props.width = Math.round(newWidth);
-        props.height = Math.round(newHeight);
+        props.left = nLeft;
+        props.top = nTop;
+        props.width = nWidth;
+        props.height = nHeight;
+        // For components that rely on style instead of numeric props
+        props.style = {
+          ...(props.style || {}),
+          position: 'absolute',
+          left: `${nLeft}px`,
+          top: `${nTop}px`,
+          width: `${Math.max(10, nWidth)}px`,
+          height: `${Math.max(10, nHeight)}px`
+        };
       });
     });
 
     // Update bounding box after scaling
-    setTimeout(calculateBoundingBox, 50);
+  setTimeout(calculateBoundingBox, 50);
   }, [selectedNodes, actions, boundingBox, calculateBoundingBox]);
 
   // Simple resize function that only changes width/height proportionally

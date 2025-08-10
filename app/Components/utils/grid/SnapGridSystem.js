@@ -271,6 +271,26 @@ class SnapGridSystem {
     };
   }
 
+  // NEW: Snap a provided bounding box to guides and return snapped x,y for left/top
+  snapBoundingBoxToGuides(bounds) {
+    // bounds: { left, top, width, height }
+    const elementBounds = {
+      left: bounds.left,
+      top: bounds.top,
+      right: bounds.left + bounds.width,
+      bottom: bounds.top + bounds.height,
+      width: bounds.width,
+      height: bounds.height,
+      centerX: bounds.left + bounds.width / 2,
+      centerY: bounds.top + bounds.height / 2
+    };
+    const result = this.snapToVerticalGuides(elementBounds);
+    if (result.snapped && result.x !== null) {
+      return { snapped: true, left: result.x, top: bounds.top };
+    }
+    return { snapped: false, left: bounds.left, top: bounds.top };
+  }
+
   // Register an element for snapping
   registerElement(id, element, bounds) {
     if (!element || !bounds) return;
@@ -645,7 +665,8 @@ class SnapGridSystem {
   }
 
   // Get snap position for a dragging element
-  getSnapPosition(draggedElementId, currentX, currentY, width, height) {
+  getSnapPosition(draggedElementId, currentX, currentY, width, height, options = {}) {
+    const opts = options || {};
     
     if (!this.snapEnabled) {
       return { x: currentX, y: currentY, snapped: false };
@@ -680,8 +701,8 @@ class SnapGridSystem {
       centerY: currentY + height / 2
     };
 
-    // 1. Grid snapping
-    if (this.gridEnabled) {
+    // 1. Grid snapping (skip when guidesOnly is requested)
+    if (this.gridEnabled && !opts.guidesOnly) {
       const gridSnapResult = this.snapToGrid(elementBounds);
       if (gridSnapResult.snapped) {
         snapResult.x = gridSnapResult.x;
@@ -691,17 +712,19 @@ class SnapGridSystem {
       }
     }
 
-    // 2. Element-to-element snapping (higher priority than grid)
-    const elementSnapResult = this.snapToElements(draggedElementId, elementBounds);
-    if (elementSnapResult.snapped) {
-      if (elementSnapResult.x !== null) snapResult.x = elementSnapResult.x;
-      if (elementSnapResult.y !== null) snapResult.y = elementSnapResult.y;
-      snapResult.snapped = true;
-      snapResult.snapLines.push(...elementSnapResult.snapLines);
-      // Note: Don't add distance indicators from snapToElements - we'll calculate them after final position
+    // 2. Element-to-element snapping (skip when guidesOnly is requested)
+    if (!opts.guidesOnly) {
+      // Temporarily support excluding certain ids (e.g., selected group members)
+      const elementSnapResult = this.snapToElements(draggedElementId, elementBounds, opts.excludeIds);
+      if (elementSnapResult.snapped) {
+        if (elementSnapResult.x !== null) snapResult.x = elementSnapResult.x;
+        if (elementSnapResult.y !== null) snapResult.y = elementSnapResult.y;
+        snapResult.snapped = true;
+        snapResult.snapLines.push(...elementSnapResult.snapLines);
+      }
     }
 
-    // 3. Vertical guide lines snapping (NEW - highest priority after elements)
+    // 3. Vertical guide lines snapping (NEW - high priority after elements)
     const verticalGuideSnapResult = this.snapToVerticalGuides(elementBounds);
     if (verticalGuideSnapResult.snapped) {
       if (verticalGuideSnapResult.x !== null) snapResult.x = verticalGuideSnapResult.x;
@@ -709,7 +732,21 @@ class SnapGridSystem {
       snapResult.snapLines.push(...verticalGuideSnapResult.snapLines);
     }
 
-    // 4. Canvas edge snapping
+    // 4. Canvas center snapping (both axes)
+    const centerSnap = this.snapToCanvasCenter({
+      left: snapResult.x,
+      top: snapResult.y,
+      width,
+      height
+    });
+    if (centerSnap.snapped) {
+      if (centerSnap.x !== null) snapResult.x = centerSnap.x;
+      if (centerSnap.y !== null) snapResult.y = centerSnap.y;
+      snapResult.snapped = true;
+      snapResult.snapLines.push(...centerSnap.snapLines);
+    }
+
+    // 5. Canvas edge snapping
     const canvasSnapResult = this.snapToCanvasEdges(elementBounds);
     if (canvasSnapResult.snapped) {
       if (canvasSnapResult.x !== null) snapResult.x = canvasSnapResult.x;
@@ -730,9 +767,11 @@ class SnapGridSystem {
       centerY: snapResult.y + height / 2
     };
     
-    // Calculate distance indicators based on final position
+    // Calculate distance indicators based on final position (skip heavy work when guidesOnly)
     const distanceIndicators = [];
-    this.addDistanceIndicators(draggedElementId, finalElementBounds, distanceIndicators);
+    if (!opts.guidesOnly) {
+      this.addDistanceIndicators(draggedElementId, finalElementBounds, distanceIndicators, opts.excludeIds || []);
+    }
     snapResult.distanceIndicators = distanceIndicators;
 
     // Update snap indicators
@@ -784,7 +823,7 @@ class SnapGridSystem {
   }
 
   // Snap to other elements
-  snapToElements(draggedElementId, elementBounds) {
+  snapToElements(draggedElementId, elementBounds, excludeIds = []) {
     const snapLines = [];
     let snappedX = null;
     let snappedY = null;
@@ -792,7 +831,7 @@ class SnapGridSystem {
 
     // Get other elements to snap to
     const otherElements = Array.from(this.trackedElements.entries())
-      .filter(([id]) => id !== draggedElementId)
+      .filter(([id]) => id !== draggedElementId && !excludeIds.includes(id))
       .map(([, info]) => info);
 
 
@@ -949,10 +988,10 @@ class SnapGridSystem {
   }
 
   // Add distance indicators between nearby elements
-  addDistanceIndicators(draggedElementId, elementBounds, distanceIndicators) {
+  addDistanceIndicators(draggedElementId, elementBounds, distanceIndicators, excludeIds = []) {
     // Get other elements
     const otherElements = Array.from(this.trackedElements.entries())
-      .filter(([id]) => id !== draggedElementId)
+      .filter(([id]) => id !== draggedElementId && !excludeIds.includes(id))
       .map(([, info]) => info);
 
     const TOUCHING_THRESHOLD = 3; // Consider elements as "touching" if closer than 3px
@@ -1042,21 +1081,21 @@ class SnapGridSystem {
     let snapped = false;
 
     // Snap to left edge (keep functionality, remove visual guide)
-    if (Math.abs(elementBounds.left) <= this.snapThreshold) {
-      snappedX = 0;
+    if (Math.abs(elementBounds.left - this.canvasBounds.left) <= this.snapThreshold) {
+      snappedX = this.canvasBounds.left;
       snapped = true;
       // Don't add snap line for cleaner look
     }
 
     // Snap to top edge (keep functionality, remove visual guide)
-    if (Math.abs(elementBounds.top) <= this.snapThreshold) {
-      snappedY = 0;
+    if (Math.abs(elementBounds.top - this.canvasBounds.top) <= this.snapThreshold) {
+      snappedY = this.canvasBounds.top;
       snapped = true;
       // Don't add snap line for cleaner look
     }
 
     // Snap to right edge (keep functionality, remove visual guide)
-    const rightEdge = this.canvasBounds.width;
+    const rightEdge = this.canvasBounds.left + this.canvasBounds.width;
     if (Math.abs(elementBounds.right - rightEdge) <= this.snapThreshold) {
       snappedX = rightEdge - elementBounds.width;
       snapped = true;
@@ -1064,7 +1103,7 @@ class SnapGridSystem {
     }
 
     // Snap to bottom edge (keep functionality, remove visual guide)
-    const bottomEdge = this.canvasBounds.height;
+    const bottomEdge = this.canvasBounds.top + this.canvasBounds.height;
     if (Math.abs(elementBounds.bottom - bottomEdge) <= this.snapThreshold) {
       snappedY = bottomEdge - elementBounds.height;
       snapped = true;
@@ -1077,6 +1116,51 @@ class SnapGridSystem {
       snapped,
       snapLines
     };
+  }
+
+  // Snap to canvas center (vertical and horizontal axes)
+  snapToCanvasCenter(elementBounds) {
+    if (!this.canvasBounds) return { snapped: false, snapLines: [] };
+
+    const centerX = this.canvasBounds.left + this.canvasBounds.width / 2;
+    const centerY = this.canvasBounds.top + this.canvasBounds.height / 2;
+    const elementCenterX = elementBounds.left + elementBounds.width / 2;
+    const elementCenterY = elementBounds.top + elementBounds.height / 2;
+
+    let snappedX = null;
+    let snappedY = null;
+    const snapLines = [];
+    let snapped = false;
+
+    if (Math.abs(elementCenterX - centerX) <= SNAP_CONFIG.CENTER_THRESHOLD) {
+      snappedX = centerX - elementBounds.width / 2;
+      snapped = true;
+      snapLines.push({
+        type: 'vertical',
+        x: centerX,
+        y1: this.canvasBounds.top,
+        y2: this.canvasBounds.top + this.canvasBounds.height,
+        color: this.guideColor,
+        width: 2,
+        dashed: true
+      });
+    }
+
+    if (Math.abs(elementCenterY - centerY) <= SNAP_CONFIG.CENTER_THRESHOLD) {
+      snappedY = centerY - elementBounds.height / 2;
+      snapped = true;
+      snapLines.push({
+        type: 'horizontal',
+        y: centerY,
+        x1: this.canvasBounds.left,
+        x2: this.canvasBounds.left + this.canvasBounds.width,
+        color: this.guideColor,
+        width: 2,
+        dashed: true
+      });
+    }
+
+    return { snapped, x: snappedX, y: snappedY, snapLines };
   }
 
   // Clear snap indicators

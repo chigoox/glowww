@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useRef, useCallback, useState, useEffect } from 'react';
+import { useEditor } from '@craftjs/core';
 import { createPortal } from 'react-dom';
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
 import ContextMenu from '../utils/context/ContextMenu';
+import { snapGridSystem } from "../utils/grid/SnapGridSystem";
 
 const MultiSelectBoundingBox = () => {
+  const { query } = useEditor();
   const [isClient, setIsClient] = useState(false);
   
   const {
@@ -71,6 +74,10 @@ const MultiSelectBoundingBox = () => {
   // Close context menu
   const closeContextMenu = useCallback(() => {
     setContextMenu({ visible: false, x: 0, y: 0 });
+    // Clear any lingering guides that might remain visible after context actions
+    try {
+      snapGridSystem?.clearSnapIndicators?.();
+    } catch {}
   }, []);
 
   // Handle drag start for moving selection
@@ -80,34 +87,80 @@ const MultiSelectBoundingBox = () => {
     e.preventDefault();
     e.stopPropagation();
 
+  // Clear any existing guides before starting a group move
+  try { snapGridSystem?.clearSnapIndicators?.(); } catch {}
+
     const startX = e.clientX;
     const startY = e.clientY;
+    const startLeft = boundingBox.left;
+    const startTop = boundingBox.top;
     let currentDeltaX = 0;
     let currentDeltaY = 0;
+    let visualLeft = startLeft;
+    let visualTop = startTop;
 
   
 
     setDragState({ startX, startY });
     setIsDragging(true);
 
+    // Register all other elements for snapping so element-to-element and distances work
+    try {
+      const nodes = query.getNodes();
+      const selectedIds = new Set(Array.from(selectedNodes));
+      Object.entries(nodes).forEach(([id, node]) => {
+        if (id !== 'ROOT' && node?.dom && !selectedIds.has(id)) {
+          const rect = node.dom.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            snapGridSystem.registerElement(id, node.dom, {
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height
+            });
+          }
+        }
+      });
+    } catch {}
+
     const handleMouseMove = (moveEvent) => {
       currentDeltaX = moveEvent.clientX - startX;
       currentDeltaY = moveEvent.clientY - startY;
-      
-      
-      // Update visual position immediately for smooth feedback
-      // We don't use transform here to avoid position conflicts
+      const proposedLeft = startLeft + currentDeltaX;
+      const proposedTop = startTop + currentDeltaY;
+
+      // Ask snap engine to snap the group bounding box like an element
+      try {
+        const excludeIds = Array.from(selectedNodes);
+        const snap = snapGridSystem.getSnapPosition(
+          'GROUP',
+          proposedLeft,
+          proposedTop,
+          boundingBox.width,
+          boundingBox.height,
+          { excludeIds }
+        );
+        visualLeft = snap.x ?? proposedLeft;
+        visualTop = snap.y ?? proposedTop;
+      } catch {
+        visualLeft = proposedLeft;
+        visualTop = proposedTop;
+      }
+
+      // Update visual position (already snapped) for smooth feedback
       if (boundingBoxRef.current) {
-        boundingBoxRef.current.style.left = `${boundingBox.left + currentDeltaX}px`;
-        boundingBoxRef.current.style.top = `${boundingBox.top + currentDeltaY}px`;
+        boundingBoxRef.current.style.left = `${visualLeft}px`;
+        boundingBoxRef.current.style.top = `${visualTop}px`;
       }
     };
 
-    const handleMouseUp = () => {
-      
-      
-      // Apply the actual movement to all selected elements using the final delta
-      moveSelection(currentDeltaX, currentDeltaY);
+  const handleMouseUp = () => {
+      // Compute final deltas using the snapped visual position
+      const finalDeltaX = (parseFloat(boundingBoxRef.current?.style.left) || (boundingBox.left + currentDeltaX)) - startLeft;
+      const finalDeltaY = (parseFloat(boundingBoxRef.current?.style.top) || (boundingBox.top + currentDeltaY)) - startTop;
+
+      // Apply the actual movement to all selected elements using the snapped delta
+      moveSelection(finalDeltaX, finalDeltaY);
 
       // Reset visual state after DOM has time to update
       setTimeout(() => {
@@ -117,15 +170,19 @@ const MultiSelectBoundingBox = () => {
         }
       }, 10);
 
-      setIsDragging(false);
+  setIsDragging(false);
+  // Clear guides after completing a group move
+  try { snapGridSystem?.clearSnapIndicators?.(); } catch {}
       setDragState(null);
+      // Cleanup tracked elements later
+      setTimeout(() => { try { snapGridSystem?.cleanupTrackedElements?.(); } catch {} }, 100);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [boundingBox, moveSelection, setIsDragging]);
+  }, [boundingBox, moveSelection, setIsDragging, query, selectedNodes]);
 
   // Handle resize start
   const handleResizeStart = useCallback((e, direction) => {
@@ -134,12 +191,15 @@ const MultiSelectBoundingBox = () => {
     e.preventDefault();
     e.stopPropagation();
 
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = boundingBox.width;
-    const startHeight = boundingBox.height;
-    let finalScaleX = 1;
-    let finalScaleY = 1;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startLeft = boundingBox.left;
+  const startTop = boundingBox.top;
+  const startWidth = boundingBox.width;
+  const startHeight = boundingBox.height;
+  let finalScaleX = 1;
+  let finalScaleY = 1;
+  let visualBox = { left: startLeft, top: startTop, width: startWidth, height: startHeight };
 
     setIsResizing(true);
 
@@ -149,51 +209,82 @@ const MultiSelectBoundingBox = () => {
 
       let scaleX = 1;
       let scaleY = 1;
+      let newLeft = startLeft;
+      let newTop = startTop;
+      let newWidth = startWidth;
+      let newHeight = startHeight;
 
-      // Calculate scale based on resize direction
+      // Calculate box transform based on drag handle direction
       switch (direction) {
-        case 'se': // bottom-right
-          scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
+        case 'se':
+          newWidth = Math.max(10, startWidth + deltaX);
+          newHeight = Math.max(10, startHeight + deltaY);
           break;
-        case 'sw': // bottom-left
-          scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
+        case 'sw':
+          newWidth = Math.max(10, startWidth - deltaX);
+          newHeight = Math.max(10, startHeight + deltaY);
+          newLeft = startLeft + (startWidth - newWidth);
           break;
-        case 'ne': // top-right
-          scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
+        case 'ne':
+          newWidth = Math.max(10, startWidth + deltaX);
+          newHeight = Math.max(10, startHeight - deltaY);
+          newTop = startTop + (startHeight - newHeight);
           break;
-        case 'nw': // top-left
-          scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
+        case 'nw':
+          newWidth = Math.max(10, startWidth - deltaX);
+          newHeight = Math.max(10, startHeight - deltaY);
+          newLeft = startLeft + (startWidth - newWidth);
+          newTop = startTop + (startHeight - newHeight);
           break;
-        case 'e': // right edge - only scale X
-          scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
-          scaleY = 1; // Keep Y unchanged
+        case 'e':
+          newWidth = Math.max(10, startWidth + deltaX);
           break;
-        case 'w': // left edge - only scale X
-          scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
-          scaleY = 1; // Keep Y unchanged
+        case 'w':
+          newWidth = Math.max(10, startWidth - deltaX);
+          newLeft = startLeft + (startWidth - newWidth);
           break;
-        case 's': // bottom edge - only scale Y
-          scaleX = 1; // Keep X unchanged
-          scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
+        case 's':
+          newHeight = Math.max(10, startHeight + deltaY);
           break;
-        case 'n': // top edge - only scale Y
-          scaleX = 1; // Keep X unchanged
-          scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
+        case 'n':
+          newHeight = Math.max(10, startHeight - deltaY);
+          newTop = startTop + (startHeight - newHeight);
           break;
       }
 
-      // Store final scale values for mouse up
+      // Derive scale from new box size
+      scaleX = newWidth / startWidth;
+      scaleY = newHeight / startHeight;
+
+      // Ask snap engine to snap the resizing bounding box like an element
+      try {
+        const snap = snapGridSystem.getResizeSnapPosition(
+          'GROUP',
+          direction,
+          { left: newLeft, top: newTop, width: startWidth, height: startHeight },
+          newWidth,
+          newHeight
+        );
+        // snap.bounds contains corrected box values after snap
+        newLeft = snap.bounds.left;
+        newTop = snap.bounds.top;
+        newWidth = snap.bounds.width;
+        newHeight = snap.bounds.height;
+        scaleX = newWidth / startWidth;
+        scaleY = newHeight / startHeight;
+      } catch {}
+
+      // Persist for mouse up
       finalScaleX = scaleX;
       finalScaleY = scaleY;
+      visualBox = { left: newLeft, top: newTop, width: newWidth, height: newHeight };
 
-      // Visual feedback - update bounding box display during resize
+      // Update visual box
       if (boundingBoxRef.current) {
-        boundingBoxRef.current.style.width = `${startWidth * scaleX}px`;
-        boundingBoxRef.current.style.height = `${startHeight * scaleY}px`;
+        boundingBoxRef.current.style.left = `${newLeft}px`;
+        boundingBoxRef.current.style.top = `${newTop}px`;
+        boundingBoxRef.current.style.width = `${newWidth}px`;
+        boundingBoxRef.current.style.height = `${newHeight}px`;
       }
     };
 
@@ -235,8 +326,10 @@ const MultiSelectBoundingBox = () => {
 
       // Reset visual feedback
       if (boundingBoxRef.current) {
-        boundingBoxRef.current.style.width = '';
-        boundingBoxRef.current.style.height = '';
+        boundingBoxRef.current.style.left = `${boundingBox.left}px`;
+        boundingBoxRef.current.style.top = `${boundingBox.top}px`;
+        boundingBoxRef.current.style.width = `${boundingBox.width}px`;
+        boundingBoxRef.current.style.height = `${boundingBox.height}px`;
       }
 
       setIsResizing(false);

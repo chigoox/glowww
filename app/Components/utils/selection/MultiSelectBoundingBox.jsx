@@ -4,8 +4,11 @@ import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useMultiSelect } from '../context/MultiSelectContext';
 import ContextMenu from '../context/ContextMenu';
+import { useEditor } from '@craftjs/core';
+import { snapGridSystem } from "../grid/SnapGridSystem";
 
 const MultiSelectBoundingBox = () => {
+  const { query } = useEditor();
   const [isClient, setIsClient] = useState(false);
   
   const {
@@ -71,6 +74,7 @@ const MultiSelectBoundingBox = () => {
   // Close context menu
   const closeContextMenu = useCallback(() => {
     setContextMenu({ visible: false, x: 0, y: 0 });
+    try { snapGridSystem?.clearSnapIndicators?.(); } catch {}
   }, []);
 
   // Handle drag start for moving selection
@@ -80,34 +84,75 @@ const MultiSelectBoundingBox = () => {
     e.preventDefault();
     e.stopPropagation();
 
+    try { snapGridSystem?.clearSnapIndicators?.(); } catch {}
+
     const startX = e.clientX;
     const startY = e.clientY;
+    const startLeft = boundingBox.left;
+    const startTop = boundingBox.top;
     let currentDeltaX = 0;
     let currentDeltaY = 0;
+    let visualLeft = startLeft;
+    let visualTop = startTop;
 
   
 
     setDragState({ startX, startY });
     setIsDragging(true);
 
+    // Register all non-selected elements for snapping
+    try {
+      const nodes = query.getNodes();
+      const selectedIds = new Set(Array.from(selectedNodes));
+      Object.entries(nodes).forEach(([id, node]) => {
+        if (id !== 'ROOT' && node?.dom && !selectedIds.has(id)) {
+          const rect = node.dom.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            snapGridSystem.registerElement(id, node.dom, {
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height
+            });
+          }
+        }
+      });
+    } catch {}
+
     const handleMouseMove = (moveEvent) => {
       currentDeltaX = moveEvent.clientX - startX;
       currentDeltaY = moveEvent.clientY - startY;
-      
-      
-      // Update visual position immediately for smooth feedback
-      // We don't use transform here to avoid position conflicts
+
+      const proposedLeft = startLeft + currentDeltaX;
+      const proposedTop = startTop + currentDeltaY;
+
+      // Snap the bounding box using the engine (includes guides, elements, distances)
+      try {
+        const excludeIds = Array.from(selectedNodes);
+        const snap = snapGridSystem.getSnapPosition(
+          'GROUP', proposedLeft, proposedTop, boundingBox.width, boundingBox.height, { excludeIds }
+        );
+        visualLeft = snap.x ?? proposedLeft;
+        visualTop = snap.y ?? proposedTop;
+      } catch {
+        visualLeft = proposedLeft;
+        visualTop = proposedTop;
+      }
+
       if (boundingBoxRef.current) {
-        boundingBoxRef.current.style.left = `${boundingBox.left + currentDeltaX}px`;
-        boundingBoxRef.current.style.top = `${boundingBox.top + currentDeltaY}px`;
+        boundingBoxRef.current.style.left = `${visualLeft}px`;
+        boundingBoxRef.current.style.top = `${visualTop}px`;
       }
     };
 
     const handleMouseUp = () => {
-      
-      
-      // Apply the actual movement to all selected elements using the final delta
-      moveSelection(currentDeltaX, currentDeltaY);
+      // Use snapped visual position to compute final delta
+      const finalLeft = parseFloat(boundingBoxRef.current?.style.left) || (startLeft + currentDeltaX);
+      const finalTop = parseFloat(boundingBoxRef.current?.style.top) || (startTop + currentDeltaY);
+      const finalDeltaX = finalLeft - startLeft;
+      const finalDeltaY = finalTop - startTop;
+
+      moveSelection(finalDeltaX, finalDeltaY);
 
       // Reset visual state after DOM has time to update
       setTimeout(() => {
@@ -118,14 +163,16 @@ const MultiSelectBoundingBox = () => {
       }, 10);
 
       setIsDragging(false);
+      try { snapGridSystem?.clearSnapIndicators?.(); } catch {}
       setDragState(null);
+      setTimeout(() => { try { snapGridSystem?.cleanupTrackedElements?.(); } catch {} }, 100);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [boundingBox, moveSelection, setIsDragging]);
+  }, [boundingBox, moveSelection, setIsDragging, query, selectedNodes]);
 
   // Handle resize start
   const handleResizeStart = useCallback((e, direction) => {
@@ -136,10 +183,13 @@ const MultiSelectBoundingBox = () => {
 
     const startX = e.clientX;
     const startY = e.clientY;
+    const startLeft = boundingBox.left;
+    const startTop = boundingBox.top;
     const startWidth = boundingBox.width;
     const startHeight = boundingBox.height;
     let finalScaleX = 1;
     let finalScaleY = 1;
+    let visualBox = { left: startLeft, top: startTop, width: startWidth, height: startHeight };
 
     setIsResizing(true);
 
@@ -147,57 +197,76 @@ const MultiSelectBoundingBox = () => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
 
-      let scaleX = 1;
-      let scaleY = 1;
+      let newLeft = startLeft;
+      let newTop = startTop;
+      let newWidth = startWidth;
+      let newHeight = startHeight;
 
-      // Calculate scale based on resize direction
       switch (direction) {
-        case 'se': // bottom-right
-          scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
+        case 'se':
+          newWidth = Math.max(10, startWidth + deltaX);
+          newHeight = Math.max(10, startHeight + deltaY);
           break;
-        case 'sw': // bottom-left
-          scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
+        case 'sw':
+          newWidth = Math.max(10, startWidth - deltaX);
+          newHeight = Math.max(10, startHeight + deltaY);
+          newLeft = startLeft + (startWidth - newWidth);
           break;
-        case 'ne': // top-right
-          scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
+        case 'ne':
+          newWidth = Math.max(10, startWidth + deltaX);
+          newHeight = Math.max(10, startHeight - deltaY);
+          newTop = startTop + (startHeight - newHeight);
           break;
-        case 'nw': // top-left
-          scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
-          scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
+        case 'nw':
+          newWidth = Math.max(10, startWidth - deltaX);
+          newHeight = Math.max(10, startHeight - deltaY);
+          newLeft = startLeft + (startWidth - newWidth);
+          newTop = startTop + (startHeight - newHeight);
           break;
-        case 'e': // right edge - only scale X
-          scaleX = Math.max(0.1, (startWidth + deltaX) / startWidth);
-          scaleY = 1; // Keep Y unchanged
+        case 'e':
+          newWidth = Math.max(10, startWidth + deltaX);
           break;
-        case 'w': // left edge - only scale X
-          scaleX = Math.max(0.1, (startWidth - deltaX) / startWidth);
-          scaleY = 1; // Keep Y unchanged
+        case 'w':
+          newWidth = Math.max(10, startWidth - deltaX);
+          newLeft = startLeft + (startWidth - newWidth);
           break;
-        case 's': // bottom edge - only scale Y
-          scaleX = 1; // Keep X unchanged
-          scaleY = Math.max(0.1, (startHeight + deltaY) / startHeight);
+        case 's':
+          newHeight = Math.max(10, startHeight + deltaY);
           break;
-        case 'n': // top edge - only scale Y
-          scaleX = 1; // Keep X unchanged
-          scaleY = Math.max(0.1, (startHeight - deltaY) / startHeight);
+        case 'n':
+          newHeight = Math.max(10, startHeight - deltaY);
+          newTop = startTop + (startHeight - newHeight);
           break;
       }
 
-      // Store final scale values for mouse up
-      finalScaleX = scaleX;
-      finalScaleY = scaleY;
+      // Snap the resizing box
+      try {
+        const snap = snapGridSystem.getResizeSnapPosition(
+          'GROUP',
+          direction,
+          { left: newLeft, top: newTop, width: startWidth, height: startHeight },
+          newWidth,
+          newHeight
+        );
+        newLeft = snap.bounds.left;
+        newTop = snap.bounds.top;
+        newWidth = snap.bounds.width;
+        newHeight = snap.bounds.height;
+      } catch {}
 
-      // Visual feedback - update bounding box display during resize
+      finalScaleX = newWidth / startWidth;
+      finalScaleY = newHeight / startHeight;
+      visualBox = { left: newLeft, top: newTop, width: newWidth, height: newHeight };
+
       if (boundingBoxRef.current) {
-        boundingBoxRef.current.style.width = `${startWidth * scaleX}px`;
-        boundingBoxRef.current.style.height = `${startHeight * scaleY}px`;
+        boundingBoxRef.current.style.left = `${newLeft}px`;
+        boundingBoxRef.current.style.top = `${newTop}px`;
+        boundingBoxRef.current.style.width = `${newWidth}px`;
+        boundingBoxRef.current.style.height = `${newHeight}px`;
       }
     };
 
-    const handleMouseUp = () => {
+  const handleMouseUp = () => {
       
       // Calculate appropriate origin point based on resize direction
       let origin = { x: 0.5, y: 0.5 }; // Default center
@@ -234,11 +303,14 @@ const MultiSelectBoundingBox = () => {
 
       // Reset visual feedback
       if (boundingBoxRef.current) {
-        boundingBoxRef.current.style.width = '';
-        boundingBoxRef.current.style.height = '';
+        boundingBoxRef.current.style.left = `${boundingBox.left}px`;
+        boundingBoxRef.current.style.top = `${boundingBox.top}px`;
+        boundingBoxRef.current.style.width = `${boundingBox.width}px`;
+        boundingBoxRef.current.style.height = `${boundingBox.height}px`;
       }
 
       setIsResizing(false);
+      try { snapGridSystem?.clearSnapIndicators?.(); } catch {}
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
