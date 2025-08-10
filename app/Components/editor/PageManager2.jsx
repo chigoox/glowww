@@ -825,13 +825,20 @@ const PageManager2 = ({
       <Dropdown
         zIndex={999999}
         popupRender={() => (
-          <div className="bg-white rounded-lg z-[99999999] shadow-lg border p-4 min-w-[300px]">
+          <div
+            className=" z-[99999999] shadow-lg border p-4 min-w-[320px]"
+            style={{
+              background: 'var(--panel-bg)',
+              color: 'var(--text-primary)',
+              borderColor: 'var(--border-color)'
+            }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
-                <FolderOutlined className="text-blue-600" />
-                <Text strong className="text-gray-800">Pages</Text>
-                <Text type="secondary" className="text-xs bg-gray-100 px-2 py-1 rounded-full">
+                <FolderOutlined style={{ color: 'var(--accent-color)' }} />
+                <Text strong style={{ color: 'var(--text-primary)' }}>Pages</Text>
+                <Text className="text-xs px-2 py-1 rounded-full" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
                   {pages.length}
                 </Text>
               </div>
@@ -841,20 +848,26 @@ const PageManager2 = ({
             </div>
 
             {/* Current Page Info - Enhanced */}
-            <div className="mb-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg text-sm border border-blue-100">
+            <div
+              className="mb-3 p-3 rounded-lg text-sm"
+              style={{
+                background: 'var(--accent-bg)',
+                border: '1px solid var(--accent-color)'
+              }}
+            >
               <div className="flex items-center justify-between">
                 <div>
-                  <Text strong className="text-blue-800">Current: </Text>
-                  <Text className="text-blue-700 font-medium">
+                  <Text strong style={{ color: 'var(--text-primary)' }}>Current: </Text>
+                  <Text style={{ color: 'var(--text-primary)' }} className="font-medium">
                     {pages.find(p => p.key === currentPageKey)?.title || 'Loading...'}
                   </Text>
-                  <div className="font-mono text-xs text-blue-600 mt-1">
+                  <div className="font-mono text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                     {pages.find(p => p.key === currentPageKey)?.path || '/'}
                   </div>
                 </div>
                 {unsavedChanges && (
-                  <div className="flex items-center text-orange-600 text-xs">
-                    <span className="w-2 h-2 bg-orange-500 rounded-full mr-1 animate-pulse"></span>
+                  <div className="flex items-center text-xs" style={{ color: 'var(--warning-color)' }}>
+                    <span className="w-2 h-2 rounded-full mr-1 animate-pulse" style={{ background: 'var(--warning-color)' }}></span>
                     Unsaved
                   </div>
                 )}
@@ -870,7 +883,10 @@ const PageManager2 = ({
             ) : (
               <>
                 {/* Page Tree with enhanced styling */}
-                <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-lg bg-white">
+                <div
+                  className="max-h-60 overflow-y-auto border rounded-lg"
+                  style={{ background: 'var(--panel-bg)', borderColor: 'var(--border-color)' }}
+                >
                   <Tree
                     treeData={treeData}
                     expandedKeys={expandedKeys}
@@ -888,7 +904,7 @@ const PageManager2 = ({
                       }
                     }}
                     switcherIcon={({ expanded }) => 
-                      expanded ? <CaretDownOutlined className="text-blue-600" /> : <CaretRightOutlined className="text-gray-400" />
+                      expanded ? <CaretDownOutlined style={{ color: 'var(--accent-color)' }} /> : <CaretRightOutlined style={{ color: 'var(--text-muted)' }} />
                     }
                     className="p-2"
                   />
@@ -905,15 +921,15 @@ const PageManager2 = ({
                     onClick={() => {
                       setNewPageModalVisible(true);
                     }}
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 border-0 shadow-sm hover:shadow-md transition-all"
+                    className="border-0 shadow-sm hover:shadow-md transition-all"
                   >
                     Add Page
                   </Button>
                   
                   {lastSaveTime && (
-                    <Text type="secondary" className="text-xs flex items-center">
-                      <ClockCircleOutlined className="mr-1 text-green-600" />
-                      <span className="text-green-600">Saved {lastSaveTime.toLocaleTimeString()}</span>
+                    <Text className="text-xs flex items-center" style={{ color: 'var(--text-secondary)' }}>
+                      <ClockCircleOutlined className="mr-1" style={{ color: 'var(--success-color)' }} />
+                      <span>Saved {lastSaveTime.toLocaleTimeString()}</span>
                     </Text>
                   )}
                 </div>
@@ -927,9 +943,9 @@ const PageManager2 = ({
         <Tooltip title="Manage pages">
           <Button type="text" size="small">
             <div className="flex items-center space-x-1">
-              <FolderOutlined />
+              <FolderOutlined style={{ color: 'var(--accent-color)' }} />
               <span>Pages</span>
-              {unsavedChanges && <span className="text-orange-500">●</span>}
+              {unsavedChanges && <span style={{ color: 'var(--warning-color)' }}>●</span>}
             </div>
           </Button>
         </Tooltip>
@@ -984,10 +1000,10 @@ const PageManager2 = ({
           </Form.Item>
           
           {newPageFormData.title && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <Text strong className="text-blue-800">Page Structure Preview:</Text>
+            <div className="rounded-lg p-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+              <Text strong style={{ color: 'var(--text-primary)' }}>Page Structure Preview:</Text>
               <div className="mt-2 space-y-1">
-                <div className="font-mono text-sm text-blue-700">
+                <div className="font-mono text-sm" style={{ color: 'var(--text-secondary)' }}>
                   URL: {(() => {
                     const slug = newPageFormData.slug || newPageFormData.title.toLowerCase().replace(/[^a-z0-9]/g, '-');
                     const parent = newPageFormData.parentKey || 'home';
@@ -999,7 +1015,7 @@ const PageManager2 = ({
                     }
                   })()}
                 </div>
-                <div className="text-xs text-blue-600">
+                <div className="text-xs" style={{ color: 'var(--accent-color)' }}>
                   Hierarchy: Home → {(() => {
                     const parent = newPageFormData.parentKey || 'home';
                     if (parent === 'home') {

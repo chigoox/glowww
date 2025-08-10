@@ -133,27 +133,30 @@ const SnapGridControls = ({ className = '' }) => {
 
   const controlsDropdown = (
     <div 
-      className="bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-200/50 p-4 min-w-[280px] max-w-[320px]" 
-      style={{ 
-        height: '30rem', 
+      className="backdrop-blur-sm rounded-xl shadow-2xl p-4 min-w-[280px] max-w-[320px] border"
+      style={{
+        height: '30rem',
         overflowY: 'scroll',
         zIndex: '99999999 !important',
-        position: 'fixed'
+        position: 'fixed',
+        background: 'var(--panel-bg)',
+        color: 'var(--text-primary)',
+        borderColor: 'var(--border-color)'
       }}
     >
       {/* Drop Position Controls */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <AimOutlined className="text-blue-500" />
-            <Text strong className="text-sm">Drop Position</Text>
+            <AimOutlined style={{ color: 'var(--accent-color)' }} />
+            <Text strong className="text-sm" style={{ color: 'var(--text-primary)' }}>Drop Position</Text>
           </div>
         </div>
 
-        <div className="bg-blue-50/50 rounded-lg p-3 space-y-3">
+        <div className="rounded-lg p-3 space-y-3 border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
           {/* Position Mode Buttons */}
           <div>
-            <Text className="text-xs text-gray-600 mb-2 block">Position Mode</Text>
+            <Text className="text-xs mb-2 block" style={{ color: 'var(--text-secondary)' }}>Position Mode</Text>
             <div className="flex space-x-1">
               <Tooltip title="Center component at mouse cursor (Figma-style)">
                 <Button
@@ -179,9 +182,9 @@ const SnapGridControls = ({ className = '' }) => {
           </div>
 
           {/* Snap to Grid Toggle */}
-          <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
             <Tooltip title="Snap dropped components to grid points">
-              <Text className="text-xs text-gray-600">Snap to Grid</Text>
+        <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>Snap to Grid</Text>
             </Tooltip>
             <Switch
               size="small"
@@ -198,8 +201,8 @@ const SnapGridControls = ({ className = '' }) => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <BorderOutlined className="text-green-500" />
-              <Text strong className="text-sm">Grid System</Text>
+              <BorderOutlined style={{ color: 'var(--accent-color)' }} />
+              <Text strong className="text-sm" style={{ color: 'var(--text-primary)' }}>Grid System</Text>
             </div>
             <div className="flex items-center space-x-1">
               <Tooltip title={settings.gridVisible ? "Hide grid" : "Show grid"}>
@@ -208,7 +211,7 @@ const SnapGridControls = ({ className = '' }) => {
                   size="small"
                   icon={settings.gridVisible ? <EyeOutlined /> : <EyeInvisibleOutlined />}
                   onClick={toggleGridVisibility}
-                  className={settings.gridVisible ? 'text-blue-500' : 'text-gray-400'}
+                  style={{ color: settings.gridVisible ? 'var(--accent-color)' : 'var(--text-secondary)' }}
                 />
               </Tooltip>
               <Switch
@@ -220,10 +223,10 @@ const SnapGridControls = ({ className = '' }) => {
           </div>
 
           {settings.gridEnabled && (
-            <div className="bg-green-50/50 rounded-lg p-3 space-y-3">
+            <div className="rounded-lg p-3 space-y-3 border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
               {/* Grid Size Buttons */}
               <div>
-                <Text className="text-xs text-gray-600 mb-2 block">Grid Size</Text>
+                <Text className="text-xs mb-2 block" style={{ color: 'var(--text-secondary)' }}>Grid Size</Text>
                 <div className="grid grid-cols-4 gap-1">
                   {Object.values(GRID_PRESETS).map(preset => (
                     <Tooltip key={preset.size} title={preset.label}>
@@ -243,8 +246,8 @@ const SnapGridControls = ({ className = '' }) => {
               {/* Grid Opacity */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <Text className="text-xs text-gray-600">Opacity</Text>
-                  <Text className="text-xs text-gray-500">{Math.round(settings.gridOpacity * 100)}%</Text>
+                  <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>Opacity</Text>
+                  <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>{Math.round(settings.gridOpacity * 100)}%</Text>
                 </div>
                 <Slider
                   min={0.1}
@@ -265,8 +268,8 @@ const SnapGridControls = ({ className = '' }) => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <CompressOutlined className="text-purple-500" />
-              <Text strong className="text-sm">Smart Snapping</Text>
+              <CompressOutlined style={{ color: 'var(--accent-color)' }} />
+              <Text strong className="text-sm" style={{ color: 'var(--text-primary)' }}>Smart Snapping</Text>
             </div>
             <Switch
               size="small"
@@ -276,7 +279,7 @@ const SnapGridControls = ({ className = '' }) => {
           </div>
 
           {settings.snapEnabled && (
-            <div className="bg-purple-50/50 rounded-lg p-3 space-y-3">
+            <div className="rounded-lg p-3 space-y-3 border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
               {/* Snap Options */}
               <div className="grid grid-cols-2 gap-2">
                 <Tooltip title="Snap to other components">
@@ -325,9 +328,9 @@ const SnapGridControls = ({ className = '' }) => {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Tooltip title="How close you need to get before snapping occurs">
-                    <Text className="text-xs text-gray-600">Sensitivity</Text>
+                    <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sensitivity</Text>
                   </Tooltip>
-                  <Text className="text-xs text-gray-500">{settings.snapThreshold}px</Text>
+                  <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>{settings.snapThreshold}px</Text>
                 </div>
                 <Slider
                   min={2}
@@ -344,9 +347,9 @@ const SnapGridControls = ({ className = '' }) => {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Tooltip title="Detection range for snapping to other elements">
-                    <Text className="text-xs text-gray-600">Element Range</Text>
+                    <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>Element Range</Text>
                   </Tooltip>
-                  <Text className="text-xs text-gray-500">{settings.elementSnapThreshold}px</Text>
+                  <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>{settings.elementSnapThreshold}px</Text>
                 </div>
                 <Slider
                   min={6}
@@ -366,21 +369,21 @@ const SnapGridControls = ({ className = '' }) => {
         {/* Keyboard Shortcuts */}
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
-            <SettingOutlined className="text-gray-500 text-sm" />
-            <Text strong className="text-sm">Shortcuts</Text>
+            <SettingOutlined className="text-sm" style={{ color: 'var(--text-secondary)' }} />
+            <Text strong className="text-sm" style={{ color: 'var(--text-primary)' }}>Shortcuts</Text>
           </div>
           <div className="space-y-1">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-600">Toggle Grid</span>
-              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">G</kbd>
+              <span style={{ color: 'var(--text-secondary)' }}>Toggle Grid</span>
+              <kbd className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--bg-secondary)' }}>G</kbd>
             </div>
             <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-600">Toggle Visibility</span>
-              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+'</kbd>
+              <span style={{ color: 'var(--text-secondary)' }}>Toggle Visibility</span>
+              <kbd className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--bg-secondary)' }}>Ctrl+'</kbd>
             </div>
             <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-600">Toggle Snap</span>
-              <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+;</kbd>
+              <span style={{ color: 'var(--text-secondary)' }}>Toggle Snap</span>
+              <kbd className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--bg-secondary)' }}>Ctrl+;</kbd>
             </div>
           </div>
         </div>
@@ -397,14 +400,17 @@ const SnapGridControls = ({ className = '' }) => {
           size="small"
           icon={<BorderOutlined />}
           onClick={toggleGrid}
-          className={`relative transition-all duration-200 ${
-            settings.gridEnabled 
-              ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          } rounded-lg px-3`}
+          className={`relative transition-all duration-200 rounded-lg px-3`}
+          style={settings.gridEnabled ? {
+            color: 'var(--accent-color)',
+            background: 'var(--accent-bg)',
+            border: '1px solid var(--accent-color)'
+          } : {
+            color: 'var(--text-secondary)'
+          }}
         >
           {settings.gridEnabled && settings.gridVisible && (
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white" />
+            <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: 'var(--accent-color)', borderColor: 'var(--panel-bg)' }} />
           )}
         </Button>
       </Tooltip>
@@ -416,14 +422,17 @@ const SnapGridControls = ({ className = '' }) => {
           size="small"
           icon={<CompressOutlined />}
           onClick={toggleSnap}
-          className={`relative transition-all duration-200 ${
-            settings.snapEnabled 
-              ? 'text-green-600 bg-green-50 hover:bg-green-100 border border-green-200' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-          } rounded-lg px-3`}
+          className={`relative transition-all duration-200 rounded-lg px-3`}
+          style={settings.snapEnabled ? {
+            color: 'var(--accent-color)',
+            background: 'var(--accent-bg)',
+            border: '1px solid var(--accent-color)'
+          } : {
+            color: 'var(--text-secondary)'
+          }}
         >
           {settings.snapEnabled && (
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+            <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2" style={{ background: 'var(--accent-color)', borderColor: 'var(--panel-bg)' }} />
           )}
         </Button>
       </Tooltip>
@@ -445,32 +454,35 @@ const SnapGridControls = ({ className = '' }) => {
             type="text"
             size="small"
             icon={<SettingOutlined />}
-            className={`transition-all duration-200 ${
-              dropdownVisible 
-                ? 'text-purple-600 bg-purple-50 border border-purple-200' 
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-            } rounded-lg px-3`}
+            className={`transition-all duration-200 rounded-lg px-3`}
+            style={dropdownVisible ? {
+              color: 'var(--accent-color)',
+              background: 'var(--accent-bg)',
+              border: '1px solid var(--accent-color)'
+            } : {
+              color: 'var(--text-secondary)'
+            }}
           />
         </Tooltip>
       </Dropdown>
 
       {/* Current Grid Size Indicator */}
       {settings.gridEnabled && (
-        <div className="text-xs text-gray-600 px-2 py-1 bg-gray-100 rounded-md border font-mono">
+  <div className="text-xs px-2 py-1 rounded-md border font-mono" style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
           {settings.gridSize}px
         </div>
       )}
 
       {/* Status Indicators */}
       {(settings.gridEnabled || settings.snapEnabled) && (
-        <div className="flex items-center space-x-2 pl-2 border-l border-gray-200">
+    <div className="flex items-center space-x-2 pl-2 border-l" style={{ borderColor: 'var(--border-color)' }}>
           {settings.gridEnabled && (
-            <div className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-md border border-blue-200">
+      <div className="text-xs font-semibold px-2 py-1 rounded-md border" style={{ color: 'var(--accent-color)', background: 'var(--accent-bg)', borderColor: 'var(--accent-color)' }}>
               Grid
             </div>
           )}
           {settings.snapEnabled && (
-            <div className="text-xs text-green-600 font-semibold bg-green-50 px-2 py-1 rounded-md border border-green-200">
+      <div className="text-xs font-semibold px-2 py-1 rounded-md border" style={{ color: 'var(--accent-color)', background: 'var(--accent-bg)', borderColor: 'var(--accent-color)' }}>
               Snap
             </div>
           )}

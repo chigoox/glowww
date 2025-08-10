@@ -47,7 +47,7 @@ const { TabPane } = Tabs;
  */
 const EditorSettingsModal = ({ visible, onClose }) => {
   const { settings, updateSetting, resetSettings, loading, isAuthenticated } = useEditorSettings();
-  const [activeTab, setActiveTab] = useState('positioning');
+  const [activeTab, setActiveTab] = useState('grid');
 
   // Sync settings with SnapGridSystem - bidirectional sync
   useEffect(() => {
@@ -1136,6 +1136,10 @@ const EditorSettingsModal = ({ visible, onClose }) => {
       getContainer={false}
       mask={true}
       styles={{
+        content: {
+          borderRadius: 12,
+          overflow: 'hidden'
+        },
         body: {
           height: '30rem',
           overflowY: 'scroll',
@@ -1201,36 +1205,15 @@ const EditorSettingsModal = ({ visible, onClose }) => {
             <TabPane 
               tab={
                 <Space>
-                  <AimOutlined />
-                  <span>Positioning</span>
-                </Space>
-              } 
-              key="positioning"
-            >
-              <PositioningTab />
-            </TabPane>
-            
-            <TabPane 
-              tab={
-                <Space>
-                  <EyeOutlined />
-                  <span>Visual</span>
-                </Space>
-              } 
-              key="visual"
-            >
-              <VisualTab />
-            </TabPane>
-            
-            <TabPane 
-              tab={
-                <Space>
                   <BorderOutlined />
-                  <span>Snap</span>
+                  <span>Grid & Snap</span>
                 </Space>
               } 
-              key="snap"
+              key="grid"
             >
+              {/* Combine the three related sections into a single tab */}
+              <PositioningTab />
+              <VisualTab />
               <SnapTab />
             </TabPane>
             

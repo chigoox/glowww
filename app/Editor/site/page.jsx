@@ -1767,6 +1767,9 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 menu={historyDropdownMenu}
                 placement="bottomLeft"
                 trigger={['click']}
+                overlayClassName="rounded-xl overflow-hidden shadow-2xl"
+                overlayStyle={{ borderRadius: 12, overflow: 'hidden' }}
+                arrow={false}
                 disabled={!isInitialized}
               >
                 <Button
@@ -1875,11 +1878,15 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                 }}
                 placement="bottomRight"
                 trigger={['click']}
+                overlayClassName="rounded-xl overflow-hidden shadow-2xl"
+                overlayStyle={{ borderRadius: 12, overflow: 'hidden' }}
+                arrow={false}
               >
                 <Button
-                  icon={<SettingOutlined className="text-lg" />}
-                  className="h-10 w-10 bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 border-gray-300"
-                  size="large"
+                  type="text"
+                  size="small"
+                  icon={<SettingOutlined />}
+                  className="rounded-lg px-3 text-gray-600 hover:text-gray-900"
                 />
               </Dropdown>
             </Tooltip>

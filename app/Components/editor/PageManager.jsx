@@ -994,15 +994,23 @@ const PageManager = () => {
     <>
       {/* Pages Button */}
       <Dropdown
+      
       zIndex={999999}
         popupRender={() => (
-          <div className="bg-white rounded-lg z-[99999999] shadow-lg border p-4 min-w-[300px]">
+          <div
+            className=" z-[99999999] shadow-lg border p-4 min-w-[320px]"
+            style={{
+              background: 'var(--panel-bg)',
+              color: 'var(--text-primary)',
+              borderColor: 'var(--border-color)'
+            }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
-                <FolderOutlined />
-                <Text strong>Pages</Text>
-                <Text type="secondary">({pages.length})</Text>
+                <FolderOutlined style={{ color: 'var(--accent-color)' }} />
+                <Text strong style={{ color: 'var(--text-primary)' }}>Pages</Text>
+                <Text style={{ color: 'var(--text-secondary)' }}>({pages.length})</Text>
               </div>
               <div className="flex items-center space-x-2">
                 <Tooltip title="Project settings">
@@ -1033,23 +1041,34 @@ const PageManager = () => {
             </div>
 
             {/* Current Page Info */}
-            <div className="mb-3 p-2 bg-blue-50 rounded text-sm">
-              <Text strong>Current: </Text>
-              <Text>{pages.find(p => p.key === currentPageKey)?.title || 'Home'}</Text>
+            <div
+              className="mb-3 p-3 rounded text-sm"
+              style={{
+                background: 'var(--accent-bg)',
+                border: '1px solid var(--accent-color)'
+              }}
+            >
+              <Text strong style={{ color: 'var(--text-primary)' }}>Current: </Text>
+              <Text style={{ color: 'var(--text-primary)' }}>
+                {pages.find(p => p.key === currentPageKey)?.title || 'Home'}
+              </Text>
               {pages.find(p => p.key === currentPageKey)?.folderPath && (
-                <div className="font-mono text-xs text-gray-600 mt-1">
+                <div className="font-mono text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                   app/{pages.find(p => p.key === currentPageKey)?.folderPath}/page.js
                 </div>
               )}
               {currentPageKey === 'home' && (
-                <div className="font-mono text-xs text-gray-600 mt-1">
+                <div className="font-mono text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                   app/page.js (root)
                 </div>
               )}
             </div>
 
             {/* Page Tree */}
-            <div className="max-h-60  overflow-y-auto">
+            <div
+              className="max-h-60 overflow-y-auto border rounded"
+              style={{ background: 'var(--panel-bg)', borderColor: 'var(--border-color)' }}
+            >
               <Tree
               
                 treeData={treeData}
@@ -1090,9 +1109,9 @@ const PageManager = () => {
               </Button>
               
               {lastSaveTime && (
-                <Text type="secondary" className="text-xs">
-                  <ClockCircleOutlined className="mr-1" />
-                  Saved {lastSaveTime.toLocaleTimeString()}
+                <Text className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  <ClockCircleOutlined className="mr-1" style={{ color: 'var(--success-color)' }} />
+                  <span>Saved {lastSaveTime.toLocaleTimeString()}</span>
                 </Text>
               )}
             </div>
@@ -1104,9 +1123,11 @@ const PageManager = () => {
         <Tooltip title="Manage pages">
           <Button type="text" size="small">
             <div className="flex items-center space-x-1">
-              <FolderOutlined />
+              <FolderOutlined style={{ color: 'var(--accent-color)' }} />
               <span>Pages</span>
-              {unsavedChanges && <span className="text-orange-500">●</span>}
+              {unsavedChanges && (
+                <span style={{ color: 'var(--warning-color)' }}>●</span>
+              )}
             </div>
           </Button>
         </Tooltip>
@@ -1128,7 +1149,7 @@ const PageManager = () => {
       >
         <div className="space-y-4">
           <div>
-            <Text>Page Name</Text>
+            <Text style={{ color: 'var(--text-primary)' }}>Page Name</Text>
             <Input
               value={newPageName}
               onChange={(e) => setNewPageName(e.target.value)}
@@ -1138,7 +1159,7 @@ const PageManager = () => {
           </div>
           
           <div>
-            <Text>Parent Page</Text>
+            <Text style={{ color: 'var(--text-primary)' }}>Parent Page</Text>
             <Select
               value={selectedPageKey || 'home'}
               onChange={setSelectedPageKey}
@@ -1155,9 +1176,9 @@ const PageManager = () => {
           </div>
           
           {newPageName && (
-            <div className="bg-gray-50 p-3 rounded">
-              <Text strong className="text-sm">Next.js App Router Structure:</Text>
-              <div className="mt-2 font-mono text-xs text-gray-600">
+            <div className="p-3 rounded" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+              <Text strong className="text-sm" style={{ color: 'var(--text-primary)' }}>Next.js App Router Structure:</Text>
+              <div className="mt-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
                 {(() => {
                   const pageKey = newPageName.toLowerCase().replace(/[^a-z0-9]/g, '-');
                   const parentKey = selectedPageKey || 'home';
@@ -1169,7 +1190,7 @@ const PageManager = () => {
                   }
                 })()}
               </div>
-              <div className="mt-1 text-xs text-blue-600">
+              <div className="mt-1 text-xs" style={{ color: 'var(--accent-color)' }}>
                 URL: {(() => {
                   const pageKey = newPageName.toLowerCase().replace(/[^a-z0-9]/g, '-');
                   const parentKey = selectedPageKey || 'home';
@@ -1179,7 +1200,7 @@ const PageManager = () => {
             </div>
           )}
           
-          <div className="text-xs text-gray-500">
+          <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
             💡 All pages are organized under the Home page for proper Next.js App Router structure
           </div>
         </div>
@@ -1274,14 +1295,17 @@ const PageManager = () => {
                     }
                   </div>
                   
-                  {globalNavbarSettings.navbarType === 'auto-sync' && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                      <Text strong>🔄 Auto-Sync Active</Text>
-                      <div className="text-xs text-blue-600 mt-1">
-                        Any changes you make to NavBar components will automatically apply to all pages in real-time.
+                    {globalNavbarSettings.navbarType === 'auto-sync' && (
+                      <div
+                        className="mt-2 p-2 rounded text-sm"
+                        style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-color)' }}
+                      >
+                        <Text strong style={{ color: 'var(--text-primary)' }}>🔄 Auto-Sync Active</Text>
+                        <div className="text-xs mt-1" style={{ color: 'var(--accent-color)' }}>
+                          Any changes you make to NavBar components will automatically apply to all pages in real-time.
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                   
                   {globalNavbarSettings.navbarType === 'custom' && (
                     <Button 
@@ -1318,7 +1342,7 @@ const PageManager = () => {
 
       {/* Confirm Switch Modal */}
       <Modal
-        title="⚠️ Unsaved Changes"
+  title="⚠️ Unsaved Changes"
         open={confirmSwitchModalVisible}
         onCancel={handleCancelSwitch}
         centered
@@ -1338,13 +1362,13 @@ const PageManager = () => {
       >
         <div className="space-y-3">
           <p>You have unsaved changes on the current page.</p>
-          <div className="bg-blue-50 p-3 rounded">
+          <div className="p-3 rounded" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
             <p><strong>Save & Switch:</strong> Save your changes and switch to the new page</p>
             <p><strong>Don't Save:</strong> Switch without saving (changes will be lost)</p>
             <p><strong>Cancel:</strong> Stay on the current page</p>
           </div>
           {pendingPageSwitch && (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
               Switching to: <strong>{pages.find(p => p.key === pendingPageSwitch)?.title || pendingPageSwitch}</strong>
             </p>
           )}
@@ -1367,7 +1391,7 @@ const PageManager = () => {
         <div className="space-y-4">
           {/* File upload */}
           <div>
-            <label className="block text-sm font-medium mb-2">Upload Page File:</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Upload Page File:</label>
             <input
               type="file"
               accept=".glow,.txt"
@@ -1378,14 +1402,14 @@ const PageManager = () => {
           
           {/* Manual paste */}
           <div>
-            <label className="block text-sm font-medium mb-2">Or Paste Page Data:</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Or Paste Page Data:</label>
             <Input.TextArea
               value={loadPageInputData}
               onChange={(e) => setLoadPageInputData(e.target.value)}
               rows={6}
               placeholder="Paste your saved page data here..."
             />
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
               Supports .glow files and raw JSON data. Will load directly to the current page.
             </p>
           </div>

@@ -412,6 +412,7 @@ body {
   background: var(--accent-color) !important;
 }
 
+
 /* Color Picker theming */
 .ant-color-picker {
   background: var(--bg-primary) !important;

@@ -76,6 +76,16 @@ const ThemeInitializer = () => {
       root.style.setProperty('--panel-bg', colors.panels.background);
       root.style.setProperty('--border-color', colors.panels.border);
       root.style.setProperty('--text-primary', colors.panels.text);
+
+      // Expose generic accent variables used across UI (Page Manager, etc.)
+      if (colors.panels.accent) {
+        const accent = colors.panels.accent;
+        // Primary accent color
+        root.style.setProperty('--accent-color', accent);
+        // Derived accent backgrounds/shadows that adapt to theme background
+        root.style.setProperty('--accent-bg', `color-mix(in srgb, ${accent} 14%, var(--bg-primary))`);
+        root.style.setProperty('--accent-shadow', `color-mix(in srgb, ${accent} 24%, transparent)`);
+      }
     }
     
     // Apply component colors
