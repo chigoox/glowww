@@ -994,17 +994,17 @@ body.dark-theme .editor-workspace .bg-slate-50 {
 }
 
 /* More aggressive targeting for the entire page when in editor */
-body.dark-theme:has([data-page="editor"]) .bg-white:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+body.dark-theme[data-page="editor"] .bg-white:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
   background: var(--panel-bg) !important;
   color: var(--text-primary) !important;
 }
 
-body.dark-theme:has([data-page="editor"]) .bg-gray-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+body.dark-theme[data-page="editor"] .bg-gray-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
   background: var(--bg-secondary) !important;
   color: var(--text-primary) !important;
 }
 
-body.dark-theme:has([data-page="editor"]) .bg-slate-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
+body.dark-theme[data-page="editor"] .bg-slate-50:not(.ant-modal-content):not(.ant-popover):not(.ant-dropdown):not(.ant-tooltip) {
   background: var(--bg-secondary) !important;
   color: var(--text-primary) !important;
 }
@@ -1110,15 +1110,7 @@ body.dark-theme[data-route*="Editor"] .bg-gray-100:not(.ant-modal-content):not(.
 }
 
 /* Aggressive targeting for all editor UI elements */
-body.dark-theme .bg-white:has([class*="toolbox"]),
-body.dark-theme .bg-white:has([class*="layers"]),
-body.dark-theme .bg-white:has([class*="style"]),
-body.dark-theme .bg-gray-50:has([class*="toolbox"]),
-body.dark-theme .bg-gray-50:has([class*="layers"]),
-body.dark-theme .bg-gray-50:has([class*="style"]) {
-  background: var(--panel-bg) !important;
-  color: var(--text-primary) !important;
-}
+/* Removed :has() parent selectors for build compatibility (cssnano). */
 
 /* Fix all white borders and backgrounds in editor interface */
 .dark-theme .border-gray-200,

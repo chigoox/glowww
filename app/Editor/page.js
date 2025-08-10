@@ -183,6 +183,18 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
 
+  // Mark body as being on the editor page to enable CSS targeting without :has()
+  useEffect(() => {
+    const body = document.body;
+    body.setAttribute('data-page', 'editor');
+    body.setAttribute('data-route', 'editor');
+    return () => {
+      // Cleanup on unmount or route change
+      body.removeAttribute('data-page');
+      body.removeAttribute('data-route');
+    };
+  }, []);
+
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!loading && user) {
