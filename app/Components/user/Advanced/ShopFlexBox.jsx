@@ -1,10 +1,11 @@
 'use client'
 
-import { EditOutlined } from '@ant-design/icons';
-import { Element, useNode } from "@craftjs/core";
+import { useNode, useEditor } from "@craftjs/core";
 import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
-import { useEffect, useState } from "react";
-import { FlexBox } from "../Layout/FlexBox";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import ContextMenu from "../../utils/context/ContextMenu";
 import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import useEditorDisplay from "../../utils/craft/useEditorDisplay";
@@ -356,6 +357,11 @@ export const ShopFlexBox = ({
     backgroundColor = "transparent",
     borderRadius = 8,
 
+    // Container Positioning (match Box API)
+    position = "relative",
+    top = 0,
+    left = 0,
+
     // Product Item Styling Props
     itemWidth = "280px",
     itemBackgroundColor = "white",
@@ -424,6 +430,7 @@ export const ShopFlexBox = ({
     // Context menu functionality
     const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
     const { hideEditorUI } = useEditorDisplay();
+    const { actions: editorActions, query } = useEditor();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState({});
@@ -431,6 +438,10 @@ export const ShopFlexBox = ({
     const [currentProduct, setCurrentProduct] = useState(null);
     const [selectedElement, setSelectedElement] = useState('container');
     const [isAdjusting, setIsAdjusting] = useState(false);
+    const cardRef = useRef(null);
+    const dragRef = useRef(null);
+    const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+    const [isResizing, setIsResizing] = useState(false);
 
     // Local editing state to prevent re-renders during adjustments
     const [editingState, setEditingState] = useState({
@@ -521,6 +532,143 @@ export const ShopFlexBox = ({
 
         return () => clearInterval(interval);
     }, [autoSlide, slideInterval, currentImageIndex]);
+
+    // Attach MOVE drag handle
+    useEffect(() => {
+        if (dragRef.current) {
+            try { drag(dragRef.current); } catch (e) { /* noop */ }
+        }
+    }, [dragRef.current]);
+
+    // Update portal controls position
+    const updateBoxPosition = () => {
+        if (cardRef.current) {
+            const rect = cardRef.current.getBoundingClientRect();
+            setBoxPosition({
+                top: rect.top + window.scrollY,
+                left: rect.left + window.scrollX,
+                width: rect.width,
+                height: rect.height
+            });
+        }
+    };
+    useEffect(() => {
+        if (!isSelected) return;
+        updateBoxPosition();
+        const onScroll = () => updateBoxPosition();
+        const onResize = () => updateBoxPosition();
+        window.addEventListener('scroll', onScroll);
+        window.addEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('scroll', onScroll);
+            window.removeEventListener('resize', onResize);
+        };
+    }, [isSelected]);
+
+    // Resize logic with snapping (mirrors Box)
+    const handleResizeStart = (e, direction) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const rect = cardRef.current.getBoundingClientRect();
+        const startWidth = rect.width;
+        const startHeight = rect.height;
+        setIsResizing(true);
+
+        // Register other elements for snapping
+        const nodes = query.getNodes();
+        Object.entries(nodes).forEach(([id, node]) => {
+            if (id !== nodeId && node.dom) {
+                const elementRect = node.dom.getBoundingClientRect();
+                const editorRoot = document.querySelector('[data-editor="true"]');
+                if (editorRoot) {
+                    const editorRect = editorRoot.getBoundingClientRect();
+                    const registrationBounds = {
+                        x: elementRect.left - editorRect.left,
+                        y: elementRect.top - editorRect.top,
+                        width: elementRect.width,
+                        height: elementRect.height,
+                    };
+                    snapGridSystem.registerElement(id, node.dom, registrationBounds);
+                }
+            }
+        });
+
+        const handleMouseMove = (moveEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+
+            switch (direction) {
+                case 'se': newWidth = startWidth + deltaX; newHeight = startHeight + deltaY; break;
+                case 'sw': newWidth = startWidth - deltaX; newHeight = startHeight + deltaY; break;
+                case 'ne': newWidth = startWidth + deltaX; newHeight = startHeight - deltaY; break;
+                case 'nw': newWidth = startWidth - deltaX; newHeight = startHeight - deltaY; break;
+                case 'e': newWidth = startWidth + deltaX; break;
+                case 'w': newWidth = startWidth - deltaX; break;
+                case 's': newHeight = startHeight + deltaY; break;
+                case 'n': newHeight = startHeight - deltaY; break;
+            }
+
+            newWidth = Math.max(newWidth, 50);
+            newHeight = Math.max(newHeight, 20);
+
+            const currentRect = cardRef.current.getBoundingClientRect();
+            const editorRoot = document.querySelector('[data-editor="true"]');
+            if (editorRoot) {
+                const editorRect = editorRoot.getBoundingClientRect();
+                let intendedBounds = {
+                    left: currentRect.left - editorRect.left,
+                    top: currentRect.top - editorRect.top,
+                    width: newWidth,
+                    height: newHeight
+                };
+                if (direction.includes('w')) {
+                    const widthDelta = newWidth - currentRect.width;
+                    intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+                }
+                if (direction.includes('n')) {
+                    const heightDelta = newHeight - currentRect.height;
+                    intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+                }
+                intendedBounds.right = intendedBounds.left + intendedBounds.width;
+                intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+                intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+                intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+                const snapResult = snapGridSystem.getResizeSnapPosition(
+                    nodeId,
+                    direction,
+                    intendedBounds,
+                    newWidth,
+                    newHeight
+                );
+                if (snapResult?.snapped) {
+                    newWidth = snapResult.bounds.width;
+                    newHeight = snapResult.bounds.height;
+                }
+            }
+
+            editorActions.history.throttle(500).setProp(nodeId, (props) => {
+                props.width = Math.round(newWidth);
+                props.height = Math.round(newHeight);
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+            snapGridSystem.clearSnapIndicators();
+            setTimeout(() => snapGridSystem.cleanupTrackedElements(), 100);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    };
 
     // Create product item
     const createProductItem = (product) => {
@@ -781,99 +929,67 @@ export const ShopFlexBox = ({
 
     return (
         <>
-            <FlexBox
-                ref={(ref) => ref && connect(drag(ref))}
-                width={width}
-                height={height}
-                display={display}
-                flexDirection={flexDirection}
-                flexWrap={flexWrap}
-                justifyContent={justifyContent}
-                alignItems={alignItems}
-                gap={gap}
-                padding={padding}
-                backgroundColor={backgroundColor}
-                borderRadius={borderRadius}
+            <div
+                ref={(ref) => { if (!ref) return; cardRef.current = ref; connect(drag(ref)); }}
                 className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className} shop-flexbox`}
                 style={{
-                    position: 'relative',
+                    width,
+                    height,
+                    display,
+                    flexDirection,
+                    flexWrap,
+                    justifyContent,
+                    alignItems,
+                    gap,
+                    padding,
+                    backgroundColor,
+                    borderRadius,
+                    position,
+                    top,
+                    left,
                     minHeight: displayProducts.length === 0 ? '200px' : 'auto'
                 }}
                 onContextMenu={hideEditorUI ? undefined : handleContextMenu}
             >
-                {/* Edit Button */}
+                {/* Portal Controls (MOVE/POS) */}
                 {isSelected && !hideEditorUI && (
-                    <div
-                        style={{
-                            position: "absolute",
-                            top: -28,
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            background: "#722ed1",
-                            color: "white",
-                            padding: "4px 8px",
-                            borderRadius: "12px",
-                            cursor: "pointer",
-                            fontSize: "9px",
-                            fontWeight: "bold",
-                            userSelect: "none",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                            zIndex: 1000,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "2px",
-                            minWidth: "48px",
-                            justifyContent: "center",
-                            border: "2px solid #d9d9d9"
-                        }}
-                        onClick={() => setIsEditModalOpen(true)}
-                        onMouseDown={e => e.stopPropagation()}
-                        title="Configure shop items"
-                    >
-                        ⚙️ EDIT
-                    </div>
+                    <PortalControls
+                        boxPosition={boxPosition}
+                        dragRef={dragRef}
+                        nodeId={nodeId}
+                        onEdit={() => setIsEditModalOpen(true)}
+                        handleResizeStart={handleResizeStart}
+                    />
                 )}
+                {/* Edit button now lives inside portal controls */}
 
                 {/* Products Display */}
                 {displayProducts.length > 0 ? (
                     displayProducts.map(product => createProductItem(product))
                 ) : (
-                    <Element
-                        id="empty-state-container"
-                        is={FlexBox}
-                        width="100%"
-                        height="200px"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        flexDirection="column"
-                        gap={8}
-                        color="#999"
-                        backgroundColor="#f9f9f9"
-                        borderRadius={8}
-                        border="2px dashed #ddd"
-                        canvas
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '200px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'column',
+                            gap: 8,
+                            color: '#999',
+                            backgroundColor: '#f9f9f9',
+                            borderRadius: 8,
+                            border: '2px dashed #ddd'
+                        }}
                     >
                         <div style={{ fontSize: '48px' }}>🛍️</div>
-                        <Element
-                            id="empty-state-text-1"
-                            is={ShopText}
-                            text="No products selected"
-                            fontSize="16px"
-                            color="#999"
-                        />
-                        <Element
-                            id="empty-state-text-2"
-                            is={ShopText}
-                            text="Click edit to configure your shop"
-                            fontSize="14px"
-                            color="#ccc"
-                        />
-                    </Element>
+                        <div style={{ fontSize: '16px', color: '#999' }}>No products selected</div>
+                        <div style={{ fontSize: '14px', color: '#ccc' }}>Click edit to configure your shop</div>
+                    </div>
                 )}
 
                 {children}
-            </FlexBox>
+            </div>
 
             {/* Edit Modal */}
             <Modal
@@ -902,6 +1018,9 @@ export const ShopFlexBox = ({
                     createProductItem={createProductItem}
                     formatPrice={formatPrice}
                     // Pass all style props
+                    position={position}
+                    top={top}
+                    left={left}
                     itemWidth={itemWidth}
                     itemPadding={itemPadding}
                     itemGap={itemGap}
@@ -960,7 +1079,7 @@ export const ShopFlexBox = ({
                 {currentProduct && (
                     <div>
                         <div style={{ marginBottom: 16, textAlign: 'center' }}>
-                            <ShopText text={currentProduct.name} fontSize="16px" fontWeight="600" />
+                            <div style={{ fontSize: '16px', fontWeight: 600 }}>{currentProduct.name}</div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                             {currentProduct.variants.map(variant => (
@@ -991,6 +1110,142 @@ export const ShopFlexBox = ({
                 />
             )}
         </>
+    );
+};
+
+// Portal controls (MOVE and POS) similar to Box
+const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit, handleResizeStart }) => {
+    if (typeof window === 'undefined') return null;
+    return createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 99999 }}>
+            <div
+                style={{
+                    position: 'absolute',
+                    top: boxPosition.top - 28,
+                    left: boxPosition.left + boxPosition.width / 2,
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    background: 'white',
+                    borderRadius: '16px',
+                    border: '2px solid #d9d9d9',
+                    overflow: 'hidden',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    userSelect: 'none',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    pointerEvents: 'auto',
+                }}
+            >
+                {/* Segment 1: MOVE (left) */}
+                <div
+                    ref={dragRef}
+                    data-handle-type="move"
+                    data-craft-node-id={nodeId}
+                    style={{
+                        background: '#52c41a',
+                        color: 'white',
+                        padding: '4px 10px',
+                        cursor: 'grab',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        minWidth: 56,
+                        justifyContent: 'center',
+                        transition: 'background 0.2s ease',
+                        borderRight: '1px solid rgba(255,255,255,0.6)'
+                    }}
+                    title="Drag to move between containers"
+                >
+                    MOVE
+                </div>
+
+                {/* Segment 2: EDIT (middle) */}
+                <div
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+                    style={{
+                        background: '#722ed1',
+                        color: 'white',
+                        padding: '4px 10px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        minWidth: 48,
+                        justifyContent: 'center',
+                        transition: 'background 0.2s ease',
+                        borderRight: '1px solid rgba(255,255,255,0.6)'
+                    }}
+                    title="Configure shop items"
+                >
+                    EDIT
+                </div>
+
+                {/* Segment 3: POS (right) */}
+                <SnapPositionHandle
+                    nodeId={nodeId}
+                    style={{
+                        background: '#1890ff',
+                        color: 'white',
+                        padding: '4px 10px',
+                        cursor: 'move',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        minWidth: 56,
+                        justifyContent: 'center',
+                        transition: 'background 0.2s ease'
+                    }}
+                >
+                    POS
+                </SnapPositionHandle>
+            </div>
+
+            {/* Resize corners */}
+            <div
+                style={{ position: 'absolute', top: boxPosition.top - 4, left: boxPosition.left - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'nw-resize', zIndex: 10001, pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'nw')}
+                title="Resize"
+            />
+            <div
+                style={{ position: 'absolute', top: boxPosition.top - 4, left: boxPosition.left + boxPosition.width - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'ne-resize', zIndex: 10001, pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'ne')}
+                title="Resize"
+            />
+            <div
+                style={{ position: 'absolute', top: boxPosition.top + boxPosition.height - 4, left: boxPosition.left - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'sw-resize', zIndex: 10001, pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'sw')}
+                title="Resize"
+            />
+            <div
+                style={{ position: 'absolute', top: boxPosition.top + boxPosition.height - 4, left: boxPosition.left + boxPosition.width - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'se-resize', zIndex: 10001, pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'se')}
+                title="Resize"
+            />
+
+            {/* Edge handles */}
+            <div
+                style={{ position: 'absolute', top: boxPosition.top - 4, left: boxPosition.left + boxPosition.width / 2 - 10, width: 20, height: 8, background: 'rgba(24, 144, 255, 0.3)', cursor: 'n-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'n')}
+                title="Resize height"
+            />
+            <div
+                style={{ position: 'absolute', top: boxPosition.top + boxPosition.height - 4, left: boxPosition.left + boxPosition.width / 2 - 10, width: 20, height: 8, background: 'rgba(24, 144, 255, 0.3)', cursor: 's-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 's')}
+                title="Resize height"
+            />
+            <div
+                style={{ position: 'absolute', left: boxPosition.left - 4, top: boxPosition.top + boxPosition.height / 2 - 10, width: 8, height: 20, background: 'rgba(24, 144, 255, 0.3)', cursor: 'w-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'w')}
+                title="Resize width"
+            />
+            <div
+                style={{ position: 'absolute', left: boxPosition.left + boxPosition.width - 4, top: boxPosition.top + boxPosition.height / 2 - 10, width: 8, height: 20, background: 'rgba(24, 144, 255, 0.3)', cursor: 'e-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
+                onMouseDown={(e) => handleResizeStart(e, 'e')}
+                title="Resize width"
+            />
+        </div>,
+        document.body
     );
 };
 
@@ -1413,15 +1668,21 @@ const StyleEditorModal = ({
                             <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#333' }}>
                                 📦 Container Styles
                             </h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                 <div>
                                     {renderSlider('Width', 'itemWidth', 200, 500, 10)}
                                     {renderSlider('Padding', 'itemPadding', 0, 50, 2)}
                                     {renderSlider('Gap', 'itemGap', 0, 30, 2)}
+                        {renderSlider('X (Left)', 'left', -500, 500, 1)}
+                        {renderSlider('Y (Top)', 'top', -500, 500, 1)}
                                 </div>
                                 <div>
                                     {renderColorPicker('Background', 'itemBackgroundColor')}
                                     {renderSlider('Border Radius', 'itemBorderRadius', 0, 50, 1)}
+                        {renderButtonGroup('Position', 'position', [
+                                        { label: 'Relative', value: 'relative' },
+                                        { label: 'Absolute', value: 'absolute' }
+                                    ])}
                                 </div>
                             </div>
                         </div>
@@ -1647,6 +1908,10 @@ const StyleEditorModal = ({
 ShopFlexBox.craft = {
     displayName: "ShopBox",
     props: {
+    // Container Positioning (align with Box)
+    position: "relative",
+    top: 0,
+    left: 0,
         selectedProducts: [],
         selectedCategories: [],
         selectedCollections: [],
