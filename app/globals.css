@@ -1150,40 +1150,12 @@ body.dark-theme .bg-white:not(.ant-modal-content):not(.ant-popover-content):not(
   color: var(--text-primary) !important;
 }
 
-/* Nuclear option - target ALL white backgrounds in editor routes */
-.dark-theme .h-screen *[style*="background: #fff"],
-.dark-theme .h-screen *[style*="background:#fff"],
-.dark-theme .h-screen *[style*="background: white"],
-.dark-theme .h-screen *[style*="background:white"] {
-  background: var(--panel-bg) !important;
-  color: var(--text-primary) !important;
-}
-
-.dark-theme .h-screen *[style*="background: #f8fafd"],
-.dark-theme .h-screen *[style*="background:#f8fafd"] {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-}
+/* Removed unsafe attribute selectors matching inline style substrings to avoid cssnano issues. */
 
 /* Target specific StyleMenu and Toolbox containers */
-.dark-theme div[style*="background: #fff"],
-.dark-theme div[style*="background:#fff"],
-.dark-theme div[style*="background: white"] {
-  background: var(--panel-bg) !important;
-  color: var(--text-primary) !important;
-}
+/* Removed unsafe attribute selectors matching inline style substrings to avoid cssnano issues. */
 
-.dark-theme div[style*="background: #f8fafd"],
-.dark-theme div[style*="background:#f8fafd"] {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-}
-
-/* Override all gray borders to match dark theme - only in editor */
-.dark-theme .h-screen *[style*="border:"],
-.dark-theme .h-screen *[style*="border "] {
-  border-color: var(--border-color) !important;
-}
+/* Removed unsafe attribute selectors matching inline style substrings to avoid cssnano issues. */
 
 /* Specific overrides for editor sidebar widths */
 .dark-theme .w-64.bg-white.border-r.border-gray-200.shadow-sm.flex-shrink-0.h-full.flex.flex-col {
@@ -1192,35 +1164,9 @@ body.dark-theme .bg-white:not(.ant-modal-content):not(.ant-popover-content):not(
   color: var(--text-primary) !important;
 }
 
-/* Override all hardcoded styles in FigmaStyleMenu and StyleMenu with !important */
-.dark-theme [style*="backgroundColor: #fafafa"],
-.dark-theme [style*="backgroundColor:#fafafa"],
-.dark-theme [style*="backgroundColor: #fcfcfc"],
-.dark-theme [style*="backgroundColor:#fcfcfc"],
-.dark-theme [style*="backgroundColor: #f5f5f5"],
-.dark-theme [style*="backgroundColor:#f5f5f5"],
-.dark-theme [style*="backgroundColor: #f8f9fa"],
-.dark-theme [style*="backgroundColor:#f8f9fa"],
-.dark-theme [style*="backgroundColor: #fafbfc"],
-.dark-theme [style*="backgroundColor:#fafbfc"] {
-  background-color: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-}
+/* Removed unsafe attribute selectors matching inline style substrings to avoid cssnano issues. */
 
-.dark-theme [style*="backgroundColor: #fff"],
-.dark-theme [style*="backgroundColor:#fff"],
-.dark-theme [style*="backgroundColor: white"],
-.dark-theme [style*="backgroundColor:white"] {
-  background-color: var(--panel-bg) !important;
-  color: var(--text-primary) !important;
-}
-
-/* Override hardcoded borders */
-.dark-theme [style*="borderBottom: 1px solid #f0f0f0"],
-.dark-theme [style*="border: 1px solid #e0e0e0"],
-.dark-theme [style*="border: 1px solid #eee"] {
-  border-color: var(--border-color) !important;
-}
+/* Removed unsafe attribute selectors matching inline style substrings to avoid cssnano issues. */
 
 /* Additional TopBar white container targeting */
 .dark-theme .bg-white.rounded-lg.px-2\.5.py-1.shadow-sm,
@@ -1457,12 +1403,7 @@ body {
 --AccentColorDark2:color-mix(in srgb, var(--AccentColor), black 90%);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* Removed unsupported @theme at-rule for broader CSS compatibility */
 
 /* width */
 ::-webkit-scrollbar {
@@ -1726,6 +1667,7 @@ input::-webkit-inner-spin-button {
 
 /* Firefox */
 input[type=number] {
+  appearance: textfield;
   -moz-appearance: textfield;
 }
 
