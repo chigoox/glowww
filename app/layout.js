@@ -1,11 +1,11 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import "./globals.css";
 import { PagesProvider } from "./Components/utils/context/PagesContext";
 import { AuthProvider } from "../contexts/AuthContext";
 import { EditorSettingsProvider } from "./Components/utils/context/EditorSettingsContext";
 import ThemeInitializer from "./Components/utils/ThemeInitializer";
 
-const geistSans = Geist({
+const geistSans = Oswald({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
@@ -23,9 +23,19 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <head>
+        {process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID && (
+          <>
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID}`}></script>
+            <script dangerouslySetInnerHTML={{ __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);} gtag('js', new Date());
+              gtag('config', '${process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID}', { anonymize_ip: true });
+            ` }} />
+          </>
+        )}
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
           <EditorSettingsProvider>
             <PagesProvider>

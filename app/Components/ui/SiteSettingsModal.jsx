@@ -114,7 +114,8 @@ const SiteSettingsModal = ({
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={600}
+  width={'32rem'}
+  bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
       destroyOnClose
     >
       <Form

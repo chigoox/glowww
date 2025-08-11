@@ -4,8 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserSites, createSite, deleteSite, updateSite, canCreateSite } from '../../lib/sites';
 import { signOut } from '../../lib/auth';
-import { PRICING_PLANS, createCheckoutSession } from '../../lib/stripe';
-import { UpgradeBenefits } from '../Components/utils/subscription/SubscriptionComponents';
+import { PRICING_PLANS, createCheckoutSession, createSetupIntent, setDefaultPaymentMethod, getSubscriptionStatus, cancelSubscriptionAtPeriodEnd, resumeSubscription, switchSubscriptionPlan, startStripeConnectOnboarding, getStripeConnectedAccount, disconnectStripeAccount } from '../../lib/stripe';
+import { startPaypalOnboarding } from '../../lib/paypal';
+import { updateUserData, checkUsernameExists } from '../../lib/auth';
+import { auth } from '../../lib/firebase';
+import { updateProfile } from 'firebase/auth';
+import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
+import { loadStripe as loadStripeJs } from '@stripe/stripe-js';
 import { ensureUserSubscription, getUserSubscription } from '../../lib/subscriptions';
 import SiteCard from '../Components/ui/SiteCard';
 import SiteSettingsModal from '../Components/ui/SiteSettingsModal';
@@ -27,6 +32,10 @@ import {
   Col,
   Progress,
   Alert
+  ,
+  theme,
+  Tabs,
+  ConfigProvider
 } from 'antd';
 import {
   PlusOutlined,
@@ -39,13 +48,26 @@ import {
   SettingOutlined,
   ShareAltOutlined,
   CopyOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  CheckCircleOutlined,
+  LockOutlined,
+  CreditCardOutlined
 } from '@ant-design/icons';
+import {
+  UserOutlined,
+  SafetyOutlined,
+  PhoneOutlined,
+  MailOutlined,
+  KeyOutlined
+} from '@ant-design/icons';
+import { ResponsiveContainer, LineChart as RechartsLineChart, Line as RechartsLine, XAxis as RechartsXAxis, YAxis as RechartsYAxis, Tooltip as RechartsTooltip, CartesianGrid as RechartsCartesianGrid, Legend as RechartsLegend } from 'recharts';
+import { Admin } from './Admin/Admin';
 
 const { Title, Text, Paragraph } = Typography;
 
 export default function Dashboard() {
-  const { user, loading: authLoading } = useAuth();
+  const { token } = theme.useToken();
+  const { user, userData, loading: authLoading } = useAuth();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState(null);
@@ -56,6 +78,10 @@ export default function Dashboard() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAnalyticsModalVisible, setIsAnalyticsModalVisible] = useState(false);
   const [selectedAnalyticsSite, setSelectedAnalyticsSite] = useState(null);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [accountForm] = Form.useForm();
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   
   // Logout function
   const handleLogout = async () => {
@@ -74,12 +100,100 @@ export default function Dashboard() {
   const [processingCreate, setProcessingCreate] = useState(false);
   const [selectedSite, setSelectedSite] = useState(null);
   const [showSiteSettings, setShowSiteSettings] = useState(false);
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState('pro');
+  const [showUpdatePaymentModal, setShowUpdatePaymentModal] = useState(false);
+  const [stripePromise] = useState(() => {
+    const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    return pk ? loadStripeJs(pk) : null;
+  });
+  const [clientSecret, setClientSecret] = useState(null);
+  const [customerId, setCustomerId] = useState(null);
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
+  const [managing, setManaging] = useState(false);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [stripeConnect, setStripeConnect] = useState(null);
+  const [paypalConnect, setPaypalConnect] = useState(null);
+  const [connectConfig, setConnectConfig] = useState({ stripe: { configured: true, missing: [] }, paypal: { configured: true, missing: [] } });
+  const [connectConfigLoading, setConnectConfigLoading] = useState(false);
+  const [stripeSummary, setStripeSummary] = useState(null);
+  const [stripeSummaryLoading, setStripeSummaryLoading] = useState(false);
+  const [paypalSummary, setPaypalSummary] = useState(null);
+  const [paypalSummaryLoading, setPaypalSummaryLoading] = useState(false);
+  const [stripeMetrics, setStripeMetrics] = useState(null);
+  const [stripeMetricsLoading, setStripeMetricsLoading] = useState(false);
+  const [metricsDays, setMetricsDays] = useState(30);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isDark, setIsDark] = useState(false);
+
+  // Sync with global theme classes set by ThemeInitializer (dark-theme / light-theme)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const update = () => setIsDark(root.classList.contains('dark-theme'));
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] });
+    return () => obs.disconnect();
+  }, []);
+
+  // Initialize active tab from URL (?tab=overview|sites|payments|insights)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const allowed = new Set(['overview', 'sites', 'payments', 'insights', 'ecommerce']);
+    const sp = new URLSearchParams(window.location.search);
+    const t = (sp.get('tab') || '').toLowerCase();
+    if (allowed.has(t)) {
+      setActiveTab(t);
+    }
+  }, []);
+
+  const onTabChange = (key) => {
+    setActiveTab(key);
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      sp.set('tab', key);
+      const next = `${window.location.pathname}?${sp.toString()}`;
+      window.history.replaceState({}, '', next);
+    }
+  };
 
   // Load user sites and subscription on component mount
   useEffect(() => {
     if (user && !authLoading) {
       loadUserSites();
       loadUserSubscription();
+  loadConnectConfig();
+  loadPaymentConnections();
+      // Stripe OAuth fallback: if Stripe redirected here with code/state, forward to server callback
+      try {
+        const search = new URLSearchParams(window.location.search);
+        const hasConnectFlag = search.has('connect');
+        const code = search.get('code');
+        const state = search.get('state');
+        if (!hasConnectFlag && code && state) {
+          const origin = window.location.origin;
+          const error = search.get('error');
+          const params = new URLSearchParams();
+          if (code) params.set('code', code);
+          if (state) params.set('state', state);
+          if (error) params.set('error', error);
+          window.location.replace(`${origin}/api/connect/stripe/oauth/callback?${params.toString()}`);
+          return; // stop further processing; navigation will occur
+        }
+      } catch {}
+      const search = new URLSearchParams(window.location.search);
+      const flag = search.get('connect');
+      if (flag === 'stripe_success') {
+        message.success('Stripe account connected');
+        search.delete('connect');
+        const next = `${window.location.pathname}${search.toString() ? '?' + search.toString() : ''}`;
+        window.history.replaceState({}, '', next);
+      } else if (flag === 'paypal_success') {
+        message.success('PayPal connected');
+        search.delete('connect');
+        const next = `${window.location.pathname}${search.toString() ? '?' + search.toString() : ''}`;
+        window.history.replaceState({}, '', next);
+      }
     }
   }, [user, authLoading]);
 
@@ -108,6 +222,10 @@ export default function Dashboard() {
       const userSubscription = await ensureUserSubscription(user.uid);
       setSubscription(userSubscription);
       console.log('User subscription loaded:', userSubscription);
+      try {
+        const status = await getSubscriptionStatus({ email: user.email });
+        setSubscriptionInfo(status.data);
+      } catch {}
     } catch (error) {
       console.error('Error loading subscription:', error);
       // Set default free tier if error
@@ -265,6 +383,64 @@ export default function Dashboard() {
     setShowSiteSettings(true);
   };
 
+  const loadPaymentConnections = async () => {
+    try {
+      const s = await getStripeConnectedAccount(user.uid);
+      setStripeConnect(s);
+      if (s?.connected) {
+        setStripeSummaryLoading(true);
+        fetch(`/api/connect/stripe/summary?userId=${encodeURIComponent(user.uid)}`)
+          .then(r => r.json())
+          .then(setStripeSummary)
+          .catch(() => setStripeSummary(null))
+          .finally(() => setStripeSummaryLoading(false));
+  // also load metrics
+  loadStripeMetrics(user.uid, metricsDays);
+      } else { setStripeSummary(null); }
+      const p = await fetch(`/api/connect/paypal/status?userId=${encodeURIComponent(user.uid)}`).then(r => r.json()).catch(() => ({ connected: false }));
+      setPaypalConnect(p);
+      if (p?.connected) {
+        setPaypalSummaryLoading(true);
+        fetch(`/api/connect/paypal/summary?userId=${encodeURIComponent(user.uid)}`)
+          .then(r => r.json())
+          .then(setPaypalSummary)
+          .catch(() => setPaypalSummary(null))
+          .finally(() => setPaypalSummaryLoading(false));
+      } else { setPaypalSummary(null); }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const loadStripeMetrics = async (uid, days) => {
+    if (!uid) return;
+    try {
+      setStripeMetricsLoading(true);
+      const data = await fetch(`/api/connect/stripe/metrics?userId=${encodeURIComponent(uid)}&days=${days}`).then(r => r.json());
+      setStripeMetrics(data?.connected ? data : null);
+    } catch {
+      setStripeMetrics(null);
+    } finally {
+      setStripeMetricsLoading(false);
+    }
+  };
+
+  const loadConnectConfig = async () => {
+    try {
+      setConnectConfigLoading(true);
+      const cfg = await fetch('/api/connect/config').then(r => r.json());
+      // Fallback shape protection
+      setConnectConfig({
+        stripe: cfg?.stripe || { configured: false, missing: [] },
+        paypal: cfg?.paypal || { configured: false, missing: [] }
+      });
+    } catch {
+      setConnectConfig({ stripe: { configured: false, missing: [] }, paypal: { configured: false, missing: [] } });
+    } finally {
+      setConnectConfigLoading(false);
+    }
+  };
+
   const handleSiteEdit = (site) => {
     window.location.href = `/Editor/site?site=${site.id}`;
   };
@@ -285,11 +461,13 @@ export default function Dashboard() {
   };
 
   const handleUpgradeConfirm = async () => {
-    // In a real app, this would integrate with a payment system
-    message.info('Redirecting to payment...');
-    setShowUpgradeModal(false);
-    // For demo purposes, we'll just show a message
-    // In production: window.location.href = '/upgrade' or open payment modal
+    try {
+      setShowUpgradeModal(false);
+  const plan = selectedUpgradePlan === 'business' ? PRICING_PLANS.business : PRICING_PLANS.pro;
+  await handleUpgrade(plan);
+    } catch (e) {
+      // handleUpgrade already shows an error toast; keep this minimal
+    }
   };
 
   const handleUpgrade = async (plan) => {
@@ -297,11 +475,22 @@ export default function Dashboard() {
       const successUrl = `${window.location.origin}/dashboard?upgrade=success`;
       const cancelUrl = `${window.location.origin}/dashboard?upgrade=cancelled`;
       
+      // Use priceId if configured; else build price_data from plan
+      const usingPriceId = !!plan.priceId && plan.priceId.startsWith('price_');
+      const priceData = usingPriceId ? undefined : {
+        currency: 'usd',
+        productName: `${plan.name} Plan`,
+        unit_amount: Math.round(plan.price * 100),
+        interval: 'month'
+      };
+
       const sessionUrl = await createCheckoutSession(
-        plan.priceId,
+        usingPriceId ? plan.priceId : undefined,
         user.uid,
         successUrl,
-        cancelUrl
+        cancelUrl,
+        user.email,
+        priceData
       );
       
       // Redirect to Stripe checkout
@@ -310,6 +499,59 @@ export default function Dashboard() {
       console.error('Error creating checkout session:', error);
       message.error('Failed to start checkout process');
     }
+  };
+
+  const openUpdatePayment = async () => {
+    try {
+      const { clientSecret: cs, customerId: cid } = await createSetupIntent(user.email, user.uid);
+      setClientSecret(cs);
+      setCustomerId(cid);
+      setShowUpdatePaymentModal(true);
+    } catch (e) {
+      message.error('Unable to start payment update');
+    }
+  };
+
+  const UpdatePaymentForm = () => {
+    const stripe = useStripe();
+    const elements = useElements();
+
+    const [saving, setSaving] = useState(false);
+
+    const onSubmit = async () => {
+      if (!stripe || !elements) return;
+      setSaving(true);
+      const result = await stripe.confirmSetup({
+        elements,
+        redirect: 'if_required'
+      });
+      if (result.error) {
+        message.error(result.error.message || 'Failed to update card');
+        setSaving(false);
+        return;
+      }
+      const setupIntent = result.setupIntent;
+      const pmId = setupIntent.payment_method;
+      try {
+        await setDefaultPaymentMethod(customerId, pmId);
+        message.success('Payment method updated');
+        setShowUpdatePaymentModal(false);
+      } catch (e) {
+        message.error('Could not set default payment method');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div>
+        <PaymentElement options={{ layout: 'tabs' }} />
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button onClick={() => setShowUpdatePaymentModal(false)}>Cancel</Button>
+          <Button type="primary" onClick={onSubmit} loading={saving}>Save</Button>
+        </div>
+      </div>
+    );
   };
 
   const copyPublicUrl = (site) => {
@@ -386,116 +628,691 @@ export default function Dashboard() {
   }
 
   return (
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorText: 'var(--text-primary)',
+          colorTextSecondary: 'var(--text-secondary)',
+          colorBgLayout: 'var(--bg-primary)',
+          colorBgContainer: 'var(--panel-bg)',
+          colorBorder: 'var(--border-color)',
+          borderRadius: 12
+        }
+      }}
+    >
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <Title level={2} style={{ margin: 0 }}>Welcome back, {user.displayName || user.email}!</Title>
-          <Text type="secondary">Manage your websites and upgrade your plan</Text>
+      <Title level={2} style={{ margin: 0, letterSpacing: -0.2 }}>Welcome back, {user.displayName || user.email}!</Title>
+      <Text type="secondary">Manage your sites, billing, and payouts</Text>
         </div>
         <Space>
+          <Button 
+            icon={<SettingOutlined />}
+            onClick={() => {
+              accountForm.setFieldsValue({
+                fullName: user.fullName || user.displayName || '',
+                username: (user.username || '').toLowerCase(),
+                email: user.email,
+                phone: userData?.phone || ''
+              });
+              setShowAccountSettings(true);
+            }}
+          >
+            Account
+          </Button>
           <Button 
             icon={<LogoutOutlined />}
             onClick={handleLogout}
             type="text"
             size="large"
-            style={{ color: '#666' }}
+            style={{ color: token.colorTextSecondary }}
           >
             Logout
           </Button>
         </Space>
       </div>
 
-      {/* Plan Status Card */}
-      <Card style={{ marginBottom: '24px' }}>
-        <Row gutter={[16, 16]} align="middle">
-          <Col flex="auto">
-            <Space direction="vertical" size={0}>
-              <Text strong>
-                Current Plan: {currentPlan.name}
-                {subscription?.tier === 'admin' && (
-                  <span style={{ marginLeft: 8, color: '#722ed1' }}>👑</span>
-                )}
-              </Text>
-              <Text type="secondary">
-                {siteUsage} of {maxSites === -1 ? '∞' : maxSites} sites used
-              </Text>
-              {maxSites !== -1 && (
-                <Progress 
-                  percent={usagePercentage} 
-                  size="small"
-                  status={usagePercentage >= 80 ? 'warning' : 'normal'}
-                />
+      {/* Primary navigation */}
+      <div className="tabs-sticky ">
+        <Tabs
+          activeKey={activeTab}
+          onChange={onTabChange}
+          className="dashboard-tabs "
+          size="large"
+          tabBarGutter={8}
+          items={[
+            { key: 'overview', label: 'Overview' },
+            { key: 'sites', label: 'Sites' },
+            { key: 'payments', label: 'Payments' },
+            { key: 'insights', label: 'Insights' },
+            { key: 'ecommerce', label: 'E-commerce' }
+          ]}
+        />
+      </div>
+      {/* Scoped styling for a modern, pill-style tab bar and to remove the white/broken underline */}
+      <style jsx global>{`
+/* --- Modern Sleek Tabs --- */
+
+/* Kill default lines/ink bar */
+.dashboard-tabs .ant-tabs-nav::before { border-bottom: none !important; }
+.dashboard-tabs .ant-tabs-ink-bar { display: none !important; }
+
+/* Equal width + centered text */
+.dashboard-tabs .ant-tabs-nav-list { width: 100%; }
+.dashboard-tabs .ant-tabs-tab { flex: 1 1 0; min-width: 0; justify-content: center; }
+.dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn { width: 100%; text-align: center; }
+
+/* Pill base */
+.dashboard-tabs .ant-tabs-tab {
+  margin: 0 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
+  position: relative;
+}
+
+/* Text */
+.dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn {
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: .01em;
+  transition: color .2s ease;
+}
+
+/* Hover (subtle tint) */
+.dashboard-tabs .ant-tabs-tab:hover {
+  background: color-mix(in srgb, var(--accent-color, #1677ff) 7%, var(--panel-bg, #fff));
+}
+.dashboard-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn {
+  color: color-mix(in srgb, var(--accent-color, #1677ff) 60%, var(--text-primary, #111));
+}
+
+/* Active (clear but calm) */
+.dashboard-tabs .ant-tabs-tab-active {
+  background: color-mix(in srgb, var(--accent-color, #1677ff) 12%, var(--panel-bg, #fff));
+  box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 4px 10px rgba(0,0,0,.04);
+}
+.dashboard-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--accent-color, #1677ff) !important;
+}
+
+/* Remove noisy rings; keep accessible focus for keyboard */
+.dashboard-tabs .ant-tabs-tab:focus,
+.dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn:focus { outline: none !important; }
+.dashboard-tabs .ant-tabs-tab:focus-visible,
+.dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color, #1677ff) 60%, transparent);
+  border-color: transparent;
+}
+
+/* No pseudo artifacts */
+.dashboard-tabs .ant-tabs-tab::before,
+.dashboard-tabs .ant-tabs-tab::after { content: none !important; }
+
+/* Compact sticky bar */
+.dashboard-tabs .ant-tabs-nav { margin: 0; }
+.tabs-sticky {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg-primary, #fff);
+  padding: 6px 0 10px;
+}
+.tabs-sticky::after {
+  content: ""; display: block; height: 1px;
+  background: var(--border-color, rgba(0,0,0,.1)); opacity: .2; margin-top: 8px;
+}
+
+/* Motion-friendly */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-tabs .ant-tabs-tab { transition: none; }
+  .dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn { transition: none; }
+}
+
+/* Optional: tidy elevation cards */
+.elevated-card {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-color, #1677ff) 6%, var(--panel-bg, #fff)) 0%,
+    var(--panel-bg, #fff) 85%
+  );
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+      `}</style>
+
+      {/* Overview */}
+      {activeTab === 'overview' && (
+        <>
+          <Card className="elevated-card" style={{ marginBottom: '16px', borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }} styles={{ body: { padding: 16 } }}>
+            <Row gutter={[16, 16]} align="middle">
+              <Col flex="auto">
+                <Space direction="vertical" size={0}>
+                  <Text strong>
+                    Current Plan: {currentPlan.name}
+                    {subscription?.tier === 'admin' && (
+                      <span style={{ marginLeft: 8, color: token.colorPrimary }}>👑</span>
+                    )}
+                  </Text>
+                  <Text type="secondary">
+                    {siteUsage} of {maxSites === -1 ? '∞' : maxSites} sites used
+                  </Text>
+                  {maxSites !== -1 && (
+                    <Progress 
+                      percent={usagePercentage} 
+                      size="small"
+                      status={usagePercentage >= 80 ? 'warning' : 'normal'}
+                    />
+                  )}
+                </Space>
+              </Col>
+              {currentPlan.id === 'free' && (
+                <Col>
+                  <Button 
+                    type="primary" 
+                    icon={<CrownOutlined />}
+                    onClick={() => showUpgradeModalHandler('Upgrade to create more sites and unlock premium features')}
+                  >
+                    Upgrade Plan
+                  </Button>
+                </Col>
               )}
-            </Space>
-          </Col>
-          {currentPlan.id === 'free' && (
+              {currentPlan.id !== 'free' && (
+                <Col>
+                  <Space>
+                    <Button onClick={openUpdatePayment}>Update payment method</Button>
+                    {subscriptionInfo?.status && (
+                      subscriptionInfo.cancelAtPeriodEnd ? (
+                        <Button loading={managing} onClick={async () => {
+                          try {
+                            setManaging(true);
+                            await resumeSubscription(subscriptionInfo.id);
+                            const status = await getSubscriptionStatus({ email: user.email });
+                            setSubscriptionInfo(status.data);
+                            message.success('Cancellation reversed');
+                          } catch { message.error('Failed to resume'); } finally { setManaging(false); }
+                        }}>Resume</Button>
+                      ) : (
+                        <Button danger loading={managing} onClick={async () => {
+                          try {
+                            setManaging(true);
+                            await cancelSubscriptionAtPeriodEnd(subscriptionInfo.id);
+                            const status = await getSubscriptionStatus({ email: user.email });
+                            setSubscriptionInfo(status.data);
+                            message.success('Will cancel at period end');
+                          } catch { message.error('Failed to cancel'); } finally { setManaging(false); }
+                        }}>Cancel at period end</Button>
+                      )
+                    )}
+                    {subscriptionInfo?.status && currentPlan.id !== 'free' && (
+                      currentPlan.id === 'pro' && PRICING_PLANS.business.priceId ? (
+                        <Button loading={managing} onClick={async () => {
+                          try {
+                            setManaging(true);
+                            await switchSubscriptionPlan(subscriptionInfo.id, PRICING_PLANS.business.priceId);
+                            const status = await getSubscriptionStatus({ email: user.email });
+                            setSubscriptionInfo(status.data);
+                            message.success('Switched to Business');
+                          } catch { message.error('Failed to switch plan'); } finally { setManaging(false); }
+                        }}>Switch to Business</Button>
+                      ) : null
+                    )}
+                    {subscriptionInfo?.status && currentPlan.id === 'business' && PRICING_PLANS.pro.priceId && (
+                      <Button loading={managing} onClick={async () => {
+                        try {
+                          setManaging(true);
+                          await switchSubscriptionPlan(subscriptionInfo.id, PRICING_PLANS.pro.priceId);
+                          const status = await getSubscriptionStatus({ email: user.email });
+                          setSubscriptionInfo(status.data);
+                          message.success('Switched to Pro');
+                        } catch { message.error('Failed to switch plan'); } finally { setManaging(false); }
+                      }}>Switch to Pro</Button>
+                    )}
+                    <Button onClick={async () => {
+                      try {
+                        const { sessionUrl } = await fetch('/api/stripe/create-portal-session', {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: user.email, returnUrl: window.location.href })
+                        }).then(r => r.json());
+                        window.location.href = sessionUrl;
+                      } catch (e) {
+                        message.error('Unable to open billing portal');
+                      }
+                    }}>Manage billing</Button>
+                  </Space>
+                </Col>
+              )}
+            </Row>
+          </Card>
+
+          <Row gutter={12}>
             <Col>
               <Button 
                 type="primary" 
-                icon={<CrownOutlined />}
-                onClick={() => showUpgradeModalHandler('Upgrade to create more sites and unlock premium features')}
+                icon={<PlusOutlined />}
+                onClick={() => setIsCreateModalVisible(true)}
+                size="large"
               >
-                Upgrade Plan
+                Create New Site
               </Button>
             </Col>
-          )}
-        </Row>
-      </Card>
+            <Col>
+              <Button icon={<SettingOutlined />} size="large" onClick={() => {
+                accountForm.setFieldsValue({
+                  fullName: user.fullName || user.displayName || '',
+                  username: (user.username || '').toLowerCase(),
+                  email: user.email,
+                  phone: userData?.phone || ''
+                });
+                setShowAccountSettings(true);
+              }}>
+                Account Settings
+              </Button>
+            </Col>
+          </Row>
+        </>
+      )}
 
-      {/* Actions Bar */}
-      <Row gutter={16} style={{ marginBottom: '24px' }}>
-        <Col>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            onClick={() => setIsCreateModalVisible(true)}
-            size="large"
-          >
-            Create New Site
-          </Button>
-        </Col>
-        <Col>
-          <Button icon={<SettingOutlined />} size="large">
-            Account Settings
-          </Button>
-        </Col>
-      </Row>
-
-      {/* Sites Grid */}
-      {sites.length === 0 ? (
-        <Card>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No sites yet"
-          >
+      {/* Sites */}
+      {activeTab === 'sites' && (
+        <>
+          <div style={{ marginBottom: 16 }}>
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
               onClick={() => setIsCreateModalVisible(true)}
             >
-              Create Your First Site
+              Create New Site
             </Button>
-          </Empty>
-        </Card>
-      ) : (
-        <Row gutter={[16, 16]}>
-          {sites.map(site => (
-            <Col xs={24} sm={12} lg={8} xl={6} key={site.id}>
-              <SiteCard
-                site={site}
-                user={user}
-                onEdit={handleSiteEdit}
-                onDelete={handleDeleteSite}
-                onPublish={handleTogglePublish}
-                onViewAnalytics={handleViewAnalytics}
-                onSettings={handleSiteSettings}
-                loading={loading}
-              />
-            </Col>
-          ))}
-        </Row>
+          </div>
+          {sites.length === 0 ? (
+            <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No sites yet">
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalVisible(true)}>
+                  Create Your First Site
+                </Button>
+              </Empty>
+            </Card>
+          ) : (
+            <Row gutter={[16, 16]}>
+              {sites.map(site => (
+                <Col xs={24} sm={12} lg={8} xl={6} key={site.id}>
+                  <SiteCard
+                    site={site}
+                    user={user}
+                    onEdit={handleSiteEdit}
+                    onDelete={handleDeleteSite}
+                    onPublish={handleTogglePublish}
+                    onViewAnalytics={handleViewAnalytics}
+                    onSettings={handleSiteSettings}
+                    loading={loading}
+                  />
+                </Col>
+              ))}
+            </Row>
+          )}
+        </>
       )}
+
+      {/* Payments */}
+      {activeTab === 'payments' && (
+        <Card
+          className="elevated-card"
+          style={{ marginBottom: 24, borderRadius: 16, border: `1px solid ${token.colorBorderSecondary}` }}
+          styles={{ body: { padding: 20 } }}
+          title={<span style={{ fontWeight: 600 }}>Payments</span>}
+        >
+          <Row gutter={[16,16]}>
+            <Col xs={24} md={12}>
+              <Card
+                size="small"
+                style={{ height: '100%', borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}
+                styles={{ header: { background: token.colorFillTertiary, borderBottom: `1px solid ${token.colorBorderSecondary}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }, body: { paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 12 } }}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" alt="Stripe" height={2} style={{ opacity: 0.9, height: 18 }} />
+                    <span style={{ fontWeight: 600 }}>Connect</span>
+                    <Tag color="blue">Standard</Tag>
+                    {stripeConnect?.connected && <Tag color="green">Connected</Tag>}
+                  </div>
+                }
+              >
+                <Text type="secondary">Accept payments and receive payouts to your bank via Stripe.</Text>
+                {!connectConfig.stripe.configured && (
+                  <Alert
+                    style={{ marginTop: 4 }}
+                    type="warning"
+                    showIcon
+                    message="Stripe Connect is not fully configured"
+                    description={<div>
+                      Add missing env: <Text code>{connectConfig.stripe.missing.join(', ') || '—'}</Text>
+                    </div>}
+                  />
+                )}
+                {stripeConnect?.connected ? (
+                  <div style={{
+                    border: `1px dashed ${token.colorBorderSecondary}`,
+                    borderRadius: 8,
+                    padding: 12,
+                    background: token.colorFillTertiary
+                  }}>
+                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                      <Text style={{ display: 'block' }}>
+                        Connected account: <Text code>{stripeConnect.accountId}</Text>
+                      </Text>
+                      <Space wrap>
+                        <Tag color={stripeConnect.charges_enabled ? 'green' : 'orange'}>Charges {stripeConnect.charges_enabled ? 'enabled' : 'disabled'}</Tag>
+                        <Tag color={stripeConnect.payouts_enabled ? 'green' : 'orange'}>Payouts {stripeConnect.payouts_enabled ? 'enabled' : 'disabled'}</Tag>
+                      </Space>
+                      {stripeSummaryLoading ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          {[1,2,3,4].map(i => (
+                            <div key={i} style={{ height: 46, borderRadius: 8, background: token.colorFill, animation: 'pulse 1.4s ease-in-out infinite' }} />
+                          ))}
+                          {null}
+                        </div>
+                      ) : stripeSummary?.connected ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          <Card size="small" styles={{ body: { padding: 10 } }} style={{ borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Available</Text>
+                            <div style={{ fontWeight: 600, fontSize: 16 }}>
+                              {(stripeSummary.available/100).toLocaleString(undefined, { style: 'currency', currency: stripeSummary.currency || 'USD' })}
+                            </div>
+                          </Card>
+                          <Card size="small" styles={{ body: { padding: 10 } }} style={{ borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Pending</Text>
+                            <div style={{ fontWeight: 600, fontSize: 16 }}>
+                              {(stripeSummary.pending/100).toLocaleString(undefined, { style: 'currency', currency: stripeSummary.currency || 'USD' })}
+                            </div>
+                          </Card>
+                          <Card size="small" styles={{ body: { padding: 10 } }} style={{ borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Business</Text>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{stripeSummary.businessName || '—'}</div>
+                          </Card>
+                          <Card size="small" styles={{ body: { padding: 10 } }} style={{ borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Status</Text>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>
+                              {stripeSummary.chargesEnabled ? 'Charges enabled' : 'Charges disabled'} / {stripeSummary.payoutsEnabled ? 'Payouts enabled' : 'Payouts disabled'}
+                            </div>
+                          </Card>
+                        </div>
+                      ) : null}
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <Button onClick={loadPaymentConnections}>Refresh</Button>
+                        <Button onClick={async ()=>{
+                          setConnectLoading(true);
+                          try { await disconnectStripeAccount(user.uid); await loadPaymentConnections(); message.success('Disconnected'); }
+                          catch { message.error('Failed to disconnect'); }
+                          finally { setConnectLoading(false); }
+                        }} danger loading={connectLoading}>Disconnect</Button>
+                      </div>
+                    </Space>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button type="primary" disabled={!connectConfig.stripe.configured || connectConfigLoading} onClick={async ()=>{
+                      try {
+                        setConnectLoading(true);
+                        const url = await startStripeConnectOnboarding(user.uid, user.email, '/dashboard');
+                        window.location.href = url;
+                      } catch (e) { message.error(e?.message || 'Unable to start Stripe Connect'); } finally { setConnectLoading(false); }
+                    }} loading={connectLoading}>
+                      Connect Stripe
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+            <Col xs={24} md={12}>
+              <Card
+                size="small"
+                style={{ height: '100%', borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}
+                styles={{ header: { background: token.colorFillTertiary, borderBottom: `1px solid ${token.colorBorderSecondary}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }, body: { paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 12 } }}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/b/b7/PayPal_Logo_Icon_2014.svg" alt="PayPal" height={2} style={{ opacity: 0.95, height: 18 }} />
+                    <Tag color="geekblue">PPCP</Tag>
+                    {paypalConnect?.connected && <Tag color="green">Connected</Tag>}
+                  </div>
+                }
+              >
+                <Text type="secondary">Onboard your PayPal Business account to accept PayPal payments.</Text>
+                {!connectConfig.paypal.configured && (
+                  <Alert
+                    style={{ marginTop: 4 }}
+                    type="warning"
+                    showIcon
+                    message="PayPal is not fully configured"
+                    description={<div>
+                      Add missing env: <Text code>{connectConfig.paypal.missing.join(', ') || '—'}</Text>
+                    </div>}
+                  />
+                )}
+                {paypalConnect?.connected ? (
+                  <div style={{
+                    border: `1px dashed ${token.colorBorderSecondary}`,
+                    borderRadius: 8,
+                    padding: 12,
+                    background: token.colorFillTertiary
+                  }}>
+                    <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                      {paypalSummaryLoading ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          {[1,2].map(i => (
+                            <div key={i} style={{ height: 46, borderRadius: 8, background: token.colorFill, animation: 'pulse 1.4s ease-in-out infinite' }} />
+                          ))}
+                          {null}
+                        </div>
+                      ) : paypalSummary?.connected ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
+                          <Card size="small" styles={{ body: { padding: 10 } }} style={{ borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Merchant ID</Text>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>
+                              {paypalSummary.merchantIdInPayPal || '—'}
+                            </div>
+                          </Card>
+                          <Card size="small" styles={{ body: { padding: 10 } }} style={{ borderRadius: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>Status</Text>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>Connected via PPCP</div>
+                          </Card>
+                        </div>
+                      ) : (
+                        <Text>Merchant ID: <Text code>{paypalConnect.merchantIdInPayPal}</Text></Text>
+                      )}
+                      <Text type="secondary">Disconnect via your PayPal dashboard if needed.</Text>
+                    </Space>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button disabled={!connectConfig.paypal.configured || connectConfigLoading} onClick={async ()=>{
+                      try {
+                        setConnectLoading(true);
+                        const url = await startPaypalOnboarding(user.uid, user.email, '/dashboard');
+                        window.location.href = url;
+                      } catch (e) { message.error(e?.message || 'Unable to start PayPal onboarding'); } finally { setConnectLoading(false); }
+                    }} loading={connectLoading}>
+                      Connect PayPal
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </Col>
+          </Row>
+        </Card>
+      )}
+
+      {/* Insights */}
+      {activeTab === 'insights' && (
+        stripeConnect?.connected ? (
+          <Card
+            className="elevated-card"
+            style={{ marginBottom: 24, borderRadius: 16, border: `1px solid ${token.colorBorderSecondary}` }}
+            styles={{ body: { padding: 20 } }}
+            title={<span style={{ fontWeight: 600 }}>Payments Insights</span>}
+            extra={
+              <Space>
+                <Button size="small" onClick={() => loadStripeMetrics(user.uid, metricsDays)} loading={stripeMetricsLoading}>Refresh</Button>
+                <Space size={4}>
+                  <Text type="secondary">Range:</Text>
+                  <Button size="small" type={metricsDays===7?'primary':'default'} onClick={()=>{setMetricsDays(7); loadStripeMetrics(user.uid, 7);}}>7d</Button>
+                  <Button size="small" type={metricsDays===30?'primary':'default'} onClick={()=>{setMetricsDays(30); loadStripeMetrics(user.uid, 30);}}>30d</Button>
+                  <Button size="small" type={metricsDays===90?'primary':'default'} onClick={()=>{setMetricsDays(90); loadStripeMetrics(user.uid, 90);}}>90d</Button>
+                </Space>
+              </Space>
+            }
+          >
+            {stripeMetricsLoading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                {[1,2,3].map(i => (
+                  <div key={i} style={{ height: 120, borderRadius: 8, background: token.colorFill, animation: 'pulse 1.4s ease-in-out infinite' }} />
+                ))}
+                {null}
+              </div>
+            ) : stripeMetrics ? (
+              <>
+                <Row gutter={[12,12]}>
+                  <Col span={24}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Revenue & Payouts</Text>
+                      <div style={{ width: '100%', height: 260, marginTop: 8 }}>
+                        <ResponsiveContainer>
+                          <RechartsLineChart data={stripeMetrics.series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={token.colorPrimary} stopOpacity={0.35} />
+                                <stop offset="100%" stopColor={token.colorPrimary} stopOpacity={0.02} />
+                              </linearGradient>
+                              <linearGradient id="payoutsGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={token.colorSuccess} stopOpacity={0.3} />
+                                <stop offset="100%" stopColor={token.colorSuccess} stopOpacity={0.02} />
+                              </linearGradient>
+                            </defs>
+                            <RechartsCartesianGrid strokeDasharray="3 3" stroke={token.colorBorder} />
+                            <RechartsXAxis dataKey="date" tickFormatter={(d)=>{
+                              try { const dt = new Date(d); return `${(dt.getMonth()+1)}/${dt.getDate()}`; } catch { return d; }
+                            }} stroke={token.colorTextSecondary} tick={{ fontSize: 12 }} />
+                            <RechartsYAxis tickFormatter={(v)=> v.toLocaleString(undefined, { style:'currency', currency: stripeMetrics.currency })} stroke={token.colorTextSecondary} tick={{ fontSize: 12 }} width={80} />
+                            <RechartsTooltip formatter={(v)=> (typeof v==='number' ? v.toLocaleString(undefined,{style:'currency', currency: stripeMetrics.currency}) : v)} labelFormatter={(d)=>d} contentStyle={{ borderRadius: 8 }} />
+                            <RechartsLegend />
+                            <RechartsLine type="monotone" dataKey="net" name="Net" stroke={token.colorPrimary} strokeOpacity={0.9} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                            <RechartsLine type="monotone" dataKey="payouts" name="Payouts" stroke={token.colorSuccess} strokeOpacity={0.9} strokeWidth={2} dot={false} />
+                          </RechartsLineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Net Revenue</Text>
+                      <div style={{ fontWeight: 700, fontSize: 22 }}>
+                        {stripeMetrics.net.toLocaleString(undefined, { style: 'currency', currency: stripeMetrics.currency })}
+                      </div>
+                      {(() => {
+                        const series = stripeMetrics.series || [];
+                        const maxNet = Math.max(1, ...series.map(s => s.net || 0));
+                        return (
+                          <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 60, marginTop: 8 }}>
+                            {series.map((p, idx) => {
+                              const ratio = Math.max(0, (p.net || 0) / maxNet);
+                              const heightPct = Math.max(2, ratio * 100);
+                              const opacity = 0.2 + Math.min(0.8, ratio);
+                              return (
+                                <div
+                                  key={idx}
+                                  title={`${p.date}: ${p.net.toFixed(2)}`}
+                                  style={{ width: '100%', background: token.colorPrimary, opacity, height: `${heightPct}%`, borderRadius: 2 }}
+                                />
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Payouts</Text>
+                      <div style={{ fontWeight: 700, fontSize: 22 }}>
+                        {stripeMetrics.payouts.toLocaleString(undefined, { style: 'currency', currency: stripeMetrics.currency })}
+                      </div>
+                      {(() => {
+                        const series = stripeMetrics.series || [];
+                        const maxPayout = Math.max(1, ...series.map(s => s.payouts || 0));
+                        return (
+                          <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 60, marginTop: 8 }}>
+                            {series.map((p, idx) => {
+                              const ratio = Math.max(0, (p.payouts || 0) / maxPayout);
+                              const heightPct = Math.max(2, ratio * 100);
+                              const opacity = 0.2 + Math.min(0.8, ratio);
+                              return (
+                                <div
+                                  key={idx}
+                                  title={`${p.date}: ${p.payouts.toFixed(2)}`}
+                                  style={{ width: '100%', background: token.colorSuccess, opacity, height: `${heightPct}%`, borderRadius: 2 }}
+                                />
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </Card>
+                  </Col>
+                </Row>
+                <Row gutter={[12,12]} style={{ marginTop: 12 }}>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Payment Methods</Text>
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(stripeMetrics.methodBreakdown || []).slice(0,5).map((m) => (
+                          <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: 4, background: token.colorPrimary }} />
+                            <Text style={{ flex: 1, textTransform: 'capitalize' }}>{m.name}</Text>
+                            <Text strong>{m.amount.toLocaleString(undefined, { style: 'currency', currency: stripeMetrics.currency })}</Text>
+                          </div>
+                        ))}
+                        {(!stripeMetrics.methodBreakdown || stripeMetrics.methodBreakdown.length===0) && <Text type="secondary">No payments yet</Text>}
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Recent Payments</Text>
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {(stripeMetrics.recent || []).map((p) => (
+                          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, alignItems: 'center' }}>
+                            <div>
+                              <Text code>{p.id}</Text>
+                              <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{new Date(p.created*1000).toLocaleString()}</div>
+                            </div>
+                            <Tag color={p.status==='succeeded' ? 'green' : 'orange'}>{p.status}</Tag>
+                            <div style={{ fontWeight: 600 }}>
+                              {p.amount.toLocaleString(undefined, { style: 'currency', currency: p.currency })}
+                            </div>
+                          </div>
+                        ))}
+                        {(!stripeMetrics.recent || stripeMetrics.recent.length===0) && <Text type="secondary">No recent payments</Text>}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+              </>
+            ) : (
+              <Alert type="info" showIcon message="No metrics yet" description="Connect Stripe and process payments to see insights here." />
+            )}
+          </Card>
+        ) : (
+          <Alert type="info" showIcon message="Connect Stripe to view insights" />
+        )
+      )}
+
+      {activeTab === 'ecommerce' &&  <Admin /> }
+
+      
 
       {/* Create Site Modal */}
       <Modal
@@ -741,20 +1558,269 @@ export default function Dashboard() {
         )}
       </Modal>
 
-      {/* Upgrade Modal */}
+      {/* Upgrade Modal with plan selection (polished) */}
       <Modal
-        title="Upgrade to Pro"
+        title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CrownOutlined style={{ color: '#ffd700' }} />
+          <span>Choose your plan</span>
+        </span>}
         open={showUpgradeModal}
         onCancel={() => setShowUpgradeModal(false)}
         footer={null}
-        width={600}
+        width={820}
         centered
         zIndex={10000}
       >
-        <UpgradeBenefits
-          onUpgrade={handleUpgradeConfirm}
-          onCancel={() => setShowUpgradeModal(false)}
+        <Row gutter={[16, 16]}>
+          {[PRICING_PLANS.pro, PRICING_PLANS.business].map((plan) => {
+            const selected = selectedUpgradePlan === plan.id;
+            const isPro = plan.id === 'pro';
+            const headerGradient = isPro
+              ? 'linear-gradient(135deg, #fff7ae, #ffd700)'
+              : 'linear-gradient(135deg, #7c3aed, #22d3ee)';
+            const accent = isPro ? '#b8860b' : '#7c3aed';
+
+            return (
+              <Col xs={24} md={12} key={plan.id}>
+        <Card
+                  hoverable
+                  onClick={() => setSelectedUpgradePlan(plan.id)}
+                  styles={{ body: { padding: 0 } }}
+                  style={{
+                    overflow: 'hidden',
+          borderRadius: 12,
+          border: selected ? `2px solid ${token.colorPrimary}` : `1px solid ${token.colorBorder}`,
+          boxShadow: selected ? token.boxShadowSecondary : token.boxShadowTertiary
+                  }}
+                >
+                  <div style={{ background: headerGradient, padding: '16px 16px 12px 16px' }}>
+                    <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+                      <Space align="center">
+                        <CrownOutlined style={{ color: isPro ? '#8b8000' : '#fff', fontSize: 18 }} />
+                        <Title level={4} style={{ margin: 0, color: isPro ? '#000' : '#fff' }}>{plan.name}</Title>
+                      </Space>
+                      {isPro && (
+                        <Tag color="#000" style={{ background: '#ffd700', borderColor: '#ffd700', color: '#000' }}>Popular</Tag>
+                      )}
+                    </Space>
+                    <div style={{ marginTop: 8 }}>
+                      <Title level={2} style={{ margin: 0, color: isPro ? '#000' : '#fff' }}>
+                        ${plan.price}
+                        <Text style={{ fontSize: 14, marginLeft: 4, color: isPro ? '#4a4a4a' : '#e6f7ff' }}>/month</Text>
+                      </Title>
+                    </div>
+                  </div>
+                  <div style={{ padding: 16 }}>
+                    <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                      {plan.features.slice(0, 6).map((f, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                          <Text>{f}</Text>
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button 
+                          type={selected ? 'primary' : 'default'}
+                          onClick={() => setSelectedUpgradePlan(plan.id)}
+                          style={{ minWidth: 160 }}
+                        >
+                          {selected ? 'Selected' : `Choose ${plan.name}`}
+                        </Button>
+                      </div>
+                    </Space>
+                  </div>
+                </Card>
+              </Col>
+            );
+          })}
+        </Row>
+        <Alert
+          style={{ marginTop: 16 }}
+          type="success"
+          showIcon
+          message={
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <LockOutlined />
+              Secure checkout powered by Stripe. Cancel anytime.
+            </span>
+          }
         />
+        <Divider />
+        <Row justify="end" gutter={8}>
+          <Col>
+            <Button onClick={() => setShowUpgradeModal(false)}>Cancel</Button>
+          </Col>
+          <Col>
+            <Button type="primary" onClick={handleUpgradeConfirm}>
+              Continue to Checkout
+            </Button>
+          </Col>
+        </Row>
+      </Modal>
+
+      {/* Account Settings Modal */}
+      <Modal
+        title={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SettingOutlined style={{ color: token.colorPrimary }} />
+            <span>Account Settings</span>
+          </span>
+        }
+        open={showAccountSettings}
+        onCancel={() => setShowAccountSettings(false)}
+        footer={null}
+        width={'32rem'}
+        bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+        destroyOnClose
+      >
+        <Tabs
+          defaultActiveKey="profile"
+          items={[
+            {
+              key: 'profile',
+              label: (
+                <span><UserOutlined /> Profile</span>
+              ),
+              children: (
+                <Form
+                  form={accountForm}
+                  layout="vertical"
+                  onFinish={async (values) => {
+                    try {
+                      setSavingAccount(true);
+                      const nextFullName = (values.fullName || '').trim();
+                      const desiredUsernameRaw = (values.username || '').trim().toLowerCase();
+                      const desiredUsername = desiredUsernameRaw.replace(/[^a-z0-9-_]/g, '-');
+                      const phone = (values.phone || '').trim();
+
+                      const email = user.email; // read-only
+
+                      if (!desiredUsername) {
+                        message.error('Username is required');
+                        return;
+                      }
+                      if (desiredUsername.length < 2 || desiredUsername.length > 30) {
+                        message.error('Username must be between 2 and 30 characters');
+                        return;
+                      }
+
+                      // Only check uniqueness if changed
+                      if (desiredUsername !== (user.username || '').toLowerCase()) {
+                        const exists = await checkUsernameExists(desiredUsername);
+                        if (exists) {
+                          message.error('That username is already taken');
+                          return;
+                        }
+                      }
+
+                      await updateUserData(user.uid, {
+                        fullName: nextFullName || user.fullName || user.displayName || '',
+                        username: desiredUsername,
+                        email,
+                        phone
+                      });
+
+                      // Update Firebase Auth displayName for welcome header
+                      try {
+                        if (auth.currentUser && nextFullName) {
+                          await updateProfile(auth.currentUser, { displayName: nextFullName });
+                        }
+                      } catch {}
+
+                      message.success('Account updated');
+                      setShowAccountSettings(false);
+                      window.location.reload();
+                    } catch (e) {
+                      console.error(e);
+                      message.error('Failed to update account');
+                    } finally {
+                      setSavingAccount(false);
+                    }
+                  }}
+                  initialValues={{
+                    fullName: user.fullName || user.displayName || '',
+                    username: (user.username || '').toLowerCase(),
+                    email: user.email,
+                    phone: userData?.phone || ''
+                  }}
+                >
+                  <Form.Item label="Email" name="email">
+                    <Input prefix={<MailOutlined />} disabled />
+                  </Form.Item>
+                  <Form.Item
+                    label="Full name"
+                    name="fullName"
+                    rules={[{ max: 80, message: 'Name too long' }]}
+                  >
+                    <Input prefix={<UserOutlined />} placeholder="Your name" />
+                  </Form.Item>
+                  <Form.Item
+                    label="Username"
+                    name="username"
+                    rules={[
+                      { required: true, message: 'Please choose a username' },
+                      { pattern: /^[a-z0-9-_]+$/, message: 'Use lowercase letters, numbers, hyphens or underscores' },
+                      { min: 2, max: 30, message: '2 to 30 characters' }
+                    ]}
+                  >
+                    <Input placeholder="your-username" onChange={(e) => {
+                      const v = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+                      accountForm.setFieldsValue({ username: v });
+                    }} />
+                  </Form.Item>
+                  <Form.Item
+                    label="Phone"
+                    name="phone"
+                    rules={[
+                      { pattern: /^[0-9+()\-\s]{7,20}$/, message: 'Enter a valid phone number' }
+                    ]}
+                  >
+                    <Input prefix={<PhoneOutlined />} placeholder="e.g. +1 (555) 123-4567" />
+                  </Form.Item>
+
+                  <Divider />
+                  <Row justify="end" gutter={8}>
+                    <Col>
+                      <Button onClick={() => setShowAccountSettings(false)}>Cancel</Button>
+                    </Col>
+                    <Col>
+                      <Button type="primary" htmlType="submit" loading={savingAccount}>Save</Button>
+                    </Col>
+                  </Row>
+                </Form>
+              )
+            },
+            {
+              key: 'security',
+              label: (
+                <span><SafetyOutlined /> Security</span>
+              ),
+              children: (
+                <SecuritySection user={user} token={token} changingPassword={changingPassword} setChangingPassword={setChangingPassword} />
+              )
+            }
+          ]}
+        />
+      </Modal>
+
+      {/* Update Payment Method Modal */}
+      <Modal
+        title="Update payment method"
+        open={showUpdatePaymentModal}
+        onCancel={() => setShowUpdatePaymentModal(false)}
+        footer={null}
+        width={520}
+        destroyOnClose
+      >
+        {stripePromise && clientSecret ? (
+          <Elements stripe={stripePromise} options={{ clientSecret }}>
+            <UpdatePaymentForm />
+          </Elements>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        )}
       </Modal>
 
       {/* Site Settings Modal */}
@@ -765,6 +1831,83 @@ export default function Dashboard() {
         user={user}
         onSiteUpdated={handleSiteUpdated}
       />
+  </div>
+  </ConfigProvider>
+  );
+}
+
+
+// Security section as an inline component to keep one file
+function SecuritySection({ user, token, changingPassword, setChangingPassword }) {
+  const [form] = Form.useForm();
+  const isPasswordProvider = !!auth.currentUser?.providerData?.some(p => p.providerId === 'password');
+
+  const handleChangePassword = async (values) => {
+    try {
+      setChangingPassword(true);
+      const { currentPassword, newPassword, confirmPassword } = values;
+      if (newPassword !== confirmPassword) {
+        message.error('New passwords do not match');
+        return;
+      }
+      // Re-authenticate
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, newPassword);
+      message.success('Password updated');
+      form.resetFields();
+    } catch (e) {
+      console.error(e);
+      const msg = e?.code === 'auth/wrong-password' ? 'Current password is incorrect' : (e?.message || 'Failed to update password');
+      message.error(msg);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const sendReset = async () => {
+    try {
+      const { sendPasswordResetEmail } = await import('firebase/auth');
+      await sendPasswordResetEmail(auth, user.email);
+      message.success('Password reset email sent');
+    } catch (e) {
+      console.error(e);
+      message.error('Failed to send reset email');
+    }
+  };
+
+  return (
+    <div>
+      {isPasswordProvider ? (
+        <Form layout="vertical" form={form} onFinish={handleChangePassword}>
+          <Alert type="info" showIcon style={{ marginBottom: 12 }} message="Update your password" />
+          <Form.Item name="currentPassword" label="Current password" rules={[{ required: true, message: 'Enter current password' }]}>
+            <Input.Password prefix={<KeyOutlined />} placeholder="Current password" />
+          </Form.Item>
+          <Form.Item name="newPassword" label="New password" rules={[{ required: true, message: 'Enter new password' }, { min: 6, message: 'Minimum 6 characters' }]}>
+            <Input.Password prefix={<KeyOutlined />} placeholder="New password" />
+          </Form.Item>
+          <Form.Item name="confirmPassword" label="Confirm new password" dependencies={["newPassword"]} rules={[{ required: true, message: 'Confirm new password' }]}>
+            <Input.Password prefix={<KeyOutlined />} placeholder="Confirm new password" />
+          </Form.Item>
+          <Space style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Button type="link" onClick={sendReset}>Forgot your current password?</Button>
+            <Button type="primary" htmlType="submit" loading={changingPassword}>Change Password</Button>
+          </Space>
+        </Form>
+      ) : (
+        <>
+          <Alert
+            type="info"
+            showIcon
+            message="Your account uses a social provider"
+            description="Password is managed by your sign-in provider. You can still set a password to enable email login."
+            style={{ marginBottom: 12 }}
+          />
+          <Button type="primary" onClick={sendReset}>Send password setup email</Button>
+        </>
+      )}
     </div>
   );
 }
