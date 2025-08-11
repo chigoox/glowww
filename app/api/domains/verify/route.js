@@ -1,6 +1,7 @@
 // POST: verify domain ownership and attach to Vercel
 import { NextResponse } from 'next/server';
-import { getDomain, updateDomainStatus } from '../../../lib/domains';
+// NOTE: This file is nested (app/api/domains/verify/), so we need four levels up to reach /lib
+import { getDomain, updateDomainStatus } from '../../../../lib/domains';
 import { db } from '../../../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 

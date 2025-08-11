@@ -1,6 +1,7 @@
 // DELETE: remove domain from Firestore and Vercel
 import { NextResponse } from 'next/server';
-import { removeDomain, getDomain } from '../../../lib/domains';
+// NOTE: This file is nested (app/api/domains/[domain]/), so we need four levels up to reach /lib
+import { removeDomain, getDomain } from '../../../../lib/domains';
 import { db } from '../../../../lib/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 
