@@ -24,6 +24,7 @@ import { Root } from '../../../../Components/core/Root';
 import { getPublicSite, getSitePages, getPage } from '../../../../../lib/sites';
 import { MultiSelectProvider } from '../../../../Components/utils/context/MultiSelectContext';
 import { PagesProvider } from '../../../../Components/utils/context/PagesContext';
+import { init as gaInit, pageView as gaPageView, viewItem as gaViewItem } from '../../../../Components/utils/analytics';
 
 // Lightweight placeholders; you can replace with real components later
 const ShopView = ({ username, siteName }) => (
@@ -129,6 +130,15 @@ export default function PublishedSitePage() {
         if (slug[0] === 'shop') {
           setPageContent(null);
           setPageTitle('Shop');
+          // Analytics: item or shop
+          const ctx = { siteId: pubSite.id, siteName: pubSite.name, username, userUid: pubSite.userId };
+          gaInit(ctx);
+          const itemId = slug[1];
+          if (itemId) {
+            gaViewItem({ item_id: itemId }, ctx);
+          } else {
+            gaPageView({}, ctx);
+          }
           return;
         }
 
@@ -139,8 +149,14 @@ export default function PublishedSitePage() {
         }
         const fullPage = await getPage(pubSite.userId, pubSite.id, target.id);
         if (!isMounted) return;
-        setPageTitle(fullPage.title || target.name || '');
-        setPageContent(fullPage.content || null);
+  const title = fullPage.title || target.name || '';
+  setPageTitle(title);
+  setPageContent(fullPage.content || null);
+
+  // Analytics: standard page view
+  const ctx = { siteId: pubSite.id, siteName: pubSite.name, username, userUid: pubSite.userId };
+  gaInit(ctx);
+  gaPageView({ page_title: title }, ctx);
       } catch (e) {
         if (!isMounted) return;
         setError(e?.message || 'Failed to load site');

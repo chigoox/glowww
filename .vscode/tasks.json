@@ -8,6 +8,13 @@
 			"group": "build",
 			"isBackground": true,
 			"problemMatcher": []
+		},
+		{
+			"label": "Install deps",
+			"type": "shell",
+			"command": "npm install",
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

@@ -78,6 +78,9 @@ export default function Dashboard() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAnalyticsModalVisible, setIsAnalyticsModalVisible] = useState(false);
   const [selectedAnalyticsSite, setSelectedAnalyticsSite] = useState(null);
+  const [siteAnalytics, setSiteAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [accountForm] = Form.useForm();
   const [savingAccount, setSavingAccount] = useState(false);
@@ -124,6 +127,33 @@ export default function Dashboard() {
   const [metricsDays, setMetricsDays] = useState(30);
   const [activeTab, setActiveTab] = useState('overview');
   const [isDark, setIsDark] = useState(false);
+
+  // Fetch site analytics when the Analytics modal opens
+  useEffect(() => {
+    let aborted = false;
+    const loadAnalytics = async () => {
+      if (!isAnalyticsModalVisible || !selectedAnalyticsSite || !user?.username) return;
+      try {
+        setAnalyticsLoading(true);
+        setAnalyticsError(null);
+        setSiteAnalytics(null);
+        const url = `/api/sites/${encodeURIComponent(user.username)}/${encodeURIComponent(selectedAnalyticsSite.name)}/analytics/summary`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (aborted) return;
+        if (!res.ok || data?.ok === false) {
+          throw new Error(data?.error || `Failed to load analytics (${res.status})`);
+        }
+        setSiteAnalytics(data);
+      } catch (e) {
+        if (!aborted) setAnalyticsError(e?.message || 'Failed to load analytics');
+      } finally {
+        if (!aborted) setAnalyticsLoading(false);
+      }
+    };
+    loadAnalytics();
+    return () => { aborted = true; };
+  }, [isAnalyticsModalVisible, selectedAnalyticsSite, user?.username]);
 
   // Sync with global theme classes set by ThemeInitializer (dark-theme / light-theme)
   useEffect(() => {
@@ -272,73 +302,53 @@ export default function Dashboard() {
   const handleCreateSite = async (values) => {
     try {
       setProcessingCreate(true);
-      
-      // Validate form values
-      if (!values.name || typeof values.name !== 'string' || values.name.trim() === '') {
+      if (!values?.name || typeof values.name !== 'string' || values.name.trim() === '') {
         message.error('Please enter a valid site name');
         return;
       }
-      
-      // Check if user can create a new site
       const canCreate = await canCreateSite(user.uid);
       if (!canCreate.allowed) {
-        // Show upgrade modal instead of creating site
         showUpgradeModalHandler(canCreate.reason);
         return;
       }
-
-      // Create the site
       const newSite = await createSite(user.uid, {
         name: values.name.trim(),
         description: values.description?.trim() || '',
-        isPublished: false
+        isPublished: false,
       });
-
       message.success('Site created successfully!');
       setIsCreateModalVisible(false);
       createForm.resetFields();
-      loadUserSites(); // Refresh the list
-
-      // Redirect to editor for the new site
+      loadUserSites();
       window.location.href = `/Editor/site?site=${newSite.id}`;
-      
     } catch (error) {
       console.error('Error creating site:', error);
-      message.error('Failed to create site: ' + error.message);
+      message.error('Failed to create site: ' + (error?.message || 'Unknown error'));
     } finally {
       setProcessingCreate(false);
     }
   };
 
+  // Delete site handlers
   const handleDeleteSite = (site, event) => {
-    // Stop event propagation to prevent parent click handlers
     if (event) {
       event.stopPropagation();
       event.preventDefault();
     }
-    
-    console.log('🗑️ Delete button clicked for site:', site.name);
-    
-    // Set the site to delete and show the modal
     setSiteToDelete(site);
     setIsDeleteModalVisible(true);
   };
 
-  // Confirm and execute site deletion
   const confirmDeleteSite = async () => {
     if (!siteToDelete) return;
-    
-    console.log('�️ Confirming deletion of site:', siteToDelete.name);
-    
     try {
       await deleteSite(user.uid, siteToDelete.id);
       message.success(`Site "${siteToDelete.name}" deleted successfully`);
-      loadUserSites();
+      await loadUserSites();
     } catch (error) {
       console.error('Error deleting site:', error);
-      message.error(`Failed to delete site: ${error.message}`);
+      message.error(`Failed to delete site: ${error?.message || 'Unknown error'}`);
     } finally {
-      // Close modal and reset state
       setIsDeleteModalVisible(false);
       setSiteToDelete(null);
     }
@@ -346,18 +356,15 @@ export default function Dashboard() {
 
 
 
+  // Publish/unpublish a site and optionally generate a thumbnail when publishing
   const handleTogglePublish = async (site) => {
     try {
       const isPublishing = !site.isPublished;
-      
       await updateSite(user.uid, site.id, {
         isPublished: isPublishing,
         publishedAt: isPublishing ? new Date() : null
       });
-      
       message.success(site.isPublished ? 'Site unpublished' : 'Site published successfully');
-      
-      // Generate thumbnail when publishing
       if (isPublishing) {
         try {
           message.info('Generating thumbnail for published site...');
@@ -370,8 +377,7 @@ export default function Dashboard() {
           message.warning('Site published but thumbnail generation failed');
         }
       }
-      
-      loadUserSites();
+      await loadUserSites();
     } catch (error) {
       console.error('Error updating site:', error);
       message.error('Failed to update site');
@@ -1430,7 +1436,7 @@ export default function Dashboard() {
         )}
       </Modal>
 
-      {/* Analytics Modal */}
+  {/* Analytics Modal */}
       <Modal
         title={
           selectedAnalyticsSite ? (
@@ -1444,22 +1450,26 @@ export default function Dashboard() {
         onCancel={() => {
           setIsAnalyticsModalVisible(false);
           setSelectedAnalyticsSite(null);
+          setSiteAnalytics(null);
+          setAnalyticsError(null);
         }}
         footer={[
           <Button key="close" type="primary" onClick={() => {
             setIsAnalyticsModalVisible(false);
             setSelectedAnalyticsSite(null);
+            setSiteAnalytics(null);
+            setAnalyticsError(null);
           }}>
             Close
           </Button>
         ]}
-        width={600}
+  width={840}
         centered
       >
         {selectedAnalyticsSite && (
           <div>
             {/* Site Overview */}
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <Title level={5}>Site Overview</Title>
               <Row gutter={[16, 8]}>
                 <Col span={12}>
@@ -1475,14 +1485,14 @@ export default function Dashboard() {
                 <Col span={24}>
                   <Text strong>Public URL: </Text>
                   <div style={{ marginTop: 4 }}>
-                    <Input 
+                    <Input
                       value={`${window.location.origin}/u/${user.username}/${selectedAnalyticsSite.name}`}
                       readOnly
                       size="small"
                       addonAfter={
-                        <Button 
-                          type="link" 
-                          size="small" 
+                        <Button
+                          type="link"
+                          size="small"
                           icon={<CopyOutlined />}
                           onClick={() => {
                             navigator.clipboard.writeText(`${window.location.origin}/u/${user.username}/${selectedAnalyticsSite.name}`);
@@ -1499,11 +1509,11 @@ export default function Dashboard() {
             </div>
 
             {/* Quick Actions */}
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <Title level={5}>Quick Actions</Title>
               <Space wrap>
-                <Button 
-                  type="primary" 
+                <Button
+                  type="primary"
                   icon={<EditOutlined />}
                   onClick={() => {
                     setIsAnalyticsModalVisible(false);
@@ -1513,14 +1523,14 @@ export default function Dashboard() {
                 >
                   Edit Site
                 </Button>
-                <Button 
+                <Button
                   icon={<EyeOutlined />}
                   onClick={() => window.open(`/u/${user.username}/${selectedAnalyticsSite.name}`, '_blank')}
                   disabled={!selectedAnalyticsSite.isPublished}
                 >
                   View Live
                 </Button>
-                <Button 
+                <Button
                   icon={<ShareAltOutlined />}
                   onClick={() => {
                     copyPublicUrl(selectedAnalyticsSite);
@@ -1532,28 +1542,178 @@ export default function Dashboard() {
               </Space>
             </div>
 
-            {/* Coming Soon Analytics */}
-            <Alert
-              message="Advanced Analytics Coming Soon!"
-              description={
-                <div>
-                  <p>We're working on comprehensive analytics including:</p>
-                  <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                    <li>Page views and unique visitors</li>
-                    <li>Traffic sources and referrers</li>
-                    <li>Geographic visitor data</li>
-                    <li>Performance metrics</li>
-                    <li>Mobile vs desktop usage</li>
-                    <li>Conversion tracking</li>
-                  </ul>
-                  <p style={{ marginTop: 12 }}>
-                    <Text strong>Stay tuned for these features in upcoming updates!</Text>
-                  </p>
-                </div>
-              }
-              type="info"
-              style={{ marginTop: 16 }}
-            />
+            {/* Analytics Content */}
+            {analyticsLoading ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {[1,2,3].map((i) => (
+                  <div key={i} style={{ height: i===2 ? 180 : 60, borderRadius: 8, background: token.colorFill, animation: 'pulse 1.4s ease-in-out infinite' }} />
+                ))}
+              </div>
+            ) : analyticsError ? (
+              <Alert type="error" showIcon message="Analytics unavailable" description={analyticsError} />
+            ) : siteAnalytics ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Total page views (last 30 days)</Text>
+                      <div style={{ fontWeight: 700, fontSize: 22 }}>{(siteAnalytics.totalViews || 0).toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div style={{ width: '100%', height: 180, marginTop: 8 }}>
+                    <ResponsiveContainer>
+                      <RechartsLineChart data={(siteAnalytics.series || []).map(s => {
+                        const d = String(s.date || '');
+                        const y = d.slice(0,4), m = d.slice(4,6), day = d.slice(6,8);
+                        const label = `${m}/${day}`;
+                        return { label, views: s.views };
+                      })} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                        <RechartsCartesianGrid strokeDasharray="3 3" stroke={token.colorBorder} />
+                        <RechartsXAxis dataKey="label" stroke={token.colorTextSecondary} tick={{ fontSize: 12 }} />
+                        <RechartsYAxis stroke={token.colorTextSecondary} tick={{ fontSize: 12 }} allowDecimals={false} width={36} />
+                        <RechartsTooltip contentStyle={{ borderRadius: 8 }} />
+                        <RechartsLine type="monotone" dataKey="views" stroke={token.colorPrimary} strokeWidth={2} dot={false} activeDot={{ r: 3 }} name="Views" />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                {/* Top pages and events */}
+                <Row gutter={[12,12]}>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Top pages</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {(siteAnalytics.pages || []).length === 0 && (
+                          <Text type="secondary">No page views yet</Text>
+                        )}
+                        {(siteAnalytics.pages || []).slice(0,6).map((p, idx) => (
+                          <div key={`${p.title}-${idx}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                            <Text style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title || '(untitled)'}</Text>
+                            <Tag color="geekblue">{p.views}</Tag>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Top events</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {(siteAnalytics.events || []).length === 0 && (
+                          <Text type="secondary">No events yet</Text>
+                        )}
+                        {(siteAnalytics.events || []).slice(0,6).map((ev) => (
+                          <div key={`${ev.event}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                            <Text code>{ev.event}</Text>
+                            <Tag>{ev.count}</Tag>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* Devices and Countries */}
+                <Row gutter={[12,12]}>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Devices</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                        {(siteAnalytics.devices || []).length === 0 && <Text type="secondary">—</Text>}
+                        {(() => {
+                          const total = Math.max(1, (siteAnalytics.devices || []).reduce((s, d) => s + (d.views || 0), 0));
+                          return (siteAnalytics.devices || []).map((d) => {
+                            const pct = Math.round(((d.views || 0) / total) * 100);
+                            return (
+                              <div key={d.category} style={{ display: 'grid', gridTemplateColumns: '90px 1fr auto', gap: 8, alignItems: 'center' }}>
+                                <Text style={{ textTransform: 'capitalize' }}>{d.category}</Text>
+                                <div style={{ height: 6, background: token.colorFillSecondary, borderRadius: 4, overflow: 'hidden' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', background: token.colorPrimary, opacity: 0.6 }} />
+                                </div>
+                                <Text type="secondary">{pct}%</Text>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Countries</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {(siteAnalytics.countries || []).length === 0 && <Text type="secondary">—</Text>}
+                        {(siteAnalytics.countries || []).slice(0,6).map((c) => (
+                          <div key={`${c.country}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                            <Text>{c.country}</Text>
+                            <Tag>{c.views}</Tag>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                <Row gutter={[12,12]}>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Top items</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {(siteAnalytics.items || []).length === 0 && (
+                          <Text type="secondary">No item views yet</Text>
+                        )}
+                        {(siteAnalytics.items || []).map((it) => (
+                          <div key={`${it.item_id}-${it.item_name}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                            <div>
+                              <Text strong>{it.item_name || it.item_id || 'Untitled item'}</Text>
+                              {it.item_id ? <div style={{ fontSize: 12, color: token.colorTextSecondary }}>ID: {it.item_id}</div> : null}
+                            </div>
+                            <Tag color="blue">{it.views}</Tag>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Top referrers</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {(siteAnalytics.referrers || []).length === 0 && (
+                          <Text type="secondary">No referrers yet</Text>
+                        )}
+                        {(siteAnalytics.referrers || []).map((r) => (
+                          <div key={`${r.referrer}-${r.views}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                            <Text style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.referrer || '(direct)'}</Text>
+                            <Tag>{r.views}</Tag>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* Traffic sources */}
+                <Row gutter={[12,12]}>
+                  <Col span={24}>
+                    <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Traffic sources</Text>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {(siteAnalytics.traffic || []).length === 0 && <Text type="secondary">—</Text>}
+                        {(siteAnalytics.traffic || []).slice(0,8).map((t) => (
+                          <div key={`${t.sourceMedium}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                            <Text>{t.sourceMedium}</Text>
+                            <Tag color="purple">{t.sessions}</Tag>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+            ) : (
+              <Alert type="info" showIcon message="No analytics yet" description="Once your site gets traffic, you'll see metrics here." />
+            )}
           </div>
         )}
       </Modal>
