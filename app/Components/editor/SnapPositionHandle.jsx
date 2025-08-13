@@ -198,8 +198,16 @@ const SnapPositionHandle = ({
     console.log('🚀 SnapResult:', snapResult);
 
     // Use snapped position if available, otherwise use calculated position
-    const finalX = snapResult.snapped ? snapResult.x : newX;
-    const finalY = snapResult.snapped ? snapResult.y : newY;
+    let finalX = snapResult.snapped ? snapResult.x : newX;
+    let finalY = snapResult.snapped ? snapResult.y : newY;
+
+    // Constrain within container bounds (can't drag outside)
+    if (canvasRect) {
+      const maxX = Math.max(0, canvasRect.width - elementWidth);
+      const maxY = Math.max(0, canvasRect.height - elementHeight);
+      finalX = Math.min(Math.max(0, finalX), maxX);
+      finalY = Math.min(Math.max(0, finalY), maxY);
+    }
 
     // Store current position and mouse coordinates for enhanced movement on drag end
     dragState.current.currentX = finalX;
@@ -216,11 +224,11 @@ const SnapPositionHandle = ({
     }
 
     // Also update Craft.js state to keep it in sync
+    // Update with pixel values during drag for responsiveness (converted to % on mouse up)
     setProp((props) => {
-      // Handle different position prop structures
       if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
-        props.left = finalX;
-        props.top = finalY;
+        props.left = finalX; // temporary px number
+        props.top = finalY;  // temporary px number
         props.position = 'absolute';
       } else if (props.style) {
         props.style = {
@@ -243,7 +251,7 @@ const SnapPositionHandle = ({
 
   }, [dom, nodeId, setProp, onDragMove]);
 
-  // Handle drag end with enhanced container switching
+  // Handle drag end: convert stored pixel offsets to % relative to parent container
   const handleMouseUp = useCallback((e) => {
     if (!dragState.current.isDragging) return;
 
@@ -252,28 +260,70 @@ const SnapPositionHandle = ({
 
     console.log('🎯 SnapPositionHandle drag end - applying final position');
 
-    // Position is already set during drag, so we don't need to do anything special here
-    // Just ensure the final state is committed to Craft.js
-    const finalX = dragState.current.currentX || 0;
-    const finalY = dragState.current.currentY || 0;
+    // Retrieve the container to compute percentage based positioning
+    let percentLeft = 0;
+    let percentTop = 0;
+    const container = getParentContainer();
+  const { elementWidth, elementHeight } = dragState.current;
+    let finalX = dragState.current.currentX || 0;
+    let finalY = dragState.current.currentY || 0;
+
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const containerW = containerRect.width || 0;
+      // Use original height captured at drag start to avoid collapse (absolute child removal from flow)
+      const originalRect = dragState.current.canvasRect; // stored at drag start
+      const baseHeight = (originalRect && originalRect.height) || containerRect.height || 0;
+
+      // Clamp again to be safe using current width / stored height
+      if (containerW > 0) {
+        const maxX = Math.max(0, containerW - elementWidth);
+        finalX = Math.min(Math.max(0, finalX), maxX);
+        percentLeft = (finalX / containerW) * 100;
+      }
+      if (baseHeight > 0) {
+        const maxY = Math.max(0, baseHeight - elementHeight);
+        finalY = Math.min(Math.max(0, finalY), maxY);
+        percentTop = (finalY / baseHeight) * 100;
+      }
+    }
+
+    // Round to 4 decimal places for stability yet precision
+    const formatPct = (v) => `${parseFloat(v.toFixed(4))}%`;
+
+    // Also convert element dimensions to percentage to preserve visual center during parent resizing
+    let widthPercent; let heightPercent;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const originalRect = dragState.current.canvasRect;
+      const baseHeight = (originalRect && originalRect.height) || containerRect.height || 0;
+      if (containerRect.width) widthPercent = (elementWidth / containerRect.width) * 100;
+      if (baseHeight) heightPercent = (elementHeight / baseHeight) * 100;
+    }
 
     setProp((props) => {
       if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
-        props.left = finalX;
-        props.top = finalY;
+        props.left = formatPct(percentLeft);
+        props.top = formatPct(percentTop);
         props.position = 'absolute';
+        if (widthPercent) props.width = formatPct(widthPercent);
+        if (heightPercent) props.height = formatPct(heightPercent);
       } else if (props.style) {
         props.style = {
           ...props.style,
           position: 'absolute',
-          left: `${finalX}px`,
-          top: `${finalY}px`
+          left: formatPct(percentLeft),
+          top: formatPct(percentTop),
+          ...(widthPercent ? { width: formatPct(widthPercent) } : {}),
+          ...(heightPercent ? { height: formatPct(heightPercent) } : {})
         };
       } else {
         props.style = {
           position: 'absolute',
-          left: `${finalX}px`,
-          top: `${finalY}px`
+          left: formatPct(percentLeft),
+          top: formatPct(percentTop),
+          ...(widthPercent ? { width: formatPct(widthPercent) } : {}),
+          ...(heightPercent ? { height: formatPct(heightPercent) } : {})
         };
       }
     });

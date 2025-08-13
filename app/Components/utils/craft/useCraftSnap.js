@@ -358,23 +358,37 @@ export const useSnapGridCanvas = () => {
 
   // Initialize snap grid system with canvas
   useEffect(() => {
-    let canvas = canvasRef.current;
-    
-    if (!canvas) {
-      try {
-        canvas = query.getDropPlaceholder();
-      } catch (error) {
-        console.warn('Could not get drop placeholder from Craft.js, using fallback canvas detection');
-        // Fallback: find editor canvas by data attributes
-        canvas = document.querySelector('[data-cy="editor-root"], [data-editor="true"]');
-      }
-    }
-    
-    if (canvas) {
-      snapGridSystem.initialize(canvas);
-    }
-    
+    // OPTION 2: Force viewport as canvas for centering safe area
+    const initViewportCanvas = () => {
+      const viewportEl = document.body || document.documentElement;
+      snapGridSystem.initialize(viewportEl);
+      snapGridSystem.updateCanvasSize(window.innerWidth, window.innerHeight);
+      // Manually set canvasBounds to viewport (0,0)
+      snapGridSystem.canvasBounds = {
+        left: 0,
+        top: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        right: window.innerWidth,
+        bottom: window.innerHeight
+      };
+    };
+    initViewportCanvas();
+    const handleResize = () => {
+      snapGridSystem.updateCanvasSize(window.innerWidth, window.innerHeight);
+      snapGridSystem.canvasBounds = {
+        left: 0,
+        top: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        right: window.innerWidth,
+        bottom: window.innerHeight
+      };
+      snapGridSystem.updateSnapIndicators();
+    };
+    window.addEventListener('resize', handleResize);
     return () => {
+      window.removeEventListener('resize', handleResize);
       snapGridSystem.destroy();
     };
   }, [query]);
@@ -390,10 +404,8 @@ export const useSnapGridCanvas = () => {
   }, []);
 
   const setCanvasRef = useCallback((element) => {
+    // Keep ref for selection, but snapping uses viewport now
     canvasRef.current = element;
-    if (element) {
-      snapGridSystem.initialize(element);
-    }
     return element;
   }, []);
 

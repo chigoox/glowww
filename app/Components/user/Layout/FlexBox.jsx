@@ -9,6 +9,7 @@ import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
+import ResizeHandles from "../support/ResizeHandles";
 
 export const FlexBox = ({
   
@@ -457,17 +458,33 @@ placeContent,
     }
   }, [isSelected, isHovered]);
 
-  // Handle resize start
+  // Handle resize start (left/top-aware; mirrors Box implementation)
   const handleResizeStart = (e, direction) => {
     e.stopPropagation();
     e.preventDefault();
-    
+
     const startX = e.clientX;
     const startY = e.clientY;
     const rect = cardRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
-    
+    // Get minWidth/minHeight from props or fallback
+    const minW = typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50;
+    const minH = typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20;
+    // Capture starting left/top relative to positioned parent container
+    let startLeft = rect.left;
+    let startTop = rect.top;
+    const parentEl = cardRef.current.offsetParent; // closest positioned ancestor
+    if (parentEl) {
+      const parentRect = parentEl.getBoundingClientRect();
+      startLeft = rect.left - parentRect.left;
+      startTop = rect.top - parentRect.top;
+    } else {
+      // fallback to viewport relative
+      startLeft = rect.left;
+      startTop = rect.top;
+    }
+
     setIsResizing(true);
 
     // Register all elements for snapping during resize
@@ -479,47 +496,34 @@ placeContent,
         if (editorRoot) {
           const editorRect = editorRoot.getBoundingClientRect();
           const computedStyle = window.getComputedStyle(node.dom);
-          
+
           // Get border widths for reference
           const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
           const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
           const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
           const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
-          
-          // For visual alignment, we want to align to the full visual bounds (border box)
-          // This includes padding and borders as users expect visual alignment to the actual edge
+
           const registrationBounds = {
             x: elementRect.left - editorRect.left,
             y: elementRect.top - editorRect.top,
             width: elementRect.width,
             height: elementRect.height,
           };
-          
-          console.log('📝 Registering element with border box bounds:', {
-            id,
-            elementRect: {
-              left: elementRect.left - editorRect.left,
-              top: elementRect.top - editorRect.top,
-              width: elementRect.width,
-              height: elementRect.height,
-              right: (elementRect.left - editorRect.left) + elementRect.width,
-              bottom: (elementRect.top - editorRect.top) + elementRect.height
-            },
-            borders: { borderLeft, borderRight, borderTop, borderBottom }
-          });
-          
-          snapGridSystem.registerElement(id, node.dom, registrationBounds);
+
+            snapGridSystem.registerElement(id, node.dom, registrationBounds);
         }
       }
     });
-    
+
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
-      
+
       let newWidth = startWidth;
       let newHeight = startHeight;
-      
+      let newLeft = startLeft;
+      let newTop = startTop;
+
       // Calculate new dimensions based on resize direction
       switch (direction) {
         case 'se': // bottom-right
@@ -529,40 +533,56 @@ placeContent,
         case 'sw': // bottom-left
           newWidth = startWidth - deltaX;
           newHeight = startHeight + deltaY;
+          newLeft = startLeft + deltaX;
           break;
         case 'ne': // top-right
           newWidth = startWidth + deltaX;
           newHeight = startHeight - deltaY;
+          newTop = startTop + deltaY;
           break;
         case 'nw': // top-left
           newWidth = startWidth - deltaX;
           newHeight = startHeight - deltaY;
+          newLeft = startLeft + deltaX;
+          newTop = startTop + deltaY;
           break;
         case 'e': // right edge
           newWidth = startWidth + deltaX;
           break;
         case 'w': // left edge
           newWidth = startWidth - deltaX;
+          newLeft = startLeft + deltaX;
           break;
         case 's': // bottom edge
           newHeight = startHeight + deltaY;
           break;
         case 'n': // top edge
           newHeight = startHeight - deltaY;
+          newTop = startTop + deltaY;
           break;
       }
-      
-      // Apply minimum constraints
-      newWidth = Math.max(newWidth, 50);
-      newHeight = Math.max(newHeight, 20);
+
+      // Clamp left/top-aware resizing at minimums
+      // If resizing left and hit minWidth, freeze left
+      if (direction.includes('w') && newWidth <= minW) {
+        newWidth = minW;
+        newLeft = startLeft + (startWidth - minW);
+      }
+      // If resizing top and hit minHeight, freeze top
+      if (direction.includes('n') && newHeight <= minH) {
+        newHeight = minH;
+        newTop = startTop + (startHeight - minH);
+      }
+      // Apply minimum constraints (for right/bottom)
+      newWidth = Math.max(newWidth, minW);
+      newHeight = Math.max(newHeight, minH);
 
       // Get current position for snap calculations
       const currentRect = cardRef.current.getBoundingClientRect();
       const editorRoot = document.querySelector('[data-editor="true"]');
       if (editorRoot) {
         const editorRect = editorRoot.getBoundingClientRect();
-        
-        // Calculate the intended bounds based on resize direction
+
         let intendedBounds = {
           left: currentRect.left - editorRect.left,
           top: currentRect.top - editorRect.top,
@@ -570,38 +590,20 @@ placeContent,
           height: newHeight
         };
 
-        // Adjust position for edges that move the element's origin
         if (direction.includes('w')) {
-          // Left edge resize - element position changes
           const widthDelta = newWidth - currentRect.width;
           intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
         }
-        
         if (direction.includes('n')) {
-          // Top edge resize - element position changes
           const heightDelta = newHeight - currentRect.height;
           intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
         }
 
-        // Calculate all edge positions with the new dimensions
         intendedBounds.right = intendedBounds.left + intendedBounds.width;
         intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
         intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
         intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
 
-        console.log('🔧 Resize bounds:', { 
-          direction, 
-          currentBounds: {
-            left: currentRect.left - editorRect.left,
-            top: currentRect.top - editorRect.top,
-            width: currentRect.width,
-            height: currentRect.height
-          },
-          intendedBounds,
-          newDimensions: { newWidth, newHeight }
-        });
-
-        // Use resize-specific snap method
         const snapResult = snapGridSystem.getResizeSnapPosition(
           nodeId,
           direction,
@@ -609,39 +611,42 @@ placeContent,
           newWidth,
           newHeight
         );
-
         if (snapResult.snapped) {
           newWidth = snapResult.bounds.width;
           newHeight = snapResult.bounds.height;
-          
-          console.log('🔧 Applied snap result:', { 
-            snappedWidth: newWidth, 
-            snappedHeight: newHeight,
-            originalDimensions: { width: newWidth, height: newHeight }
-          });
+          if (direction.includes('w') && typeof snapResult.bounds.left === 'number') {
+            newLeft = snapResult.bounds.left;
+          }
+          if (direction.includes('n') && typeof snapResult.bounds.top === 'number') {
+            newTop = snapResult.bounds.top;
+          }
         }
       }
-      
-      // Update dimensions using Craft.js throttled setProp for smooth history
+
       editorActions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
+        if (direction.includes('w')) {
+          props.left = Math.round(newLeft);
+        }
+        if (direction.includes('n')) {
+          props.top = Math.round(newTop);
+        }
+        if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
+          props.position = 'absolute';
+        }
       });
     };
-    
+
     const handleMouseUp = () => {
       setIsResizing(false);
-      
-      // Clear snap indicators and cleanup tracked elements
       snapGridSystem.clearSnapIndicators();
       setTimeout(() => {
         snapGridSystem.cleanupTrackedElements();
       }, 100);
-      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -889,14 +894,17 @@ placeContent,
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping (hide in preview mode) */}
       {isSelected && !hideEditorUI && (
-        <PortalControls
-          boxPosition={boxPosition}
-          dragRef={dragRef}
-          handleResizeStart={handleResizeStart}
-          nodeId={nodeId}
-          isDragging={isDragging}
-          setIsDragging={setIsDragging}
-        />
+        <>
+          <PortalControls
+            boxPosition={boxPosition}
+            dragRef={dragRef}
+            handleResizeStart={handleResizeStart}
+            nodeId={nodeId}
+            isDragging={isDragging}
+            setIsDragging={setIsDragging}
+          />
+          <ResizeHandles boxPosition={boxPosition} onResizeStart={handleResizeStart} />
+        </>
       )}
       {children}
       
@@ -1008,155 +1016,7 @@ const PortalControls = ({
         </SnapPositionHandle>
       </div>
 
-      {/* Resize handles */}
-      {/* Top-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'nw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'nw')}
-        title="Resize"
-      />
-
-      {/* Top-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'ne-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'ne')}
-        title="Resize"
-      />
-
-      {/* Bottom-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'sw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'sw')}
-        title="Resize"
-      />
-
-      {/* Bottom-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'se-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'se')}
-        title="Resize"
-      />
-
-      {/* Edge resize handles - beautiful semi-transparent style */}
-      {/* Top edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 10,
-          width: 20,
-          height: 8,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 'n-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'n')}
-        title="Resize height"
-      />
-
-      {/* Bottom edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 10,
-          width: 20,
-          height: 8,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 's-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 's')}
-        title="Resize height"
-      />
-
-      {/* Left edge */}
-      <div
-        style={{
-          position: 'absolute',
-          left: boxPosition.left - 4,
-          top: boxPosition.top + boxPosition.height / 2 - 10,
-          width: 8,
-          height: 20,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 'w-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'w')}
-        title="Resize width"
-      />
-
-      {/* Right edge */}
-      <div
-        style={{
-          position: 'absolute',
-          left: boxPosition.left + boxPosition.width - 4,
-          top: boxPosition.top + boxPosition.height / 2 - 10,
-          width: 8,
-          height: 20,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 'e-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'e')}
-        title="Resize width"
-      />
+  {/* Resize handles removed; now provided by <ResizeHandles /> */}
     </div>,
     document.body
   );

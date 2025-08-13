@@ -357,8 +357,16 @@ const SnapPositionHandle = ({
     console.log('🚀 SnapResult:', snapResult);
 
     // Use snapped position if available, otherwise use calculated position
-    const finalX = snapResult.snapped ? snapResult.x : newX;
-    const finalY = snapResult.snapped ? snapResult.y : newY;
+    let finalX = snapResult.snapped ? snapResult.x : newX;
+    let finalY = snapResult.snapped ? snapResult.y : newY;
+
+    // Constrain within container bounds
+    if (canvasRect) {
+      const maxX = Math.max(0, canvasRect.width - elementWidth);
+      const maxY = Math.max(0, canvasRect.height - elementHeight);
+      finalX = Math.min(Math.max(0, finalX), maxX);
+      finalY = Math.min(Math.max(0, finalY), maxY);
+    }
 
     // Store current position and mouse coordinates for enhanced movement on drag end
     dragState.current.currentX = finalX;
@@ -375,8 +383,8 @@ const SnapPositionHandle = ({
     }
 
     // Also update Craft.js state to keep it in sync
+    // Use pixel values during drag (convert to % on mouse up)
     setProp((props) => {
-      // Handle different position prop structures
       if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
         props.left = finalX;
         props.top = finalY;
@@ -402,7 +410,7 @@ const SnapPositionHandle = ({
 
   }, [dom, nodeId, setProp, onDragMove, isContainerSwitchInProgress]);
 
-  // Handle drag end with enhanced container switching
+  // Handle drag end with enhanced container switching (convert to %)
   const handleMouseUp = useCallback((e) => {
     if (!dragState.current.isDragging) return;
 
@@ -411,28 +419,60 @@ const SnapPositionHandle = ({
 
     console.log('🎯 SnapPositionHandle drag end - applying final position');
 
-    // Position is already set during drag, so we don't need to do anything special here
-    // Just ensure the final state is committed to Craft.js
-    const finalX = dragState.current.currentX || 0;
-    const finalY = dragState.current.currentY || 0;
+  let finalX = dragState.current.currentX || 0;
+  let finalY = dragState.current.currentY || 0;
+  const container = getParentContainer();
+  const { elementWidth, elementHeight } = dragState.current;
+  let percentLeft = 0;
+  let percentTop = 0;
+
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const originalRect = dragState.current.canvasRect;
+      const baseHeight = (originalRect && originalRect.height) || rect.height || 0;
+      const maxX = Math.max(0, rect.width - elementWidth);
+      const maxY = Math.max(0, baseHeight - elementHeight);
+      finalX = Math.min(Math.max(0, finalX), maxX);
+      finalY = Math.min(Math.max(0, finalY), maxY);
+      percentLeft = rect.width ? (finalX / rect.width) * 100 : 0;
+      percentTop = baseHeight ? (finalY / baseHeight) * 100 : 0;
+    }
+
+    const formatPct = (v) => `${parseFloat(v.toFixed(4))}%`;
+
+    // Also convert width/height to percentages (keeps element centered proportionally on resize)
+    let widthPercent; let heightPercent;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const originalRect = dragState.current.canvasRect;
+      const baseHeight = (originalRect && originalRect.height) || rect.height || 0;
+      if (rect.width) widthPercent = (elementWidth / rect.width) * 100;
+      if (baseHeight) heightPercent = (elementHeight / baseHeight) * 100;
+    }
 
     setProp((props) => {
       if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
-        props.left = finalX;
-        props.top = finalY;
+        props.left = formatPct(percentLeft);
+        props.top = formatPct(percentTop);
         props.position = 'absolute';
+        if (widthPercent) props.width = formatPct(widthPercent);
+        if (heightPercent) props.height = formatPct(heightPercent);
       } else if (props.style) {
         props.style = {
           ...props.style,
           position: 'absolute',
-          left: `${finalX}px`,
-          top: `${finalY}px`
+          left: formatPct(percentLeft),
+          top: formatPct(percentTop),
+          ...(widthPercent ? { width: formatPct(widthPercent) } : {}),
+          ...(heightPercent ? { height: formatPct(heightPercent) } : {})
         };
       } else {
         props.style = {
           position: 'absolute',
-          left: `${finalX}px`,
-          top: `${finalY}px`
+          left: formatPct(percentLeft),
+          top: formatPct(percentTop),
+          ...(widthPercent ? { width: formatPct(widthPercent) } : {}),
+          ...(heightPercent ? { height: formatPct(heightPercent) } : {})
         };
       }
     });

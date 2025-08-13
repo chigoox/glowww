@@ -12,7 +12,7 @@ import MultiSelectBoundingBox from "../utils/selection/MultiSelectBoundingBox";
 export const Root = ({
   // Layout & Position
   width = "100%",
-  height = "100%",
+  height = "auto",
   minWidth = '100%',
   maxWidth = '100%',
   minHeight,
@@ -205,6 +205,7 @@ placeContent,
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [viewportSize, setViewportSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1200, height: typeof window !== 'undefined' ? window.innerHeight : 800 });
 
   useEffect(() => {
 //setid props for the root element
@@ -274,6 +275,11 @@ placeContent,
 
   useEffect(() => {
     setIsClient(true);
+    const handleResize = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
@@ -618,8 +624,8 @@ placeContent,
       {!hideEditorUI && (
         <SnapGridOverlay
           canvasRef={RootRef}
-          canvasWidth={RootRef.current?.offsetWidth || 1200}
-          canvasHeight={RootRef.current?.offsetHeight || 800}
+          canvasWidth={viewportSize.width}
+          canvasHeight={viewportSize.height}
         />
       )}
       
@@ -675,9 +681,9 @@ Root.craft = {
   props: {
     // Layout & Position
     width: "auto",
-    height: "900px",
-    minHeight: "900px",
-    maxWidth: '100vh',
+    height: "auto",
+    minHeight: "100vh",
+  maxWidth: '100vw',
     display: "block",
     position: "relative",
     zIndex: 1,

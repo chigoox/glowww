@@ -30,7 +30,7 @@ import EditorLayers from '../../Components/editor/EditorLayers';
 import { Form, FormInputDropArea } from '../../Components/user/Advanced/Form';
 import { Carousel } from '../../Components/user/Media/Carousel';
 import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
-import { Root } from '../../Components/Root';
+import { Root } from '../../Components/core/Root';
 import { MultiSelectProvider } from '../../Components/utils/context/MultiSelectContext';
 import { EditorSettingsProvider } from '../../Components/utils/context/EditorSettingsContext';
 import EditorSettingsModal from '../../Components/ui/EditorSettingsModal';
@@ -1649,9 +1649,9 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   }, [refreshPageCache, pages, currentPageId, pageContentCache, isInitialized, isLoadingPage, handlePageChange, actions, query, user?.uid, siteId]);
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen w-[100vw]   flex flex-col">
       {/* Modern Toolbar */}
-      <div className="bg-white border-b border-gray-300 shadow-sm px-4 py-3">
+      <div className="bg-white border-b overflow-x-scroll border-gray-300 shadow-sm px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Left Section - Navigation & Site Info */}
           <div className="flex items-center space-x-4">
@@ -1668,13 +1668,13 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             <div className="border-l border-gray-300 pl-4">
               <div className="flex items-center space-x-3">
                 <div>
-                  <span className="text-lg font-semibold text-gray-900">
+                  <span className="text font-semibold text-gray-900">
                     {site?.name || 'Untitled Site'}
                   </span>
-                  <div className="flex items-center space-x-2 text-xs">
+                  <div className=" items-center space-x-2 text-xs">
                     {site?.isPublished ? (
                       <span className="text-green-400 flex items-center">
-                        <span className="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
+                        <span className="w-2 h-2  bg-green-400 rounded-full mr-1"></span>
                         Published
                       </span>
                     ) : (
@@ -1684,9 +1684,9 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
                       </span>
                     )}
                     {lastSaved && (
-                      <span className="text-gray-500">
+                      <div className="text-gray-500">
                         • Saved {lastSaved.toLocaleTimeString()}
-                      </span>
+                      </div>
                     )}
                     {isSaving && !isLoadingPage && (
                       <span className="text-blue-600 flex items-center">
@@ -1721,7 +1721,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             {/* Editor/Preview Toggle */}
             <Tooltip title={enabled ? "Switch to Preview Mode" : "Switch to Editor Mode"}>
               <Button
-                icon={enabled ? <EditOutlined className="text-lg" /> : <EyeOutlined className="text-lg" />}
+                icon={!enabled ? <EditOutlined className="text-lg" /> : <EyeOutlined className="text-lg" />}
                 disabled={!isInitialized}
                 onClick={() => {
                   if (isInitialized) {

@@ -15,9 +15,9 @@ export const Box = ({
   // Layout & Position
   width = "200px",
   height = "200px",
-  minWidth = "200px",
+  minWidth = "0px",
   maxWidth,
-  minHeight = "200px",
+  minHeight = "0px",
   maxHeight,
   display = "block",
   position = "relative",
@@ -467,6 +467,19 @@ placeContent,
     const rect = cardRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
+    // Capture starting left/top relative to positioned parent container
+    let startLeft = rect.left;
+    let startTop = rect.top;
+    const parentEl = cardRef.current.offsetParent; // closest positioned ancestor
+    if (parentEl) {
+      const parentRect = parentEl.getBoundingClientRect();
+      startLeft = rect.left - parentRect.left;
+      startTop = rect.top - parentRect.top;
+    } else {
+      // fallback to viewport relative
+      startLeft = rect.left;
+      startTop = rect.top;
+    }
     
     setIsResizing(true);
 
@@ -519,6 +532,8 @@ placeContent,
       
       let newWidth = startWidth;
       let newHeight = startHeight;
+  let newLeft = startLeft;
+  let newTop = startTop;
       
       // Calculate new dimensions based on resize direction
       switch (direction) {
@@ -529,26 +544,32 @@ placeContent,
         case 'sw': // bottom-left
           newWidth = startWidth - deltaX;
           newHeight = startHeight + deltaY;
+          newLeft = startLeft + deltaX;
           break;
         case 'ne': // top-right
           newWidth = startWidth + deltaX;
           newHeight = startHeight - deltaY;
+          newTop = startTop + deltaY;
           break;
         case 'nw': // top-left
           newWidth = startWidth - deltaX;
           newHeight = startHeight - deltaY;
+          newLeft = startLeft + deltaX;
+          newTop = startTop + deltaY;
           break;
         case 'e': // right edge
           newWidth = startWidth + deltaX;
           break;
         case 'w': // left edge
           newWidth = startWidth - deltaX;
+          newLeft = startLeft + deltaX;
           break;
         case 's': // bottom edge
           newHeight = startHeight + deltaY;
           break;
         case 'n': // top edge
           newHeight = startHeight - deltaY;
+          newTop = startTop + deltaY;
           break;
       }
       
@@ -613,6 +634,13 @@ placeContent,
         if (snapResult.snapped) {
           newWidth = snapResult.bounds.width;
           newHeight = snapResult.bounds.height;
+          // If snapping returned left/top (for west/north handles), use them
+          if (direction.includes('w') && typeof snapResult.bounds.left === 'number') {
+            newLeft = snapResult.bounds.left;
+          }
+            if (direction.includes('n') && typeof snapResult.bounds.top === 'number') {
+            newTop = snapResult.bounds.top;
+          }
           
           console.log('🔧 Applied snap result:', { 
             snappedWidth: newWidth, 
@@ -626,6 +654,16 @@ placeContent,
       editorActions.history.throttle(500).setProp(nodeId, (props) => {
         props.width = Math.round(newWidth);
         props.height = Math.round(newHeight);
+        if (direction.includes('w')) {
+          props.left = Math.round(newLeft);
+        }
+        if (direction.includes('n')) {
+          props.top = Math.round(newTop);
+        }
+        // Ensure absolute positioning when adjusting left/top so opposite edges remain fixed
+        if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
+          props.position = 'absolute';
+        }
       });
     };
     
@@ -646,38 +684,7 @@ placeContent,
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle custom drag for position changes - REPLACED by SnapPositionHandle
-  // const handleDragStart = (e) => {
-  //   e.stopPropagation();
-  //   e.preventDefault();
-  //   
-  //   const startX = e.clientX;
-  //   const startY = e.clientY;
-  //   const currentTop = parseInt(top) || 0;
-  //   const currentLeft = parseInt(left) || 0;
-  //   
-  //   setIsDragging(true);
-  //   
-  //   const handleMouseMove = (moveEvent) => {
-  //     const deltaX = moveEvent.clientX - startX;
-  //     const deltaY = moveEvent.clientY - startY;
-  //     
-  //     // Update position using Craft.js throttled setProp for smooth history
-  //     editorActions.history.throttle(200).setProp(nodeId, (props) => {
-  //       props.left = currentLeft + deltaX;
-  //       props.top = currentTop + deltaY;
-  //     });
-  //   };
-  //   
-  //   const handleMouseUp = () => {
-  //     setIsDragging(false);
-  //     document.removeEventListener('mousemove', handleMouseMove);
-  //     document.removeEventListener('mouseup', handleMouseUp);
-  //   };
-  //   
-  //   document.addEventListener('mousemove', handleMouseMove);
-  //   document.addEventListener('mouseup', handleMouseUp);
-  // };
+
 
   // Helper function to process values (add px to numbers where appropriate)
   const processValue = (value, property) => {
@@ -1171,8 +1178,8 @@ Box.craft = {
     // Layout & Position
     width: "200px",
     height: "200px",
-    minHeight: "200px",
-    minWidth: "200px",
+    minHeight: "0px",
+    minWidth: "0px",
     display: "block",
     position: "relative",
     top: 0,
