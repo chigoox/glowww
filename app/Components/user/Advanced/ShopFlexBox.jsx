@@ -2,16 +2,21 @@
 
 import { useNode, useEditor } from "@craftjs/core";
 import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
+import ResizeHandles from "../support/ResizeHandles";
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { AUTH } from '@/Firebase';
+import { db as DATABASE } from '@/lib/firebase';
 import ContextMenu from "../../utils/context/ContextMenu";
 import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import useEditorDisplay from "../../utils/craft/useEditorDisplay";
 
 
-// Mock Stripe Products Data
+// Mock Stripe Products Data (kept as fallback when no Firestore products are available)
 const mockStripeProducts = {
     products: [
         {
@@ -336,6 +341,8 @@ export const ShopFlexBox = ({
     selectedProducts = [],
     selectedCategories = [],
     selectedCollections = [],
+    showAllWhenNoSelection = true,
+    disableMockFallback = false,
     baseUrl = "shop.com/shop",
     linkType = "name",
     showDiscount = true,
@@ -430,7 +437,8 @@ export const ShopFlexBox = ({
     // Context menu functionality
     const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
     const { hideEditorUI } = useEditorDisplay();
-    const { actions: editorActions, query } = useEditor();
+    // Rename Craft.js 'query' to avoid shadowing Firestore 'query' function
+    const { actions: editorActions, query: craftQuery } = useEditor();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState({});
@@ -443,6 +451,120 @@ export const ShopFlexBox = ({
     const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
     const [isResizing, setIsResizing] = useState(false);
 
+    // Firestore product sourcing
+    const [fsProducts, setFsProducts] = useState([]);
+    const [loadingProducts, setLoadingProducts] = useState(true);
+    const [productsError, setProductsError] = useState(null);
+    const [usingMock, setUsingMock] = useState(false);
+    const [queriedWithoutOrderBy, setQueriedWithoutOrderBy] = useState(false);
+
+    // Subscribe to current user's products (mirrors admin ProductsListAdmin pattern)
+    useEffect(() => {
+        let unsubscribeAuth;
+        let offProducts;
+        try {
+            unsubscribeAuth = onAuthStateChanged(AUTH, async (currentUser) => {
+                // debug logging removed
+                if (!currentUser) {
+                    setFsProducts([]);
+                    setLoadingProducts(false);
+                    return;
+                }
+                const runQuery = (withOrder) => {
+                    try {
+                        const constraints = [ where('userId', '==', currentUser.uid) ];
+                        if (withOrder) constraints.push(orderBy('created', 'desc'));
+                        const qRef = query(collection(DATABASE, 'products'), ...constraints);
+                        offProducts = onSnapshot(qRef, (snap) => {
+                            const rows = snap.docs.map(d => {
+                                const data = d.data();
+                                const ts = data.created;
+                                const createdMs = ts?.toMillis ? ts.toMillis() : (ts?.seconds ? (ts.seconds * 1000 + (ts.nanoseconds || 0) / 1e6) : Date.now());
+                                return { id: d.id, ...data, created: createdMs };
+                            });
+                            // debug logging removed
+                            setFsProducts(rows);
+                            setLoadingProducts(false);
+                            setProductsError(null);
+                        }, (err) => {
+                            console.error('[ShopFlexBox] Firestore snapshot error:', err);
+                            // Retry without orderBy on index errors / failed-precondition if we haven't yet
+                            if (!queriedWithoutOrderBy && (err.code === 'failed-precondition' || err.code === 'permission-denied' || /index/i.test(err.message || ''))) {
+                                // debug logging removed
+                                setQueriedWithoutOrderBy(true);
+                                runQuery(false);
+                                return;
+                            }
+                            setProductsError(err.message || 'Failed to load products');
+                            setLoadingProducts(false);
+                        });
+                    } catch (err) {
+                        console.error('[ShopFlexBox] Query setup failed:', err);
+                        setProductsError(err.message || 'Failed to query products');
+                        setLoadingProducts(false);
+                    }
+                };
+                runQuery(true);
+            });
+        } catch (err) {
+            console.error('[ShopFlexBox] Auth subscription failed:', err);
+            setProductsError(err.message || 'Auth error');
+            setLoadingProducts(false);
+        }
+        return () => {
+            try { offProducts && offProducts(); } catch {}
+            try { unsubscribeAuth && unsubscribeAuth(); } catch {}
+        };
+    }, [queriedWithoutOrderBy]);
+
+    // Map Firestore products into display shape (prices converted to cents to match existing formatPrice logic)
+    const mappedFsProducts = useMemo(() => fsProducts.map(p => {
+        const priceDollars = p?.metadata?.price ?? p?.price ?? 0;
+        const compareAtDollars = p?.metadata?.compareAtPrice ?? p?.metadata?.compareAt ?? undefined;
+        const collections = Array.isArray(p?.metadata?.collections) ? p.metadata.collections.filter(Boolean) : [];
+        return {
+            id: p.id,
+            name: p.name || 'Untitled Product',
+            price: Math.round(Number(priceDollars || 0) * 100),
+            originalPrice: compareAtDollars !== undefined ? Math.round(Number(compareAtDollars) * 100) : undefined,
+            images: Array.isArray(p.images) && p.images.length ? p.images : ['https://via.placeholder.com/400x300?text=No+Image'],
+            category: p?.metadata?.category || '',
+            collections,
+            variants: Array.isArray(p.variants) ? p.variants : []
+        };
+    }), [fsProducts]);
+
+    const availableProducts = useMemo(() => {
+        if (mappedFsProducts.length) {
+            setUsingMock(false);
+            return mappedFsProducts;
+        }
+        if (disableMockFallback) {
+            setUsingMock(false);
+            return [];
+        }
+        setUsingMock(true);
+        return mockStripeProducts.products;
+    }, [mappedFsProducts, disableMockFallback]);
+
+    const availableCategories = useMemo(() => {
+        const counts = new Map();
+        availableProducts.forEach(p => {
+            const cat = p.category || 'uncategorized';
+            counts.set(cat, (counts.get(cat) || 0) + 1);
+        });
+        return Array.from(counts.entries()).map(([id, count]) => ({ id, name: id, count }));
+    }, [availableProducts]);
+
+    const availableCollections = useMemo(() => {
+        const counts = new Map();
+        availableProducts.forEach(p => {
+            const cols = p.collections || (p.collection ? [p.collection] : []);
+            cols.forEach(c => { if (c) counts.set(c, (counts.get(c) || 0) + 1); });
+        });
+        return Array.from(counts.entries()).map(([id, count]) => ({ id, name: id, count }));
+    }, [availableProducts]);
+
     // Local editing state to prevent re-renders during adjustments
     const [editingState, setEditingState] = useState({
         activeSlider: null,
@@ -453,41 +575,36 @@ export const ShopFlexBox = ({
         return `$${(price / 100).toFixed(2)}`;
     };
 
-    // Helper function to get products to display
+    // Helper function to get products to display (from Firestore if available, fallback to mock)
     const getDisplayProducts = () => {
-        let products = [];
-
+        const source = availableProducts;
+        if (!source.length) return [];
+        if (selectedProducts.length === 0 && selectedCategories.length === 0 && selectedCollections.length === 0) {
+            if (showAllWhenNoSelection) return source; // new behavior: auto show all
+            return [];
+        }
+        let results = [];
         if (selectedProducts.length > 0) {
-            const individualProducts = mockStripeProducts.products.filter(product => 
-                selectedProducts.includes(product.id)
-            );
-            products = [...products, ...individualProducts];
+            results.push(...source.filter(p => selectedProducts.includes(p.id)));
         }
-
         if (selectedCategories.length > 0) {
-            const categoryProducts = mockStripeProducts.products.filter(product =>
-                selectedCategories.includes(product.category)
-            );
-            products = [...products, ...categoryProducts];
+            results.push(...source.filter(p => selectedCategories.includes(p.category)));
         }
-
         if (selectedCollections.length > 0) {
-            const collectionProducts = mockStripeProducts.products.filter(product =>
-                selectedCollections.includes(product.collection)
-            );
-            products = [...products, ...collectionProducts];
+            results.push(...source.filter(p => {
+                const cols = p.collections || (p.collection ? [p.collection] : []);
+                return cols.some(c => selectedCollections.includes(c));
+            }));
         }
-
-        const uniqueProducts = products.filter((product, index, self) =>
-            index === self.findIndex(p => p.id === product.id)
-        );
-
-        return uniqueProducts;
+        // Deduplicate
+        const map = new Map();
+        results.forEach(p => { if (!map.has(p.id)) map.set(p.id, p); });
+        return Array.from(map.values());
     };
 
     // Helper functions
     const handleImageNav = (productId, direction) => {
-        const product = mockStripeProducts.products.find(p => p.id === productId);
+    const product = availableProducts.find(p => p.id === productId);
         if (!product) return;
 
         const currentIndex = currentImageIndex[productId] || 0;
@@ -578,7 +695,7 @@ export const ShopFlexBox = ({
         setIsResizing(true);
 
         // Register other elements for snapping
-        const nodes = query.getNodes();
+    const nodes = craftQuery.getNodes();
         Object.entries(nodes).forEach(([id, node]) => {
             if (id !== nodeId && node.dom) {
                 const elementRect = node.dom.getBoundingClientRect();
@@ -953,13 +1070,15 @@ export const ShopFlexBox = ({
             >
                 {/* Portal Controls (MOVE/POS) */}
                 {isSelected && !hideEditorUI && (
-                    <PortalControls
-                        boxPosition={boxPosition}
-                        dragRef={dragRef}
-                        nodeId={nodeId}
-                        onEdit={() => setIsEditModalOpen(true)}
-                        handleResizeStart={handleResizeStart}
-                    />
+                    <>
+                        <PortalControls
+                            boxPosition={boxPosition}
+                            dragRef={dragRef}
+                            nodeId={nodeId}
+                            onEdit={() => setIsEditModalOpen(true)}
+                        />
+                        <ResizeHandles boxPosition={boxPosition} onResizeStart={handleResizeStart} />
+                    </>
                 )}
                 {/* Edit button now lives inside portal controls */}
 
@@ -983,8 +1102,16 @@ export const ShopFlexBox = ({
                         }}
                     >
                         <div style={{ fontSize: '48px' }}>🛍️</div>
-                        <div style={{ fontSize: '16px', color: '#999' }}>No products selected</div>
-                        <div style={{ fontSize: '14px', color: '#ccc' }}>Click edit to configure your shop</div>
+                        <div style={{ fontSize: '16px', color: '#999', textAlign:'center' }}>
+                            {loadingProducts && 'Loading products...'}
+                            {!loadingProducts && productsError && 'Error loading products'}
+                            {!loadingProducts && !productsError && !showAllWhenNoSelection && 'No products selected'}
+                            {!loadingProducts && !productsError && showAllWhenNoSelection && 'No products available'}
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#ccc', textAlign:'center' }}>
+                            Click edit to configure your shop
+                            {/* debug panel removed */}
+                        </div>
                     </div>
                 )}
 
@@ -1017,6 +1144,12 @@ export const ShopFlexBox = ({
                     isAdjusting={isAdjusting}
                     createProductItem={createProductItem}
                     formatPrice={formatPrice}
+                    availableProducts={availableProducts}
+                    availableCategories={availableCategories}
+                    availableCollections={availableCollections}
+                    showAllWhenNoSelection={showAllWhenNoSelection}
+                    disableMockFallback={disableMockFallback}
+                    // debugProducts removed
                     // Pass all style props
                     position={position}
                     top={top}
@@ -1114,7 +1247,7 @@ export const ShopFlexBox = ({
 };
 
 // Portal controls (MOVE and POS) similar to Box
-const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit, handleResizeStart }) => {
+const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit }) => {
     if (typeof window === 'undefined') return null;
     return createPortal(
         <div style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 99999 }}>
@@ -1201,49 +1334,6 @@ const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit, handleResizeStar
                 </SnapPositionHandle>
             </div>
 
-            {/* Resize corners */}
-            <div
-                style={{ position: 'absolute', top: boxPosition.top - 4, left: boxPosition.left - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'nw-resize', zIndex: 10001, pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'nw')}
-                title="Resize"
-            />
-            <div
-                style={{ position: 'absolute', top: boxPosition.top - 4, left: boxPosition.left + boxPosition.width - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'ne-resize', zIndex: 10001, pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'ne')}
-                title="Resize"
-            />
-            <div
-                style={{ position: 'absolute', top: boxPosition.top + boxPosition.height - 4, left: boxPosition.left - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'sw-resize', zIndex: 10001, pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'sw')}
-                title="Resize"
-            />
-            <div
-                style={{ position: 'absolute', top: boxPosition.top + boxPosition.height - 4, left: boxPosition.left + boxPosition.width - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: '2px', cursor: 'se-resize', zIndex: 10001, pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'se')}
-                title="Resize"
-            />
-
-            {/* Edge handles */}
-            <div
-                style={{ position: 'absolute', top: boxPosition.top - 4, left: boxPosition.left + boxPosition.width / 2 - 10, width: 20, height: 8, background: 'rgba(24, 144, 255, 0.3)', cursor: 'n-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'n')}
-                title="Resize height"
-            />
-            <div
-                style={{ position: 'absolute', top: boxPosition.top + boxPosition.height - 4, left: boxPosition.left + boxPosition.width / 2 - 10, width: 20, height: 8, background: 'rgba(24, 144, 255, 0.3)', cursor: 's-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 's')}
-                title="Resize height"
-            />
-            <div
-                style={{ position: 'absolute', left: boxPosition.left - 4, top: boxPosition.top + boxPosition.height / 2 - 10, width: 8, height: 20, background: 'rgba(24, 144, 255, 0.3)', cursor: 'w-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'w')}
-                title="Resize width"
-            />
-            <div
-                style={{ position: 'absolute', left: boxPosition.left + boxPosition.width - 4, top: boxPosition.top + boxPosition.height / 2 - 10, width: 8, height: 20, background: 'rgba(24, 144, 255, 0.3)', cursor: 'e-resize', zIndex: 9999, borderRadius: '4px', pointerEvents: 'auto' }}
-                onMouseDown={(e) => handleResizeStart(e, 'e')}
-                title="Resize width"
-            />
         </div>,
         document.body
     );
@@ -1260,6 +1350,12 @@ const StyleEditorModal = ({
     isAdjusting,
     createProductItem,
     formatPrice,
+    availableProducts = [],
+    availableCategories = [],
+    availableCollections = [],
+    showAllWhenNoSelection = true,
+    disableMockFallback = false,
+    // debugProducts removed
     // All style props passed as props
     ...styleProps
 }) => {
@@ -1532,13 +1628,14 @@ const StyleEditorModal = ({
                         <Select
                             mode="multiple"
                             style={{ width: '100%' }}
-                            placeholder="Select individual products"
+                            placeholder={availableProducts.length ? "Select individual products" : "No products available"}
                             value={styleProps.selectedProducts}
                             onChange={(value) => setProp(props => props.selectedProducts = value)}
-                            options={mockStripeProducts.products.map(product => ({
+                            options={availableProducts.map(product => ({
                                 label: `${product.name} - ${formatPrice(product.price)}`,
                                 value: product.id
                             }))}
+                            disabled={!availableProducts.length}
                         />
                     </div>
 
@@ -1550,13 +1647,14 @@ const StyleEditorModal = ({
                         <Select
                             mode="multiple"
                             style={{ width: '100%' }}
-                            placeholder="Select categories"
+                            placeholder={availableCategories.length ? "Select categories" : "No categories"}
                             value={styleProps.selectedCategories}
                             onChange={(value) => setProp(props => props.selectedCategories = value)}
-                            options={mockStripeProducts.categories.map(category => ({
-                                label: `${category.name} (${category.count} items)`,
+                            options={availableCategories.map(category => ({
+                                label: `${category.name} (${category.count} items)` ,
                                 value: category.id
                             }))}
+                            disabled={!availableCategories.length}
                         />
                     </div>
 
@@ -1565,16 +1663,40 @@ const StyleEditorModal = ({
                         <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
                             Collections
                         </h3>
+                    {/* Behavior Toggle */}
+                    <div style={{ marginBottom: 24 }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', fontWeight: '600' }}>
+                            Display Behavior
+                        </h3>
+                        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                            <Switch
+                                checked={showAllWhenNoSelection}
+                                onChange={(val) => setProp(p => p.showAllWhenNoSelection = val)}
+                                size="small"
+                            />
+                            <span style={{ fontSize:12, color:'#555' }}>Show all products when no filters selected</span>
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:12 }}>
+                            <Switch
+                                checked={disableMockFallback}
+                                onChange={(val) => setProp(p => p.disableMockFallback = val)}
+                                size="small"
+                            />
+                            <span style={{ fontSize:12, color:'#555' }}>Disable mock fallback</span>
+                        </div>
+                        {/* debug logging toggle removed */}
+                    </div>
                         <Select
                             mode="multiple"
                             style={{ width: '100%' }}
-                            placeholder="Select collections"
+                            placeholder={availableCollections.length ? "Select collections" : "No collections"}
                             value={styleProps.selectedCollections}
                             onChange={(value) => setProp(props => props.selectedCollections = value)}
-                            options={mockStripeProducts.collections.map(collection => ({
-                                label: `${collection.name} (${collection.count} items)`,
+                            options={availableCollections.map(collection => ({
+                                label: `${collection.name} (${collection.count} items)` ,
                                 value: collection.id
                             }))}
+                            disabled={!availableCollections.length}
                         />
                     </div>
                 </div>
@@ -1607,7 +1729,7 @@ const StyleEditorModal = ({
                     overflow: 'auto'
                 }}>
                     <div style={{ transform: 'scale(0.8)', transformOrigin: 'center' }}>
-                        {!isAdjusting && createProductItem(mockStripeProducts.products[0])}
+                        {!isAdjusting && availableProducts.length > 0 && createProductItem(availableProducts[0])}
                         {isAdjusting && (
                             <div style={{
                                 width: styleProps.itemWidth,
@@ -1920,6 +2042,9 @@ ShopFlexBox.craft = {
         showDiscount: true,
         showQuickAdd: true,
         showWishlist: true,
+    showAllWhenNoSelection: true,
+    disableMockFallback: false,
+    // debugProducts removed
         autoSlide: false,
         slideInterval: 3000,
         width: "auto",

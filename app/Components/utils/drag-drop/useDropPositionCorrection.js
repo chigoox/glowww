@@ -746,6 +746,13 @@ const applyPositioning = useCallback((nodeId, position) => {
       }
     };
     
+    // Capture mouseup separately to freeze final release coordinates
+    const handleMouseUp = (e) => {
+      if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove || dropStateRef.current.potentialDragNodeId) {
+        dropStateRef.current.mousePosition = { x: e.clientX, y: e.clientY };
+      }
+    };
+
     // Also listen for dragend to capture final position and handle existing moves
     const handleDragEnd = (e) => {
       try {
@@ -827,7 +834,8 @@ const applyPositioning = useCallback((nodeId, position) => {
     document.addEventListener('dragstart', handleDragStart);
     document.addEventListener('dragover', handleDragOver);
     document.addEventListener('dragenter', handleDragEnter);
-    document.addEventListener('dragend', handleDragEnd);
+  document.addEventListener('dragend', handleDragEnd);
+  document.addEventListener('mouseup', handleMouseUp, true);
     document.addEventListener('mousemove', handleMouseMove);  // Track mouse for position
     
     // Monitor for new components
@@ -870,7 +878,8 @@ const applyPositioning = useCallback((nodeId, position) => {
       document.removeEventListener('dragstart', handleDragStart);
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('dragenter', handleDragEnter);
-      document.removeEventListener('dragend', handleDragEnd);
+  document.removeEventListener('dragend', handleDragEnd);
+  document.removeEventListener('mouseup', handleMouseUp, true);
       document.removeEventListener('mousemove', handleMouseMove);
       clearInterval(monitorInterval);
       clearInterval(craftMonitorInterval);

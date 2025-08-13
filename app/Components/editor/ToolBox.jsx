@@ -47,11 +47,15 @@ import { FormInput } from "../user/Input";
 import { Form } from "../user/Advanced/Form";
 import {Carousel} from "../user/Media/Carousel";
 import { NavBar } from "../user/Nav/NavBar";
+import { useSelectDrop } from '../utils/context/SelectDropContext';
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const { connectors } = useEditor();
   const { correctPosition } = useDropPositionCorrection();
   const toolboxRef = useRef(null);
+  const selectDrop = (() => { try { return useSelectDrop(); } catch { return null; } })();
+  const selectMode = selectDrop?.selectDropMode;
+  const armedComponent = selectDrop?.armedComponent;
 
   // Create refs for each component
   const boxRef = useRef(null);
@@ -255,11 +259,22 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
   const closeDrawer = () => {
     setActiveDrawer(null);
+    // If drawer closes, unarm current component for safety
+    if (selectMode && selectDrop?.armedComponent) {
+      try { selectDrop.setArmedComponent(null); } catch {}
+    }
   };
 
   const switchDrawer = (sectionId) => {
     setActiveDrawer(sectionId);
   };
+
+  // Safety: if toolbox fully closed, unarm any armed component
+  useEffect(() => {
+    if (!activeDrawer && selectMode && selectDrop?.armedComponent) {
+      try { selectDrop.setArmedComponent(null); } catch {}
+    }
+  }, [activeDrawer, selectMode, selectDrop]);
 
   const renderDrawerContent = (section) => {
     return (
@@ -274,26 +289,38 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           >
             <div
               ref={component.ref}
-              className="w-12 h-12 p-0 rounded-xl transition-all cursor-grab active:cursor-grabbing group flex items-center justify-center toolbox-component"
+              className={`w-12 h-12 p-0 rounded-xl transition-all flex items-center justify-center toolbox-component ${selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${armedComponent===component.name ? 'ring-2 ring-blue-500' : ''}`}
               style={{ 
                 userSelect: 'none',
-                background: 'var(--panel-bg)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)'
+                background: armedComponent===component.name ? 'var(--accent-color)' : 'var(--panel-bg)',
+                border: armedComponent===component.name ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
+                color: armedComponent===component.name ? '#fff' : 'var(--text-primary)'
               }}
               onMouseEnter={(e) => {
                 e.target.style.background = 'var(--bg-secondary)';
                 e.target.style.borderColor = 'var(--accent-color)';
               }}
               onMouseLeave={(e) => {
-                e.target.style.background = 'var(--panel-bg)';
-                e.target.style.borderColor = 'var(--border-color)';
+                if (armedComponent!==component.name) {
+                  e.target.style.background = 'var(--panel-bg)';
+                  e.target.style.borderColor = 'var(--border-color)';
+                }
               }}
               data-component={component.name}
+              onClick={(e) => {
+                if (selectMode && selectDrop) {
+                  // Arm / disarm
+                  if (armedComponent === component.name) {
+                    selectDrop.setArmedComponent(null);
+                  } else {
+                    selectDrop.setArmedComponent(component.name);
+                  }
+                }
+              }}
             >
               <div 
                 className="text-lg transition-colors"
-                style={{ color: 'var(--text-secondary)' }}
+                style={{ color: armedComponent===component.name ? '#fff' : 'var(--text-secondary)' }}
               >
                 {component.icon}
               </div>
@@ -336,7 +363,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
       {/* Figma-style bottom center toolbar */}
       {!activeDrawer && (
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-          <ThemedContainer variant="panel" className="rounded-2xl shadow-lg p-2">
+          <ThemedContainer data-editor-toolbox-floating variant="panel" className="rounded-2xl shadow-lg p-2">
             <div className="flex items-center gap-1">
               {sections.map((section) => (
                 <Tooltip
@@ -383,7 +410,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
        {/* Quick Section Switcher (when drawer is open) */}
         {activeDrawer && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-            <ThemedContainer variant="panel" className="rounded-2xl shadow-lg p-2">
+            <ThemedContainer data-editor-toolbox-floating variant="panel" className="rounded-2xl shadow-lg p-2">
               <div className="flex items-center gap-1">
                 {sections.map((section) => (
                   <Tooltip

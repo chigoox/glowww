@@ -26,9 +26,11 @@ import EditorLayers from '../Components/editor/EditorLayers';
 import { Form, FormInputDropArea } from '../Components/user/Advanced/Form';
 import {Carousel} from '../Components/user/Media/Carousel';
 import { NavBar, NavItem } from '../Components/user/Nav/NavBar';
+import { SelectOutlined, DragOutlined } from '@ant-design/icons';
 import { Flex } from 'antd';
 import { Root } from '../Components/core/Root';
 import { MultiSelectProvider } from '../Components/utils/context/MultiSelectContext';
+import { SelectDropProvider, useSelectDrop } from '../Components/utils/context/SelectDropContext';
 
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
@@ -262,9 +264,66 @@ export default function App() {
     }}> 
       <EditorSettingsProvider>
         <MultiSelectProvider>
-          <EditorLayout />
+          <SelectDropProvider>
+            <EditorLayout />
+            <SelectDropToggle />
+          </SelectDropProvider>
         </MultiSelectProvider>
       </EditorSettingsProvider>
     </Editor>
   );
+}
+
+// Minimal floating toggle for this editor variant
+function SelectDropToggle() {
+  try {
+    const { selectDropMode, setSelectDropMode, isMobile } = useSelectDrop();
+    const [style, setStyle] = useState({ left: 16, top: null, size: 40, ready: false });
+
+    useEffect(() => {
+      if (isMobile) return;
+      let attempts = 0;
+      const gap = 8;
+      const measure = () => {
+        const toolbox = document.querySelector('[data-editor-toolbox-floating]');
+        if (toolbox) {
+          const rect = toolbox.getBoundingClientRect();
+          const size = Math.max(28, Math.round(rect.height * 0.6));
+          setStyle({
+            left: Math.round(rect.left - size - gap),
+            top: Math.round(rect.top + (rect.height / 2) - (size / 2)),
+            size,
+            ready: true
+          });
+        } else if (attempts < 25) {
+          attempts++;
+          setTimeout(measure, 120);
+        }
+      };
+      measure();
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }, [isMobile]);
+
+    if (isMobile) return null;
+    const commonStyle = style.top != null ? {
+      position: 'fixed', left: style.left, top: style.top,
+      width: style.size, height: style.size, borderRadius: style.size / 2, zIndex: 60
+    } : {
+      position: 'fixed', left: style.left, bottom: 96,
+      width: style.size, height: style.size, borderRadius: style.size / 2, zIndex: 60
+    };
+
+    return (
+      <button
+        onClick={() => setSelectDropMode(!selectDropMode)}
+        aria-label={selectDropMode ? 'Disable tap to place mode' : 'Enable tap to place mode'}
+        style={commonStyle}
+        className={`shadow-lg flex items-center justify-center border transition-all text-[11px] font-medium ${selectDropMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+        title="Toggle Select & Drop Mode"
+      >
+        {selectDropMode ? <SelectOutlined className="text-base" /> : <DragOutlined className="text-base" />}
+      </button>
+    );
+  } catch { return null; }
 }

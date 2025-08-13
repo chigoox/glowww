@@ -8,7 +8,7 @@ import { Spin, message, Button, Space, Typography, Alert, Switch, Dropdown, Tool
 import { EyeOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined, HistoryOutlined, EditOutlined, 
          SaveOutlined, SettingOutlined, ImportOutlined, ExportOutlined, BgColorsOutlined, HeatMapOutlined,
          BoxPlotOutlined, MenuOutlined, EyeInvisibleOutlined, GlobalOutlined, ClockCircleOutlined, 
-         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined } from '@ant-design/icons';
+         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined, SelectOutlined, DragOutlined } from '@ant-design/icons';
 
 // Import existing editor components
 import { Toolbox } from '../../Components/editor/ToolBox';
@@ -33,6 +33,7 @@ import { NavBar, NavItem } from '../../Components/user/Nav/NavBar';
 import { Root } from '../../Components/core/Root';
 import { MultiSelectProvider } from '../../Components/utils/context/MultiSelectContext';
 import { EditorSettingsProvider } from '../../Components/utils/context/EditorSettingsContext';
+import { SelectDropProvider, useSelectDrop } from '../../Components/utils/context/SelectDropContext';
 import EditorSettingsModal from '../../Components/ui/EditorSettingsModal';
 import { useDropPositionCorrection } from '../../Components/utils/drag-drop/useDropPositionCorrection';
 import { useContainerSwitchingFeedback } from '../../Components/utils/drag-drop/useContainerSwitchingFeedback';
@@ -2061,41 +2062,39 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
           </div>
 
         {/* Floating Left Sidebar - Toolbox & Layers */}
-        {(() => {
-          const shouldShowToolbox = enabled && isInitialized;
-          return shouldShowToolbox ;
-        })() && (
-          <div className='absolute flex-shrink-0 z-30 left-4 top-4 bottom-4 w-64 min-h-64 max-h-96'>
-            {!isLeftPanelMinimized && <div className=" bg-white border border-gray-200 shadow-lg rounded-lg max-h-96  flex flex-col">
-            {/* Minimize Button */}
-            <div className="flex justify-between items-center p-2 border-b border-gray-200">
-              <Tooltip title="Minimize Layers Panel">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<MinusOutlined />}
-                  onClick={() => setIsLeftPanelMinimized(true)}
-                  className="text-gray-500 hover:text-gray-700"
-                />
-              </Tooltip>
-              <span className="text-sm font-medium text-gray-700 flex items-center">
-                <LayoutOutlined className="mr-2" />
-                Layers
-              </span>
-            </div>
-
-            
-            <div className="h-full max-h-96 flex-1 min-h-0">
-              <EditorLayers />
-            </div>
-          </div>}
-          <Toolbox 
+        {enabled && isInitialized && (
+          <>
+            {!isLeftPanelMinimized && (
+              <div className="absolute flex-shrink-0 z-30 left-4 top-4 bottom-auto w-64 max-h-96 bg-white border border-gray-200 shadow-lg rounded-lg flex flex-col">
+                {/* Minimize Button */}
+                <div className="flex justify-between items-center p-2 border-b border-gray-200">
+                  <Tooltip title="Minimize Layers Panel">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<MinusOutlined />}
+                      onClick={() => setIsLeftPanelMinimized(true)}
+                      className="text-gray-500 hover:text-gray-700"
+                    />
+                  </Tooltip>
+                  <span className="text-sm font-medium text-gray-700 flex items-center">
+                    <LayoutOutlined className="mr-2" />
+                    Layers
+                  </span>
+                </div>
+                <div className="h-full max-h-80 flex-1 min-h-0">
+                  <EditorLayers />
+                </div>
+              </div>
+            )}
+            {/* Toolbox always rendered (it handles its own fixed positioning) */}
+            <Toolbox
               activeDrawer={activeDrawer}
               setActiveDrawer={setActiveDrawer}
               openMenuNodeId={openMenuNodeId}
               setOpenMenuNodeId={setOpenMenuNodeId}
             />
-          </div>
+          </>
         )}
 
         {/* Floating Right Sidebar - Style Menu */}
@@ -2275,7 +2274,11 @@ function SiteEditor() {
     > 
       <EditorSettingsProvider>
         <MultiSelectProvider>
-          <SiteEditorLayout siteId={siteId} siteData={site} siteContent={siteContent} />
+          <SelectDropProvider>
+            <SiteEditorLayout siteId={siteId} siteData={site} siteContent={siteContent} />
+            {/* Desktop floating toggle for Select/Drop mode */}
+            <SelectDropToggle />
+          </SelectDropProvider>
         </MultiSelectProvider>
       </EditorSettingsProvider>
     </Editor>
@@ -2298,4 +2301,58 @@ export default function SiteEditorPage() {
       <SiteEditor />
     </Suspense>
   );
+}
+
+// Floating desktop toggle button component
+function SelectDropToggle() {
+  try {
+    const { selectDropMode, setSelectDropMode, isMobile } = useSelectDrop();
+    const [style, setStyle] = React.useState({ left: 16, top: null, size: 40, ready: false });
+
+    React.useEffect(() => {
+      if (isMobile) return;
+      let attempts = 0;
+      const gap = 8;
+      const measure = () => {
+        const toolbox = document.querySelector('[data-editor-toolbox-floating]');
+        if (toolbox) {
+          const rect = toolbox.getBoundingClientRect();
+          const size = Math.max(28, Math.round(rect.height * 0.6));
+            setStyle({
+              left: Math.round(rect.left - size - gap),
+              top: Math.round(rect.top + (rect.height / 2) - (size / 2)),
+              size,
+              ready: true
+            });
+        } else if (attempts < 25) {
+          attempts++;
+          setTimeout(measure, 120);
+        }
+      };
+      measure();
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }, [isMobile]);
+
+    if (isMobile) return null;
+    const commonStyle = style.top != null ? {
+      position: 'fixed', left: style.left, top: style.top,
+      width: style.size, height: style.size, borderRadius: style.size / 2, zIndex: 60
+    } : {
+      position: 'fixed', left: style.left, bottom: 96,
+      width: style.size, height: style.size, borderRadius: style.size / 2, zIndex: 60
+    };
+
+    return (
+      <button
+        onClick={() => setSelectDropMode(!selectDropMode)}
+        aria-label={selectDropMode ? 'Disable tap to place mode' : 'Enable tap to place mode'}
+        style={commonStyle}
+        className={`shadow-lg flex items-center justify-center border transition-all text-[11px] font-medium ${selectDropMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+        title="Toggle Select & Drop Mode"
+      >
+        {selectDropMode ? <SelectOutlined className="text-base" /> : <DragOutlined className="text-base" />}
+      </button>
+    );
+  } catch { return null; }
 }

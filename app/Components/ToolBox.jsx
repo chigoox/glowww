@@ -46,11 +46,15 @@ import { FormInput } from "./user/Input";
 import { Form } from "./user/Advanced/Form";
 import {Carousel} from "./user/Media/Carousel";
 import { NavBar } from "./user/Nav/NavBar";
+import { useSelectDrop } from './utils/context/SelectDropContext';
 
 export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
   const { connectors } = useEditor();
   const { correctPosition } = useDropPositionCorrection();
   const toolboxRef = useRef(null);
+  const selectDrop = (() => { try { return useSelectDrop(); } catch { return null; } })();
+  const selectMode = selectDrop?.selectDropMode;
+  const armedComponent = selectDrop?.armedComponent;
 
   // Create refs for each component
   const boxRef = useRef(null);
@@ -254,11 +258,20 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
 
   const closeDrawer = () => {
     setActiveDrawer(null);
+    if (selectMode && selectDrop?.armedComponent) {
+      try { selectDrop.setArmedComponent(null); } catch {}
+    }
   };
 
   const switchDrawer = (sectionId) => {
     setActiveDrawer(sectionId);
   };
+
+  useEffect(() => {
+    if (!activeDrawer && selectMode && selectDrop?.armedComponent) {
+      try { selectDrop.setArmedComponent(null); } catch {}
+    }
+  }, [activeDrawer, selectMode, selectDrop]);
 
   const renderDrawerContent = (section) => {
     return (
@@ -273,9 +286,14 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
           >
             <div
               ref={component.ref}
-              className="w-12 h-12 p-0 border border-gray-200 rounded-xl hover:border-gray-300 hover:bg-gray-50 transition-all cursor-grab active:cursor-grabbing group bg-white flex items-center justify-center toolbox-component"
+              className={`w-12 h-12 p-0 border rounded-xl transition-all group flex items-center justify-center toolbox-component ${selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${armedComponent===component.name ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'}`}
               style={{ userSelect: 'none' }}
               data-component={component.name}
+              onClick={() => {
+                if (selectMode && selectDrop) {
+                  if (armedComponent === component.name) selectDrop.setArmedComponent(null); else selectDrop.setArmedComponent(component.name);
+                }
+              }}
             >
               <div className="text-lg text-gray-600 group-hover:text-gray-800 transition-colors">
                 {component.icon}
@@ -304,7 +322,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
       {/* Figma-style bottom center toolbar */}
       {!activeDrawer && (
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
+          <div data-editor-toolbox-floating className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
             <div className="flex items-center gap-1">
               {sections.map((section) => (
                 <Tooltip
@@ -338,7 +356,7 @@ export const Toolbox = ({activeDrawer, setActiveDrawer}) => {
        {/* Quick Section Switcher (when drawer is open) */}
         {activeDrawer && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
+            <div data-editor-toolbox-floating className="bg-white border border-gray-200 rounded-2xl shadow-lg p-2">
               <div className="flex items-center gap-1">
                 {sections.map((section) => (
                   <Tooltip

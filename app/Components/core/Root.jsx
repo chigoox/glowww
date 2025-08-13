@@ -206,6 +206,8 @@ placeContent,
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [viewportSize, setViewportSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1200, height: typeof window !== 'undefined' ? window.innerHeight : 800 });
+  // Track full content height of the root canvas so overlays (guides/safe area) span entire scrollable area
+  const [rootContentHeight, setRootContentHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
 
   useEffect(() => {
 //setid props for the root element
@@ -280,6 +282,41 @@ placeContent,
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Measure & observe root content height so snap guides extend the full length (not just viewport)
+  useEffect(() => {
+    const el = RootRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      // Use max of scrollHeight and bounding rect to account for overflow/expansion
+      const h = Math.max(el.scrollHeight, el.getBoundingClientRect().height, window.innerHeight);
+      setRootContentHeight(h);
+    };
+
+    measure();
+
+    // Observe size changes
+    let resizeObserver;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => measure());
+      resizeObserver.observe(el);
+    }
+
+    // Observe DOM mutations that could change height
+    const mutationObserver = new MutationObserver(() => measure());
+    mutationObserver.observe(el, { childList: true, subtree: true, attributes: true, characterData: false });
+
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+
+    return () => {
+      if (resizeObserver) resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
   }, []);
 
   useEffect(() => {
@@ -624,8 +661,9 @@ placeContent,
       {!hideEditorUI && (
         <SnapGridOverlay
           canvasRef={RootRef}
+          // Width still tied to viewport; height uses full content so guides span entire scrollable canvas
           canvasWidth={viewportSize.width}
-          canvasHeight={viewportSize.height}
+          canvasHeight={rootContentHeight}
         />
       )}
       
