@@ -1,4 +1,8 @@
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ESM does not provide __dirname; derive it from import.meta.url
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Next.js configuration
