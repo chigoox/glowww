@@ -7,7 +7,7 @@ import { signOut } from '../../lib/auth';
 import { PRICING_PLANS, createCheckoutSession, createSetupIntent, setDefaultPaymentMethod, getSubscriptionStatus, cancelSubscriptionAtPeriodEnd, resumeSubscription, switchSubscriptionPlan, startStripeConnectOnboarding, getStripeConnectedAccount, disconnectStripeAccount } from '../../lib/stripe';
 import { startPaypalOnboarding } from '../../lib/paypal';
 import { updateUserData, checkUsernameExists } from '../../lib/auth';
-import { auth } from '../../lib/firebase';
+import { auth } from '@/lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 import { loadStripe as loadStripeJs } from '@stripe/stripe-js';
@@ -31,7 +31,8 @@ import {
   Row,
   Col,
   Progress,
-  Alert
+  Alert,
+  Table
   ,
   theme,
   Tabs,
@@ -68,6 +69,10 @@ const { Title, Text, Paragraph } = Typography;
 export default function Dashboard() {
   const { token } = theme.useToken();
   const { user, userData, loading: authLoading } = useAuth();
+  // Seller orders state (multi-tenant ecommerce)
+  const [sellerOrders, setSellerOrders] = useState([]);
+  const [sellerOrdersLoading, setSellerOrdersLoading] = useState(false);
+  const [sellerOrdersCursor, setSellerOrdersCursor] = useState(null);
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState(null);
@@ -127,6 +132,30 @@ export default function Dashboard() {
   const [metricsDays, setMetricsDays] = useState(30);
   const [activeTab, setActiveTab] = useState('overview');
   const [isDark, setIsDark] = useState(false);
+
+  // Load recent seller orders (paginated) when overview tab active
+  useEffect(() => {
+    if(!user?.uid) return;
+    if(activeTab !== 'overview') return;
+    let cancelled = false;
+    const load = async (append=false) => {
+      try {
+        setSellerOrdersLoading(true);
+        const params = new URLSearchParams({ sellerUserId: user.uid, limit: '10' });
+        if(append && sellerOrdersCursor) params.set('cursor', String(sellerOrdersCursor));
+        const res = await fetch(`/api/seller/orders?${params.toString()}`);
+        const json = await res.json();
+        if(cancelled) return;
+        if(res.ok && json.ok) {
+          setSellerOrders(prev => append ? [...prev, ...json.orders] : json.orders);
+          setSellerOrdersCursor(json.nextCursor || null);
+        }
+      } catch(e) { if(!cancelled) console.warn('load seller orders failed', e); }
+      finally { if(!cancelled) setSellerOrdersLoading(false); }
+    };
+    load(false);
+    return () => { cancelled = true; };
+  }, [user?.uid, activeTab]);
 
   // Fetch site analytics when the Analytics modal opens
   useEffect(() => {
@@ -622,6 +651,7 @@ export default function Dashboard() {
   const siteUsage = subscription ? subscription.usage.sitesCount : sites.length;
   const maxSites = subscription ? subscription.limits.maxSites : currentPlan.maxSites;
   const usagePercentage = maxSites === -1 ? 0 : (siteUsage / maxSites) * 100;
+  const atSiteLimit = maxSites !== -1 && siteUsage >= maxSites;
 
   // Debug logging for admin users
   if (subscription?.tier === 'admin') {
@@ -647,7 +677,7 @@ export default function Dashboard() {
         }
       }}
     >
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 124px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
     <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -901,10 +931,11 @@ export default function Dashboard() {
               <Button 
                 type="primary" 
                 icon={<PlusOutlined />}
-                onClick={() => setIsCreateModalVisible(true)}
+                onClick={() => atSiteLimit ? showUpgradeModalHandler('Upgrade to create more sites') : setIsCreateModalVisible(true)}
                 size="large"
+                disabled={atSiteLimit}
               >
-                Create New Site
+                {atSiteLimit ? 'Site Limit Reached' : 'Create New Site'}
               </Button>
             </Col>
             <Col>
@@ -931,17 +962,25 @@ export default function Dashboard() {
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
-              onClick={() => setIsCreateModalVisible(true)}
+              disabled={atSiteLimit}
+              onClick={() => atSiteLimit ? showUpgradeModalHandler('Upgrade to create more sites') : setIsCreateModalVisible(true)}
             >
-              Create New Site
+              {atSiteLimit ? 'Site Limit Reached' : 'Create New Site'}
             </Button>
           </div>
           {sites.length === 0 ? (
             <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No sites yet">
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalVisible(true)}>
-                  Create Your First Site
-                </Button>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={atSiteLimit ? 'Free plan site limit reached' : 'No sites yet'}>
+                {!atSiteLimit && (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalVisible(true)}>
+                    Create Your First Site
+                  </Button>
+                )}
+                {atSiteLimit && (
+                  <Button type="primary" icon={<CrownOutlined />} onClick={() => showUpgradeModalHandler('Upgrade to create more sites')}>
+                    Upgrade to add sites
+                  </Button>
+                )}
               </Empty>
             </Card>
           ) : (
@@ -1388,11 +1427,16 @@ export default function Dashboard() {
                 type="primary" 
                 htmlType="submit"
                 loading={processingCreate}
+                disabled={atSiteLimit}
+                onClick={(e)=>{ if(atSiteLimit){ e.preventDefault(); showUpgradeModalHandler('Upgrade to create more sites'); } }}
               >
-                Create Site
+                {atSiteLimit ? 'Upgrade to add more' : 'Create Site'}
               </Button>
             </Col>
           </Row>
+          {atSiteLimit && (
+            <Alert style={{ marginTop: 16 }} type="warning" showIcon message="Free plan site limit reached" description="Upgrade your plan to create additional sites." />
+          )}
         </Form>
       </Modal>
 
@@ -1991,6 +2035,41 @@ export default function Dashboard() {
         user={user}
         onSiteUpdated={handleSiteUpdated}
       />
+      {/* Seller Orders (Overview) */}
+      {activeTab === 'overview' && (
+        <Card style={{ marginTop: 24, borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }} title="Recent Orders" extra={<Button size="small" disabled={!sellerOrdersCursor || sellerOrdersLoading} loading={sellerOrdersLoading} onClick={()=>{
+          // trigger pagination load
+          (async()=>{
+            try {
+              setSellerOrdersLoading(true);
+              const params = new URLSearchParams({ sellerUserId: user.uid, limit: '10' });
+              if(sellerOrdersCursor) params.set('cursor', String(sellerOrdersCursor));
+              const res = await fetch(`/api/seller/orders?${params.toString()}`);
+              const json = await res.json();
+              if(res.ok && json.ok) {
+                setSellerOrders(prev => [...prev, ...json.orders]);
+                setSellerOrdersCursor(json.nextCursor || null);
+              }
+            } catch(e){ console.warn(e); } finally { setSellerOrdersLoading(false); }
+          })();
+        }}>Load more</Button>}>
+          <Table
+            size="small"
+            rowKey="id"
+            dataSource={sellerOrders}
+            loading={sellerOrdersLoading}
+            pagination={false}
+            locale={{ emptyText: sellerOrdersLoading ? 'Loading...' : 'No orders yet' }}
+            columns={[
+              { title:'Order', dataIndex:'id', key:'id', width:160, render:(v)=> <code style={{ fontSize:12 }}>{v}</code> },
+              { title:'Status', dataIndex:'status', key:'status', width:110, render:(v)=> <Tag color={v==='paid'?'green': v==='pending'?'gold': v==='refunded'?'blue':'red'}>{v}</Tag> },
+              { title:'Total', dataIndex:'total', key:'total', width:110, render:(v,r)=> `${(v/100).toFixed(2)} ${r.currency||'USD'}` },
+              { title:'Discount', dataIndex:'discountAmount', key:'discountAmount', width:110, render:(v)=> v ? (v/100).toFixed(2) : '0.00' },
+              { title:'Created', dataIndex:'createdAt', key:'createdAt', render:(v)=> v ? new Date(v).toLocaleString() : '' }
+            ]}
+          />
+        </Card>
+      )}
   </div>
   </ConfigProvider>
   );

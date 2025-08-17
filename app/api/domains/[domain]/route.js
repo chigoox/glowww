@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 // NOTE: This file is nested (app/api/domains/[domain]/), so we need four levels up to reach /lib
 import { removeDomain, getDomain } from '../../../../lib/domains';
-import { db } from '../../../../lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 
 export const runtime = 'nodejs';

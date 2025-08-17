@@ -8,6 +8,9 @@ import dynamic from 'next/dynamic';
 import ContextMenu from "../../utils/context/ContextMenu";
 import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import useEditorDisplay from "../../utils/context/useEditorDisplay";
+import ResizeHandles from "../support/ResizeHandles";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
+import SnapPositionHandle from "../../editor/SnapPositionHandle";
 
 // Dynamically import the Editor to avoid SSR issues
 const Editor = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
@@ -70,11 +73,13 @@ export const Paragraph = ({
     selected: node.events.selected,
     parent: node.data.parent,
   }));
-  const { actions } = useEditor();
+  const { actions: editorActions, query } = useEditor();
+  // Snap system (selection + snapping) – mirrors Box/Text pattern
+  const { connectors: { snapConnect } } = useCraftSnap(nodeId);
   const { hideEditorUI } = useEditorDisplay();
 
   const paragraphRef = useRef(null);
-  const dragRef = useRef(null);
+  const dragRef = useRef(null); // MOVE handle ref (Craft container drag)
   const editorRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
@@ -115,21 +120,20 @@ export const Paragraph = ({
     }
   }, [content, isEditing]);
 
+  // Establish connectors: root uses snapConnect (selection + snapping), MOVE handle uses drag()
   useEffect(() => {
-    const connectElements = () => {
+    const establish = () => {
       if (paragraphRef.current) {
-        // Connect both selection and dragging to the main element
-        connect(drag(paragraphRef.current));
+        snapConnect(paragraphRef.current);
+      }
+      if (dragRef.current) {
+        drag(dragRef.current);
       }
     };
-
-    // Always connect on mount and when dependencies change
-    connectElements();
-    
-    // Reconnect when selection state changes
-    const timer = setTimeout(connectElements, 50);
+    establish();
+    const timer = setTimeout(establish, 80); // minor delay to ensure DOM settled
     return () => clearTimeout(timer);
-  }, [connect, drag, isSelected, isClient]);
+  }, [snapConnect, drag, isSelected, isClient]);
 
   // Detect parent changes and reset position properties
   useEffect(() => {
@@ -177,111 +181,6 @@ export const Paragraph = ({
     }
   }, [isSelected, isHovered]);
 
-  // Handle resize start
-  const handleResizeStart = (e, direction) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const rect = paragraphRef.current.getBoundingClientRect();
-    const startWidth = rect.width;
-    const startHeight = rect.height;
-    
-    setIsResizing(true);
-    
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      
-      let newWidth = startWidth;
-      let newHeight = startHeight;
-      
-      // Calculate new dimensions based on resize direction
-      switch (direction) {
-        case 'se': // bottom-right
-          newWidth = startWidth + deltaX;
-          newHeight = startHeight + deltaY;
-          break;
-        case 'sw': // bottom-left
-          newWidth = startWidth - deltaX;
-          newHeight = startHeight + deltaY;
-          break;
-        case 'ne': // top-right
-          newWidth = startWidth + deltaX;
-          newHeight = startHeight - deltaY;
-          break;
-        case 'nw': // top-left
-          newWidth = startWidth - deltaX;
-          newHeight = startHeight - deltaY;
-          break;
-        case 'e': // right edge
-          newWidth = startWidth + deltaX;
-          break;
-        case 'w': // left edge
-          newWidth = startWidth - deltaX;
-          break;
-        case 's': // bottom edge
-          newHeight = startHeight + deltaY;
-          break;
-        case 'n': // top edge
-          newHeight = startHeight - deltaY;
-          break;
-      }
-      
-      // Apply minimum constraints
-      newWidth = Math.max(newWidth, 100);
-      newHeight = Math.max(newHeight, 50);
-      
-      // Update dimensions using Craft.js setProp
-      setProp(props => {
-        props.width = Math.round(newWidth);
-        props.height = Math.round(newHeight);
-      });
-    };
-    
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  // Handle custom drag for position changes
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const currentTop = parseInt(top) || 0;
-    const currentLeft = parseInt(left) || 0;
-    
-    setIsDragging(true);
-    
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      
-      // Update position using Craft.js setProp
-      setProp(props => {
-        props.left = currentLeft + deltaX;
-        props.top = currentTop + deltaY;
-      });
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
 
   // Helper function to process values
   const processValue = (value, property) => {
@@ -377,8 +276,7 @@ export const Paragraph = ({
       ref={(el) => {
         paragraphRef.current = el;
         if (el) {
-          // Immediate connection when element is available
-          connect(drag(el));
+          snapConnect(el);
         }
       }}
       style={{
@@ -398,13 +296,28 @@ export const Paragraph = ({
     >
       {/* Portal controls rendered outside this container to avoid overflow clipping */}
       {isSelected && !isEditing && !hideEditorUI && (
-        <PortalControls
-          boxPosition={boxPosition}
-          dragRef={dragRef}
-          handleDragStart={handleDragStart}
-          handleResizeStart={handleResizeStart}
-          handleEditClick={handleEditClick}
+        
+        <div>
+          <PortalControls
+            boxPosition={boxPosition}
+            dragRef={dragRef}
+            handleEditClick={handleEditClick}
+            nodeId={nodeId}
+            isDragging={isDragging}
+            setIsDragging={setIsDragging}
+          />
+        <ResizeHandles
+          boxPosition={boxPosition} 
+          nodeId={nodeId}
+          targetRef={paragraphRef}
+          editorActions={editorActions}
+          craftQuery={query}
+          minWidth={typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50}
+          minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
+          onResize={updateBoxPosition}
+          onResizeEnd={updateBoxPosition}
         />
+        </div>
       )}
 
       {/* Content display or editor */}
@@ -487,9 +400,10 @@ export const Paragraph = ({
 const PortalControls = ({ 
   boxPosition, 
   dragRef, 
-  handleDragStart, 
-  handleResizeStart,
-  handleEditClick 
+  handleEditClick,
+  nodeId,
+  isDragging,
+  setIsDragging
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -525,6 +439,9 @@ const PortalControls = ({
         {/* Left - MOVE (Craft.js drag) */}
         <div
           ref={dragRef}
+          data-handle-type="move"
+            data-craft-node-id={nodeId}
+            className="move-handle"
           style={{
             background: '#52c41a',
             color: 'white',
@@ -534,7 +451,7 @@ const PortalControls = ({
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '36px',
+            minWidth: '48px',
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
@@ -564,176 +481,34 @@ const PortalControls = ({
         </div>
 
         {/* Right - POS (Custom position drag) */}
-        <div
+        <SnapPositionHandle
+          nodeId={nodeId}
           style={{
             background: '#1890ff',
             color: 'white',
-            padding: '2px',
+            padding: '4px',
             borderRadius: '0 14px 14px 0',
             cursor: 'move',
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            minWidth: '36px',
+            minWidth: '48px',
             justifyContent: 'center',
             transition: 'background 0.2s ease'
           }}
-          onMouseDown={(e) => handleDragStart(e)}
-          title="Drag to change position"
+          onDragStart={() => setIsDragging && setIsDragging(true)}
+          onDragMove={(e, { x, y, snapped }) => {
+            if (Math.random() < 0.05) {
+              console.log(`Paragraph position -> x:${x} y:${y} snapped:${snapped}`);
+            }
+          }}
+          onDragEnd={() => setIsDragging && setIsDragging(false)}
         >
           ↕↔ POS
-        </div>
+        </SnapPositionHandle>
       </div>
 
-      {/* Resize handles */}
-      {/* Top-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'nw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'nw')}
-        title="Resize"
-      />
-
-      {/* Top-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'ne-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'ne')}
-        title="Resize"
-      />
-
-      {/* Bottom-left corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'sw-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'sw')}
-        title="Resize"
-      />
-
-      {/* Bottom-right corner */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width - 4,
-          width: 8,
-          height: 8,
-          background: 'white',
-          border: '2px solid #1890ff',
-          borderRadius: '2px',
-          cursor: 'se-resize',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'se')}
-        title="Resize"
-      />
-
-      {/* Edge resize handles - beautiful semi-transparent style */}
-      {/* Top edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 10,
-          width: 20,
-          height: 8,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 'n-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'n')}
-        title="Resize height"
-      />
-
-      {/* Bottom edge */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top + boxPosition.height - 4,
-          left: boxPosition.left + boxPosition.width / 2 - 10,
-          width: 20,
-          height: 8,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 's-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 's')}
-        title="Resize height"
-      />
-
-      {/* Left edge */}
-      <div
-        style={{
-          position: 'absolute',
-          left: boxPosition.left - 4,
-          top: boxPosition.top + boxPosition.height / 2 - 10,
-          width: 8,
-          height: 20,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 'w-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'w')}
-        title="Resize width"
-      />
-
-      {/* Right edge */}
-      <div
-        style={{
-          position: 'absolute',
-          left: boxPosition.left + boxPosition.width - 4,
-          top: boxPosition.top + boxPosition.height / 2 - 10,
-          width: 8,
-          height: 20,
-          background: 'rgba(24, 144, 255, 0.3)',
-          cursor: 'e-resize',
-          zIndex: 9999,
-          borderRadius: '4px',
-          pointerEvents: 'auto'
-        }}
-        onMouseDown={(e) => handleResizeStart(e, 'e')}
-        title="Resize width"
-      />
+    
     </div>,
     document.body
   );

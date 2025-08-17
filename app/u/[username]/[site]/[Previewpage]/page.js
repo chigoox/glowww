@@ -24,7 +24,7 @@ import { Root } from '../../../../Components/core/Root';
 import { MultiSelectProvider } from '../../../../Components/utils/context/MultiSelectContext';
 import { PagesProvider } from '../../../../Components/utils/context/PagesContext';
 
-import { db } from '../../../../../lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { getSitePages, getPage } from '../../../../../lib/sites';
 

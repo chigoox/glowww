@@ -1,7 +1,7 @@
 // Minimal utilities to satisfy legacy admin components
 'use client'
 import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { db as DATABASE } from '../../lib/firebase';
+import { db as DATABASE } from '@/lib/firebase';
 
 export async function addToDoc(col, id, data) {
   await setDoc(doc(DATABASE, col, id), data, { merge: true });

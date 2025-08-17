@@ -2,6 +2,7 @@
 
 import { AuthProvider } from "../../contexts/AuthContext";
 import { PagesProvider } from "./utils/context/PagesContext";
+import { CartProvider } from "@/contexts/CartContext";
 
 /**
  * Client-side wrapper for providers to prevent hydration mismatch
@@ -11,7 +12,9 @@ export function ClientProviders({ children }) {
   return (
     <AuthProvider>
       <PagesProvider>
-        {children}
+        <CartProvider>
+          {children}
+        </CartProvider>
       </PagesProvider>
     </AuthProvider>
   );

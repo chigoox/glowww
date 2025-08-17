@@ -1,5 +1,5 @@
 'use client'
-
+         
 import React, { useRef, useEffect, useState, useMemo } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { createPortal } from 'react-dom';
@@ -45,8 +45,11 @@ import {
   CompassOutlined,
   InteractionOutlined,
   ThunderboltOutlined,
-  MobileOutlined
+  MobileOutlined,
+  ShoppingCartOutlined
 } from '@ant-design/icons';
+// Use shared Figma-style DragInput for all numeric adjustments
+import { DragInput } from '../../editor/FigmaStyleMenu';
 import pako from 'pako';
 import { 
   Modal, 
@@ -88,6 +91,11 @@ import {
   Statistic,
   Segmented
 } from 'antd';
+import dynamic from 'next/dynamic';
+const NavCartButton = dynamic(() => import('../Cart/NavCartButton'), { ssr: false });
+const CartDrawer = dynamic(() => import('../Cart/CartDrawer'), { ssr: false });
+const CartStickyBar = dynamic(() => import('../Cart/CartStickyBar'), { ssr: false });
+import { useCart } from '@/contexts/CartContext';
 
 // Destructure Typography and other nested components
 const { Text, Title, Paragraph } = Typography;
@@ -115,7 +123,7 @@ const DEFAULT_LAYOUT = {
   margin: { top: 0, right: 0, bottom: 0, left: 0 },
   gap: 16,
   containerPadding: 20,
-  containerMaxWidth: 3000,
+  containerMaxWidth: 900,
   centerContent: false,
   justifyContent: 'space-between',
   alignItems: 'center'
@@ -163,6 +171,16 @@ const DEFAULT_CTA_BUTTON = {
   text: "Get Started",
   action: "/signup"
 };
+
+// Default cart configuration (mirrors CraftJS default props) so component logic always has a shape
+const DEFAULT_CART = {
+  enabled: true,
+  trigger: { placement: 'navbar', icon: 'shopping-cart', showBadge: true, badgeMode: 'count', iconSize: 20 },
+  drawer: { side: 'right', widthDesktop: 420, openOnAdd: true },
+  content: { title: 'Your cart', emptyTitle: 'Your cart is empty', emptySubtitle: 'Keep exploring to find something you love.', showPromo: true, showNotes: false, crossSell: true },
+  style: { bg: '#ffffff', text: '#222', border: '#f0f0f0', radius: '16px', thumbShape: 'rounded', shadow: 'lg' },
+  behavior: { mobileSticky: true }
+};
 const FONT_FAMILIES = [
   { label: 'Arial', value: 'Arial, sans-serif' },
   { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
@@ -184,6 +202,10 @@ const FONT_FAMILIES = [
 // Helper function to get pages from project data and build navigation
 const getPagesFromProject = (navMode = 'top-level') => {
   try {
+    // SSR guard: during server render, skip accessing window/localStorage
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+      return [ { id: 1, name: 'Home', path: '/', children: [] } ];
+    }
     // Helper function to decompress data (same as in useSaveOperations)
     const decompressData = (compressedString) => {
       try {
@@ -319,6 +341,12 @@ const formatPageName = (pageName) => {
     .join(' ');
 };
 
+// Removed local DragInput/FigmaSlider in favor of shared DragInput import
+
+// Safe hook wrapper: allows NavBar to render even if provider missing (logs warning)
+let useCartSafe = () => {
+  try { return useCart(); } catch { console.warn('NavBar: CartProvider not found in tree'); return null; }
+};
 // NavItem Component using AntD
 export const NavItem = ({ 
   item, 
@@ -726,23 +754,25 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
       title={
         <Space>
           <SettingOutlined style={{ color: '#1890ff' }} />
-          <Typography.Title level={4} style={{ margin: 0, color: '#262626' }}>
+          <h1 className="text-sm" style={{ margin: 0, color: '#262626' }}>
             NavBar Configuration
-          </Typography.Title>
+          </h1>
         </Space>
-      }
-      open={visible}
-      onClose={onClose}
-      width={680}
+  }
+  open={visible}
+  onClose={onClose}
+  width={400}
       placement="right"
       destroyOnClose={true}
       styles={{
         header: {
-          borderBottom: '1px solid #f0f0f0',
-          paddingBottom: '16px'
+          borderBottom: '1px solid #eef0f2',
+          paddingBottom: '12px',
+          background: '#fff'
         },
         body: {
-          padding: 0
+          padding: 4,
+          background: '#f7f8fa'
         }
       }}
       extra={
@@ -763,8 +793,50 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
         </Space>
       }
     >
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        {/* Inline style override for a more Figma-like aesthetic */}
+        <style>{`
+          .modern-nav-settings .ant-tabs-left > .ant-tabs-nav {min-width:110px;background:#fff;border-right:1px solid #eef0f2;padding:4px 0;}
+            .modern-nav-settings .ant-tabs-left > .ant-tabs-nav .ant-tabs-tab {margin:0;padding:5px 10px;border-radius:0;font-weight:500;color:#5f6368;font-size:12px;}
+            .modern-nav-settings .ant-tabs-left > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {margin-top:2px;}
+          .modern-nav-settings .ant-tabs-left > .ant-tabs-nav .ant-tabs-tab-active {background:#eef6ff;color:#1677ff;font-weight:600;}
+          .modern-nav-settings .ant-tabs-ink-bar {display:none;}
+          .modern-nav-settings .ant-tabs-content-holder {overflow:hidden;}
+          .modern-nav-settings .ant-card {border:1px solid #eceef1;border-radius:8px;background:#ffffff;} 
+          .modern-nav-settings .ant-card-head {border-bottom:1px solid #f2f4f6;min-height:30px;padding:0 6px;} 
+          .modern-nav-settings .ant-card-head-title {padding:6px 0;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:#6b7075;} 
+          .modern-nav-settings .ant-collapse {background:transparent;} 
+          .modern-nav-settings .ant-collapse-item {border:1px solid #e6e9ec !important;border-radius:6px;margin-bottom:8px;overflow:hidden;background:#ffffff;} 
+          .modern-nav-settings .ant-collapse-content {border-top:1px solid #f0f2f5;} 
+          .modern-nav-settings .section-scroll {height:calc(100vh - 140px);overflow-y:auto;padding:8px 10px 14px;background:linear-gradient(180deg,#fafbfc,#f7f8fa);} 
+          .modern-nav-settings .prop-grid-label {font-size:10px;font-weight:600;letter-spacing:.4px;color:#7a7f85;text-transform:uppercase;margin-bottom:3px;display:block;} 
+          .modern-nav-settings .group-label {font-size:9px;font-weight:600;letter-spacing:.6px;color:#9aa0a6;text-transform:uppercase;margin:4px 0 6px;display:block;} 
+          /* Compact form spacing */
+          .modern-nav-settings .ant-form-item {margin-bottom:8px;}
+          .modern-nav-settings .ant-form-item-label > label {font-size:11px;}
+          /* Make rows wrap for narrow width */
+          .modern-nav-settings .ant-row {flex-wrap:wrap; row-gap:8px;}
+          .modern-nav-settings .ant-row .ant-col {padding-inline:4px;}
+          /* Ensure selects & inputs fill width */
+          .modern-nav-settings .ant-select, .modern-nav-settings .ant-input, .modern-nav-settings .ant-input-number, .modern-nav-settings .ant-segmented,
+          .modern-nav-settings .ant-tree, .modern-nav-settings .ant-radio-group {width:100%;}
+          .modern-nav-settings .ant-input-group {width:100%;}
+          .modern-nav-settings .ant-space-compact-block {display:flex;flex-wrap:wrap;}
+          /* DragInput adjustments */
+          .modern-nav-settings .ant-input-number {padding:0 4px;}
+          /* Prevent horizontal scroll */
+          .modern-nav-settings {overflow:hidden;}
+          /* Grid-like two column areas become responsive */
+          .modern-nav-settings .responsive-pair {display:flex;flex-wrap:wrap;gap:6px;}
+          .modern-nav-settings .responsive-pair > * {flex:1 1 130px;}
+          @media (max-width: 360px){
+            .modern-nav-settings .ant-tabs-left > .ant-tabs-nav {min-width:95px;}
+            .modern-nav-settings .ant-card-head-title {font-size:10px;}
+          }
+        `}</style>
         <Tabs 
+          className="modern-nav-settings"
+          tabPosition="left"
           activeKey={activeTab} 
           onChange={setActiveTab}
           type="card"
@@ -790,12 +862,55 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                 </Space>
               ),
               children: (
-                <div style={{ padding: '24px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                <div style={{ padding: '10px 12px 14px', height: 'calc(100vh - 190px)', overflowY: 'auto' }}>
                   <Collapse 
                     defaultActiveKey={['positioning', 'spacing']}
                     ghost
                     expandIconPosition="end"
                     items={[
+                      {
+                        key: 'global-navbar',
+                        label: (
+                          <Space>
+                            <GlobalOutlined />
+                            <span style={{ fontWeight: 500 }}>Global Navbar</span>
+                          </Space>
+                        ),
+                        children: (
+                          <Card size="small" style={{ marginBottom: 16 }}>
+                            <Form layout="vertical" size="small">
+                              <Form.Item label="Use this NavBar globally">
+                                <Switch
+                                  checked={navBar.isGlobalNavbar === true}
+                                  onChange={(val) => {
+                                    updateNavBarSetting('isGlobalNavbar', val);
+                                    try {
+                                      // Store hint in localStorage for PageManager / project settings to pick up
+                                      const activeProjectName = localStorage.getItem('glow_active_project');
+                                      if (activeProjectName) {
+                                        const key = `glow_global_navbar_flag_${activeProjectName}`;
+                                        if (val) {
+                                          localStorage.setItem(key, 'true');
+                                        } else {
+                                          localStorage.removeItem(key);
+                                        }
+                                      }
+                                    } catch (e) {
+                                      console.warn('Global navbar flag storage failed', e);
+                                    }
+                                  }}
+                                />
+                              </Form.Item>
+                              <Alert
+                                type={navBar.isGlobalNavbar ? 'success' : 'info'}
+                                showIcon
+                                message={navBar.isGlobalNavbar ? 'This NavBar is marked for global use.' : 'Toggle to mark this NavBar design for global use via project settings.'}
+                                description="Project Settings will inject a global navbar when enabled. Marking this helps identify which design to sync."
+                              />
+                            </Form>
+                          </Card>
+                        )
+                      },
                       {
                         key: 'positioning',
                         label: (
@@ -826,6 +941,27 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                   <Select
                                     value={navBar.logoPosition}
                                     onChange={(value) => updateNavBarSetting('logoPosition', value)}
+                                    options={[
+                                      { value: 'left', label: 'Left' },
+                                      { value: 'center', label: 'Center' },
+                                      { value: 'right', label: 'Right' }
+                                    ]}
+                                  />
+                                </Form.Item>
+                              </Col>
+                              <Col span={12}>
+                                <Form.Item label="Safe Area Sides">
+                                  <Switch
+                                    checked={navBar.isSafeArea === true}
+                                    onChange={(val) => updateNavBarSetting('isSafeArea', val)}
+                                  />
+                                </Form.Item>
+                              </Col>
+                              <Col span={12}>
+                                <Form.Item label="Nav Items Position">
+                                  <Select
+                                    value={navBar.navItemsPosition || 'left'}
+                                    onChange={(value) => updateNavBarSetting('navItemsPosition', value)}
                                     options={[
                                       { value: 'left', label: 'Left' },
                                       { value: 'center', label: 'Center' },
@@ -925,287 +1061,68 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                         ),
                         children: (
                           <Card size="small" style={{ marginBottom: 16 }}>
-                            <Descriptions
-                              title="Padding Controls"
-                              size="small"
-                              column={2}
-                              bordered
-                              items={[
-                                {
-                                  key: 'top',
-                                  label: 'Top',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.padding?.top || 12}
-                                        onChange={(value) => handlePaddingUpdate('top', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={paddingLocks.top ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => togglePaddingLock('top')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: paddingLocks.top ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                },
-                                {
-                                  key: 'right',
-                                  label: 'Right',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.padding?.right || 24}
-                                        onChange={(value) => handlePaddingUpdate('right', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={paddingLocks.right ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => togglePaddingLock('right')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: paddingLocks.right ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                },
-                                {
-                                  key: 'bottom',
-                                  label: 'Bottom',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.padding?.bottom || 12}
-                                        onChange={(value) => handlePaddingUpdate('bottom', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={paddingLocks.bottom ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => togglePaddingLock('bottom')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: paddingLocks.bottom ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                },
-                                {
-                                  key: 'left',
-                                  label: 'Left',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.padding?.left || 24}
-                                        onChange={(value) => handlePaddingUpdate('left', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={paddingLocks.left ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => togglePaddingLock('left')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: paddingLocks.left ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                }
-                              ]}
-                            />
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12 }}>
+                              {['top','right','bottom','left'].map(dir => (
+                                <div key={dir} style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                    <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', textTransform:'uppercase', color:'#5f6368' }}>{dir}</span>
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      icon={paddingLocks[dir] ? <LockOutlined /> : <UnlockOutlined />}
+                                      onClick={() => togglePaddingLock(dir)}
+                                      style={{ padding:0, width:22, height:22, color: paddingLocks[dir] ? '#1890ff' : '#bfbfbf' }}
+                                      title={paddingLocks[dir] ? 'Unlock' : 'Lock linked'}
+                                    />
+                                  </div>
+                                  <DragInput
+                                    icon={dir.charAt(0).toUpperCase()}
+                                    value={navBar.layout?.padding?.[dir] || (dir==='left'||dir==='right'?24:12)}
+                                    min={0}
+                                    max={100}
+                                    onChange={(v)=>handlePaddingUpdate(dir, v)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
                             <Divider />
-                            <Descriptions
-                              title="Margin Controls"
-                              size="small"
-                              column={2}
-                              bordered
-                              items={[
-                                {
-                                  key: 'top',
-                                  label: 'Top',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.margin?.top || 0}
-                                        onChange={(value) => handleMarginUpdate('top', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={marginLocks.top ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => toggleMarginLock('top')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: marginLocks.top ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                },
-                                {
-                                  key: 'right',
-                                  label: 'Right',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.margin?.right || 0}
-                                        onChange={(value) => handleMarginUpdate('right', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={marginLocks.right ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => toggleMarginLock('right')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: marginLocks.right ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                },
-                                {
-                                  key: 'bottom',
-                                  label: 'Bottom',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.margin?.bottom || 0}
-                                        onChange={(value) => handleMarginUpdate('bottom', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={marginLocks.bottom ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => toggleMarginLock('bottom')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: marginLocks.bottom ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                },
-                                {
-                                  key: 'left',
-                                  label: 'Left',
-                                  children: (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={0}
-                                        max={100}
-                                        value={navBar.layout?.margin?.left || 0}
-                                        onChange={(value) => handleMarginUpdate('left', value)}
-                                        size="small"
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={marginLocks.left ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={() => toggleMarginLock('left')}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '24px',
-                                          color: marginLocks.left ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                      />
-                                    </div>
-                                  )
-                                }
-                              ]}
-                            />
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12 }}>
+                              {['top','right','bottom','left'].map(dir => (
+                                <div key={dir} style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                    <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', textTransform:'uppercase', color:'#5f6368' }}>{dir} M</span>
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      icon={marginLocks[dir] ? <LockOutlined /> : <UnlockOutlined />}
+                                      onClick={() => toggleMarginLock(dir)}
+                                      style={{ padding:0, width:22, height:22, color: marginLocks[dir] ? '#1890ff' : '#bfbfbf' }}
+                                      title={marginLocks[dir] ? 'Unlock' : 'Lock linked'}
+                                    />
+                                  </div>
+                                  <DragInput
+                                    icon={dir.charAt(0).toUpperCase()}
+                                    value={navBar.layout?.margin?.[dir] || 0}
+                                    min={0}
+                                    max={100}
+                                    onChange={(v)=>handleMarginUpdate(dir, v)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
                             <Divider />
-                            <Row gutter={[16, 16]}>
+                            <Row gutter={[12, 12]}>
                               <Col span={12}>
-                                <Statistic
-                                  title="Items Gap"
-                                  value={navBar.layout?.gap || 16}
-                                  suffix="px"
-                                  valueStyle={{ fontSize: '16px' }}
-                                />
-                                <Slider
-                                  min={0}
-                                  max={50}
-                                  value={navBar.layout?.gap || 16}
-                                  onChange={(value) => updateStyleObject('layout', 'gap', value)}
-                                  tooltip={{ formatter: (val) => `${val}px` }}
-                                />
+                                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                  <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Items Gap</span>
+                                  <DragInput icon="↔" value={navBar.layout?.gap || 16} min={0} max={80} onChange={(value) => updateStyleObject('layout', 'gap', value)} />
+                                </div>
                               </Col>
                               <Col span={12}>
-                                <Statistic
-                                  title="Container Max Width"
-                                  value={navBar.layout?.containerMaxWidth || 3000}
-                                  suffix="px"
-                                  valueStyle={{ fontSize: '16px' }}
-                                />
-                                <Slider
-                                  min={600}
-                                  max={9000}
-                                  step={50}
-                                  value={navBar.layout?.containerMaxWidth || 3000}
-                                  onChange={(value) => updateStyleObject('layout', 'containerMaxWidth', value)}
-                                  tooltip={{ formatter: (val) => `${val}px` }}
-                                />
+                                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                  <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Container Width</span>
+                                  <DragInput icon="⬌" value={navBar.layout?.containerMaxWidth || 900} min={480} max={2400} step={40} onChange={(value) => updateStyleObject('layout', 'containerMaxWidth', value)} />
+                                </div>
                               </Col>
                             </Row>
                             <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
@@ -1221,16 +1138,10 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                 </Space>
                               </Col>
                               <Col span={12}>
-                                <Space direction="vertical" style={{ width: '100%' }}>
-                                  <Text strong>Z-Index</Text>
-                                  <InputNumber
-                                    min={1}
-                                    max={9999}
-                                    value={navBar.zIndex || 1000}
-                                    onChange={(value) => updateNavBarSetting('zIndex', value)}
-                                    style={{ width: '100%' }}
-                                  />
-                                </Space>
+                                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                  <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Z-Index</span>
+                                  <DragInput icon="#" value={navBar.zIndex || 1000} min={1} max={5000} step={1} onChange={(value) => updateNavBarSetting('zIndex', value)} />
+                                </div>
                               </Col>
                             </Row>
                           </Card>
@@ -1250,7 +1161,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                 </Space>
               ),
               children: (
-                <div style={{ padding: '24px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                <div style={{ padding: '12px 14px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                   <Collapse 
                     defaultActiveKey={['logo-settings', 'logo-styling']}
                     ghost
@@ -1398,66 +1309,28 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                               title={<Text strong style={{ color: '#1890ff' }}>Dimensions</Text>}
                               style={{ borderColor: '#e6f7ff' }}
                             >
-                              <Row gutter={[16, 16]}>
+                              <Row gutter={[12, 12]}>
                                 <Col span={12}>
-                                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                                    <Text strong style={{ fontSize: '12px', color: '#666' }}>Width</Text>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={20}
-                                        max={200}
-                                        step={5}
-                                        value={navBar.logo?.width || 40}
-                                        onChange={(value) => handleLogoSizeUpdate('width', value)}
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                        placeholder="Width"
-                                      />
+                                  <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                      <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Logo Width</span>
                                       <Button
                                         type="text"
                                         size="small"
                                         icon={logoSizeLock ? <LockOutlined /> : <UnlockOutlined />}
                                         onClick={toggleLogoSizeLock}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '32px',
-                                          color: logoSizeLock ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                        title={logoSizeLock ? "Unlock to resize independently" : "Lock to resize together"}
+                                        style={{ padding:0, width:24, height:24, color:logoSizeLock?'#1890ff':'#bfbfbf' }}
+                                        title={logoSizeLock ? 'Unlock to resize independently' : 'Lock to resize together'}
                                       />
                                     </div>
-                                  </Space>
+                                    <DragInput icon="W" value={navBar.logo?.width || 40} min={20} max={300} onChange={(value) => handleLogoSizeUpdate('width', value)} />
+                                  </div>
                                 </Col>
                                 <Col span={12}>
-                                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                                    <Text strong style={{ fontSize: '12px', color: '#666' }}>Height</Text>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <InputNumber
-                                        min={20}
-                                        max={200}
-                                        step={5}
-                                        value={navBar.logo?.height || 40}
-                                        onChange={(value) => handleLogoSizeUpdate('height', value)}
-                                        addonAfter="px"
-                                        style={{ width: '100%' }}
-                                        placeholder="Height"
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={logoSizeLock ? <LockOutlined /> : <UnlockOutlined />}
-                                        onClick={toggleLogoSizeLock}
-                                        style={{ 
-                                          padding: '0 4px',
-                                          minWidth: 'auto',
-                                          height: '32px',
-                                          color: logoSizeLock ? '#1890ff' : '#d9d9d9'
-                                        }}
-                                        title={logoSizeLock ? "Unlock to resize independently" : "Lock to resize together"}
-                                      />
-                                    </div>
-                                  </Space>
+                                  <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                    <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Logo Height</span>
+                                    <DragInput icon="H" value={navBar.logo?.height || 40} min={20} max={300} onChange={(value) => handleLogoSizeUpdate('height', value)} />
+                                  </div>
                                 </Col>
                                 <Col span={24}>
                                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -1539,23 +1412,15 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                         style={{ backgroundColor: '#52c41a' }}
                                       />
                                     </div>
-                                    <Slider
-                                      min={0}
-                                      max={20}
-                                      step={1}
+                                    <DragInput
                                       value={navBar.logo?.padding || 0}
-                                      onChange={(value) => updateStyleObject('logo', 'padding', value)}
-                                      tooltip={{ 
-                                        formatter: (val) => `${val}px`,
-                                        placement: 'top'
-                                      }}
-                                      trackStyle={{ backgroundColor: '#52c41a' }}
-                                      handleStyle={{ borderColor: '#52c41a' }}
-                                      marks={{
-                                        0: { label: '0', style: { fontSize: '10px' } },
-                                        10: { label: '10', style: { fontSize: '10px' } },
-                                        20: { label: '20', style: { fontSize: '10px' } }
-                                      }}
+                                      min={0}
+                                      max={40}
+                                      step={1}
+                                      onChange={(v)=>updateStyleObject('logo','padding',v)}
+                                      suffix="px"
+                                      tooltip="Logo padding"
+                                      style={{ width:'100%' }}
                                     />
                                   </Space>
                                 </Col>
@@ -1568,24 +1433,15 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                         style={{ backgroundColor: '#52c41a' }}
                                       />
                                     </div>
-                                    <Slider
-                                      min={0}
-                                      max={100}
-                                      step={1}
+                                    <DragInput
                                       value={navBar.logo?.borderRadius || 0}
-                                      onChange={(value) => updateStyleObject('logo', 'borderRadius', value)}
-                                      tooltip={{ 
-                                        formatter: (val) => val === 100 ? 'Circular' : `${val}px`,
-                                        placement: 'top'
-                                      }}
-                                      trackStyle={{ backgroundColor: '#52c41a' }}
-                                      handleStyle={{ borderColor: '#52c41a' }}
-                                      marks={{
-                                        0: { label: '0', style: { fontSize: '10px' } },
-                                        25: { label: '25', style: { fontSize: '10px' } },
-                                        50: { label: '50', style: { fontSize: '10px' } },
-                                        100: { label: '●', style: { fontSize: '14px' } }
-                                      }}
+                                      min={0}
+                                      max={200}
+                                      step={1}
+                                      onChange={(v)=>updateStyleObject('logo','borderRadius',v)}
+                                      suffix="px"
+                                      tooltip="Logo border radius"
+                                      style={{ width:'100%' }}
                                     />
                                   </Space>
                                 </Col>
@@ -1637,22 +1493,15 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                         style={{ backgroundColor: '#722ed1' }}
                                       />
                                     </div>
-                                    <Slider
+                                    <DragInput
+                                      value={navBar.logo?.borderWidth || 0}
                                       min={0}
                                       max={10}
                                       step={1}
-                                      value={navBar.logo?.borderWidth || 0}
-                                      onChange={(value) => updateStyleObject('logo', 'borderWidth', value)}
-                                      trackStyle={{ backgroundColor: '#722ed1' }}
-                                      handleStyle={{ borderColor: '#722ed1' }}
-                                      marks={{
-                                        0: '0',
-                                        5: '5',
-                                        10: '10'
-                                      }}
-                                      tooltip={{
-                                        formatter: (value) => `${value}px`
-                                      }}
+                                      onChange={(v)=>updateStyleObject('logo','borderWidth',v)}
+                                      suffix="px"
+                                      tooltip="Border width"
+                                      style={{ width:'100%' }}
                                     />
                                   </Space>
                                 </Col>
@@ -1702,7 +1551,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                 </Space>
               ),
               children: (
-                <div style={{ padding: '24px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                <div style={{ padding: '12px 14px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                   <Collapse 
                     defaultActiveKey={['nav-structure', 'nav-styling']}
                     ghost
@@ -1848,19 +1697,10 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                         </Form.Item>
                                       </Col>
                                       <Col span={12}>
-                                        <Statistic
-                                          title="Font Size"
-                                          value={navBar.navItemStyles?.fontSize || 16}
-                                          suffix="px"
-                                          valueStyle={{ fontSize: '16px' }}
-                                        />
-                                        <Slider
-                                          min={12}
-                                          max={28}
-                                          value={navBar.navItemStyles?.fontSize || 16}
-                                          onChange={(value) => updateStyleObject('navItemStyles', 'fontSize', value)}
-                                          tooltip={{ formatter: (val) => `${val}px` }}
-                                        />
+                                        <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                          <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Font Size</span>
+                                          <DragInput icon={<FontSizeOutlined style={{ fontSize:10 }} />} value={navBar.navItemStyles?.fontSize || 16} min={10} max={72} onChange={(v)=>updateStyleObject('navItemStyles','fontSize',v)} />
+                                        </div>
                                       </Col>
                                       <Col span={12}>
                                         <Form.Item label="Text Shadow">
@@ -1945,12 +1785,15 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                               suffix="px"
                                               valueStyle={{ fontSize: '16px' }}
                                             />
-                                            <Slider
-                                              min={12}
-                                              max={32}
+                                            <DragInput
                                               value={navBar.navItemStyles?.iconSize || 16}
-                                              onChange={(value) => updateStyleObject('navItemStyles', 'iconSize', value)}
-                                              tooltip={{ formatter: (val) => `${val}px` }}
+                                              min={8}
+                                              max={64}
+                                              step={1}
+                                              onChange={(v)=>updateStyleObject('navItemStyles','iconSize',v)}
+                                              suffix="px"
+                                              tooltip="Icon size"
+                                              style={{ width:'100%' }}
                                             />
                                           </Col>
                                           <Col span={12}>
@@ -2018,7 +1861,7 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                 </Space>
               ),
               children: (
-                <div style={{ padding: '24px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+                <div style={{ padding: '12px 14px', height: 'calc(100vh - 200px)', overflowY: 'auto' }}>
                   <Collapse 
                     defaultActiveKey={['interactive', 'mobile']}
                     ghost
@@ -2198,13 +2041,14 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                               </Col>
                               <Col span={12}>
                                 <Form.Item label="Transition Duration">
-                                  <Slider
-                                    min={100}
-                                    max={1000}
-                                    step={50}
+                                  <DragInput
                                     value={navBar.transitionDuration || 300}
-                                    onChange={(value) => updateNavBarSetting('transitionDuration', value)}
-                                    tooltip={{ formatter: (val) => `${val}ms` }}
+                                    min={50}
+                                    max={2000}
+                                    step={10}
+                                    onChange={(v)=>updateNavBarSetting('transitionDuration',v)}
+                                    suffix="ms"
+                                    tooltip="Transition duration"
                                   />
                                 </Form.Item>
                               </Col>
@@ -2313,15 +2157,10 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                                 </Form.Item>
                               </Col>
                               <Col span={12}>
-                                <Form.Item label="Mobile Logo Size">
-                                  <Slider
-                                    min={50}
-                                    max={150}
-                                    value={navBar.mobileLogoScale || 100}
-                                    onChange={(value) => updateNavBarSetting('mobileLogoScale', value)}
-                                    tooltip={{ formatter: (val) => `${val}%` }}
-                                  />
-                                </Form.Item>
+                                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                                  <span style={{ fontSize:11, fontWeight:600, letterSpacing:'.5px', color:'#5f6368' }}>Mobile Logo Size %</span>
+                                  <DragInput icon="%" value={navBar.mobileLogoScale || 100} min={25} max={200} onChange={(v)=>updateNavBarSetting('mobileLogoScale', v)} />
+                                </div>
                               </Col>
 
                               <Col span={24}>
@@ -2354,6 +2193,22 @@ const NavBarSettingsModal = ({ visible, onClose, navBar, onUpdate }) => {
                       }
                     ]}
                   />
+                </div>
+              )
+            }
+            ,{
+              key: 'cart',
+              label: (<Space size="small"><ShoppingCartOutlined />Cart</Space>),
+              children: (
+                <div style={{ padding: '12px 14px', height: 'calc(100vh - 200px)', overflowY:'auto' }}>
+                  <Collapse ghost defaultActiveKey={['cart-enable','cart-trigger','cart-drawer','cart-content','cart-style','cart-behavior']} items={[
+                    { key:'cart-enable', label:<Space><CheckOutlined /> Enable</Space>, children:(<Card size="small"><Form layout="vertical" size="small"><Form.Item label="Enable Cart"><Switch checked={navBar.cart?.enabled!==false} onChange={(v)=>onUpdate({...navBar,cart:{...(navBar.cart||{}),enabled:v}})} /></Form.Item></Form></Card>) },
+                    { key:'cart-trigger', label:<Space><AimOutlined /> Trigger</Space>, children:(<Card size="small"><Row gutter={12}><Col span={12}><Form.Item label="Badge Mode"><Select value={navBar.cart?.trigger?.badgeMode||'count'} onChange={(val)=>onUpdate({...navBar,cart:{...navBar.cart,trigger:{...navBar.cart.trigger,badgeMode:val}}})} options={[{value:'count',label:'Count'},{value:'dot',label:'Dot'},{value:'hidden',label:'Hidden'}]} /></Form.Item></Col><Col span={12}><Form.Item label="Icon Size" style={{ display:'flex', flexDirection:'column' }}><DragInput icon={<FontSizeOutlined style={{ fontSize:10 }} />} value={navBar.cart?.trigger?.iconSize||20} min={14} max={48} onChange={(val)=>onUpdate({...navBar,cart:{...navBar.cart,trigger:{...navBar.cart.trigger,iconSize:val}}})} /></Form.Item></Col><Col span={12}><Form.Item label="Show Badge"><Switch checked={navBar.cart?.trigger?.showBadge!==false} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,trigger:{...navBar.cart.trigger,showBadge:v}}})} /></Form.Item></Col></Row></Card>) },
+                    { key:'cart-drawer', label:<Space><LayoutOutlined /> Drawer</Space>, children:(<Card size="small"><Row gutter={12}><Col span={12}><Form.Item label="Side"><Select value={navBar.cart?.drawer?.side||'right'} onChange={(val)=>onUpdate({...navBar,cart:{...navBar.cart,drawer:{...navBar.cart.drawer,side:val}}})} options={[{value:'right',label:'Right'},{value:'left',label:'Left'}]} /></Form.Item></Col><Col span={12}><Form.Item label="Width (px)"><DragInput icon="W" value={navBar.cart?.drawer?.widthDesktop||420} min={280} max={640} onChange={(val)=>onUpdate({...navBar,cart:{...navBar.cart,drawer:{...navBar.cart.drawer,widthDesktop:val}}})} /></Form.Item></Col><Col span={12}><Form.Item label="Open On Add"><Switch checked={navBar.cart?.drawer?.openOnAdd!==false} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,drawer:{...navBar.cart.drawer,openOnAdd:v}}})} /></Form.Item></Col></Row></Card>) },
+                    { key:'cart-content', label:<Space><FontSizeOutlined /> Content</Space>, children:(<Card size="small"><Form layout="vertical" size="small"><Form.Item label="Title"><Input value={navBar.cart?.content?.title||''} onChange={(e)=>onUpdate({...navBar,cart:{...navBar.cart,content:{...navBar.cart.content,title:e.target.value}}})} /></Form.Item><Form.Item label="Empty Title"><Input value={navBar.cart?.content?.emptyTitle||''} onChange={(e)=>onUpdate({...navBar,cart:{...navBar.cart,content:{...navBar.cart.content,emptyTitle:e.target.value}}})} /></Form.Item><Form.Item label="Empty Subtitle"><Input.TextArea rows={2} value={navBar.cart?.content?.emptySubtitle||''} onChange={(e)=>onUpdate({...navBar,cart:{...navBar.cart,content:{...navBar.cart.content,emptySubtitle:e.target.value}}})} /></Form.Item><Row gutter={12}><Col span={8}><Form.Item label="Promo"><Switch checked={navBar.cart?.content?.showPromo!==false} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,content:{...navBar.cart.content,showPromo:v}}})} /></Form.Item></Col><Col span={8}><Form.Item label="Notes"><Switch checked={navBar.cart?.content?.showNotes===true} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,content:{...navBar.cart.content,showNotes:v}}})} /></Form.Item></Col><Col span={8}><Form.Item label="Cross Sell"><Switch checked={navBar.cart?.content?.crossSell!==false} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,content:{...navBar.cart.content,crossSell:v}}})} /></Form.Item></Col></Row></Form></Card>) },
+                    { key:'cart-style', label:<Space><FormatPainterOutlined /> Style</Space>, children:(<Card size="small"><Row gutter={12}><Col span={12}><Form.Item label="BG"><Input type="color" value={navBar.cart?.style?.bg||'#ffffff'} onChange={(e)=>onUpdate({...navBar,cart:{...navBar.cart,style:{...navBar.cart.style,bg:e.target.value}}})} /></Form.Item></Col><Col span={12}><Form.Item label="Text"><Input type="color" value={navBar.cart?.style?.text||'#222222'} onChange={(e)=>onUpdate({...navBar,cart:{...navBar.cart,style:{...navBar.cart.style,text:e.target.value}}})} /></Form.Item></Col><Col span={12}><Form.Item label="Border"><Input type="color" value={navBar.cart?.style?.border||'#f0f0f0'} onChange={(e)=>onUpdate({...navBar,cart:{...navBar.cart,style:{...navBar.cart.style,border:e.target.value}}})} /></Form.Item></Col><Col span={12}><Form.Item label="Radius"><DragInput icon={<BorderOutlined style={{ fontSize:10 }} />} value={parseInt(navBar.cart?.style?.radius)||16} min={0} max={48} onChange={(val)=>onUpdate({...navBar,cart:{...navBar.cart,style:{...navBar.cart.style,radius: typeof val==='number'? `${val}px`:val}}})} /></Form.Item></Col><Col span={12}><Form.Item label="Thumb Shape"><Select value={navBar.cart?.style?.thumbShape||'rounded'} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,style:{...navBar.cart.style,thumbShape:v}}})} options={[{value:'rounded',label:'Rounded'},{value:'square',label:'Square'},{value:'circle',label:'Circle'}]} /></Form.Item></Col><Col span={12}><Form.Item label="Shadow"><Select value={navBar.cart?.style?.shadow||'lg'} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,style:{...navBar.cart.style,shadow:v}}})} options={[{value:'none',label:'None'},{value:'sm',label:'Small'},{value:'md',label:'Medium'},{value:'lg',label:'Large'}]} /></Form.Item></Col></Row></Card>) },
+                    { key:'cart-behavior', label:<Space><MobileOutlined /> Behavior</Space>, children:(<Card size="small"><Form layout="vertical" size="small"><Form.Item label="Mobile Sticky Summary Bar"><Switch checked={navBar.cart?.behavior?.mobileSticky!==false} onChange={(v)=>onUpdate({...navBar,cart:{...navBar.cart,behavior:{...navBar.cart.behavior,mobileSticky:v}}})} /></Form.Item></Form></Card>) }
+                  ]} />
                 </div>
               )
             }
@@ -2399,6 +2254,7 @@ export const NavBar = ({
   orientation = "horizontal", // 'horizontal' | 'vertical'
   alignment = "space-between", // flex alignment
   logoPosition = "left", // 'left' | 'center' | 'right'
+  navItemsPosition = "left", // 'left' | 'center' | 'right' (controls menu items grouping)
   
   // Logo Settings
   logo = DEFAULT_LOGO,
@@ -2441,6 +2297,11 @@ export const NavBar = ({
   
   // Layout object for spacing and dimensions
   layout = DEFAULT_LAYOUT,
+  isSafeArea = false,
+  // Global flag
+  isGlobalNavbar = false,
+  // Cart configuration (optional override)
+  cart = DEFAULT_CART,
   
   // HTML Attributes
   className = "",
@@ -2458,6 +2319,9 @@ export const NavBar = ({
     selected: node.events.selected,
   }));
 
+  // Aggregate minimal navBar object expected by legacy code sections (currently only cart)
+  const navBar = useMemo(() => ({ cart: cart || DEFAULT_CART }), [cart]);
+
   const navBarRef = useRef(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -2467,6 +2331,74 @@ export const NavBar = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState('/');
   const [navigationVersion, setNavigationVersion] = useState(0); // Force navigation refresh
+  // Cart state from provider
+  const cartState = useCart?.();
+  const [cartOpen, setCartOpen] = useState(false);
+  // Scroll behavior states
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isScrollHidden, setIsScrollHidden] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
+  useEffect(()=>{ if(!cartState) return; const fn=()=>{ if(navBar.cart?.drawer?.openOnAdd!==false) setCartOpen(true); }; window.addEventListener('glow_cart_item_added',fn); return()=>window.removeEventListener('glow_cart_item_added',fn); },[cartState, navBar.cart?.drawer?.openOnAdd]);
+
+  // Persist cart config overrides locally so global pages can hydrate before Craft loads
+  useEffect(()=>{
+    try {
+      const cfg = navBar.cart; if(!cfg) return; localStorage.setItem('glow_cart_config_v1', JSON.stringify(cfg));
+    } catch {}
+  }, [navBar.cart]);
+
+  const mergedCartConfig = useMemo(()=>{
+    let stored = null; try { stored = JSON.parse(localStorage.getItem('glow_cart_config_v1')||'null'); } catch {}
+    return { ...(stored||{}), ...(navBar.cart||{}) };
+  }, [navBar.cart]);
+
+  // --- Cart Config: Enhanced Project-Level Persistence & Migration ---
+  useEffect(()=>{
+    if (typeof window === 'undefined') return;
+    try {
+      const activeProject = localStorage.getItem('glow_active_project') || 'default';
+      const legacyKey = 'glow_cart_config_v1';
+      const projectKey = `glow_cart_config_proj_${activeProject}`;
+
+      // Migrate legacy key to project-scoped key if needed
+      const legacyVal = localStorage.getItem(legacyKey);
+      const projectVal = localStorage.getItem(projectKey);
+      if (legacyVal && !projectVal) {
+        localStorage.setItem(projectKey, legacyVal);
+      }
+
+      // If props.cart still default-ish but we have a stored project config, hydrate Craft props
+      if (!projectVal && !legacyVal) return; // nothing stored
+      let storedCfg = null;
+      try { storedCfg = JSON.parse(projectVal || legacyVal || 'null'); } catch {}
+      if (!storedCfg || typeof storedCfg !== 'object') return;
+
+      // Basic heuristic: if current cart prop differs from stored (excluding runtime changes), update craft props once
+      setProp(props => {
+        if (!props.cart || JSON.stringify(props.cart) === JSON.stringify(DEFAULT_CART)) {
+          props.cart = { ...DEFAULT_CART, ...storedCfg };
+        }
+      });
+    } catch (e) {
+      console.warn('Cart config project-level hydration failed', e);
+    }
+  }, []); // run once on mount
+
+  // Persist project-scoped cart config whenever cart prop changes
+  useEffect(()=>{
+    if (typeof window === 'undefined') return;
+    try {
+      const activeProject = localStorage.getItem('glow_active_project') || 'default';
+      const projectKey = `glow_cart_config_proj_${activeProject}`;
+      // Always write merged (prop has precedence over defaults)
+      const toStore = JSON.stringify({ ...DEFAULT_CART, ...(cart||{}) });
+      localStorage.setItem(projectKey, toStore);
+      // Maintain legacy key for backward compatibility (can remove later)
+      localStorage.setItem('glow_cart_config_v1', toStore);
+    } catch (e) {
+      console.warn('Cart config persistence failed', e);
+    }
+  }, [cart]);
 
   // Context menu functionality
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
@@ -2478,6 +2410,8 @@ export const NavBar = ({
   const safeLogo = useMemo(() => ({ ...DEFAULT_LOGO, ...logo }), [logo]);
   const safeCtaButton = useMemo(() => ({ ...DEFAULT_CTA_BUTTON, ...ctaButton }), [ctaButton]);
   const safeLayout = useMemo(() => ({ ...DEFAULT_LAYOUT, ...layout }), [layout]);
+  // Merge cart prop with defaults so settings modal and runtime always see full shape
+  const safeCart = useMemo(() => ({ ...DEFAULT_CART, ...(cart || {}) }), [cart]);
 
   // Listen for page changes to refresh navigation
   useEffect(() => {
@@ -2701,7 +2635,10 @@ export const NavBar = ({
     orientation,
     alignment,
     logoPosition,
+    navItemsPosition,
     logo: safeLogo,
+  // Cart (added so settings modal has reactive cart state)
+  cart: safeCart,
     // Navigation settings
     maxMenuDepth,
     showHomePage,
@@ -2734,13 +2671,17 @@ export const NavBar = ({
     // Styling
     backgroundColor,
     border,
-    borderRadius
+  borderRadius,
+  isGlobalNavbar,
+  isSafeArea
   }), [
     navMode,
     orientation,
     alignment,
     logoPosition,
+    navItemsPosition,
     safeLogo,
+  safeCart,
     maxMenuDepth,
     showHomePage,
     mobileBreakpoint,
@@ -2767,7 +2708,9 @@ export const NavBar = ({
     backgroundColor,
     border,
     borderRadius,
-    safeLayout
+  safeLayout,
+  isGlobalNavbar,
+  isSafeArea
   ]);
 
   const updateNavBar = (updates) => {
@@ -2776,7 +2719,32 @@ export const NavBar = ({
     });
   };
 
-  // Don't render until client-side
+  // (Legacy side padding safe area effect removed; now using inner wrapper.)
+
+  // Scroll behavior effect
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!scrollBehavior || scrollBehavior === 'normal') return;
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setIsScrolled(y > 10);
+      if (scrollBehavior === 'hide-on-scroll') {
+        if (y > lastY && y > 120) {
+          setIsScrollHidden(true);
+        } else if (y < lastY - 4) {
+          setIsScrollHidden(false);
+        }
+      } else if (scrollBehavior === 'compact-on-scroll') {
+        setIsCompact(y > 80);
+      }
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [scrollBehavior]);
+
   if (!isClient) {
     return (
       <div style={{ ...computedStyles, display: 'flex', alignItems: 'center' }}>
@@ -2785,6 +2753,13 @@ export const NavBar = ({
     );
   }
 
+  // Helper: determine justification for nav items when not center-logo layout
+  const navItemsJustify = navItemsPosition === 'center' ? 'center' : navItemsPosition === 'right' ? 'flex-end' : 'flex-start';
+
+  // Optional safe area wrapper styles
+  // (Replaced inner wrapper approach with side padding on outer container)
+
+  // Build main content with optional inner safe area wrapper
   return (
     <>
       <div
@@ -2792,12 +2767,13 @@ export const NavBar = ({
         ref={navBarRef}
         style={{
           ...computedStyles,
+          ...(scrollBehavior === 'transparent-on-top' && !isScrolled ? { backgroundColor: 'transparent', boxShadow: 'none', borderBottom: 'none' } : {}),
+          ...(scrollBehavior === 'hide-on-scroll' ? { transition: 'transform 0.4s ease', transform: isScrollHidden ? 'translateY(-120%)' : 'translateY(0)' } : {}),
+          ...(scrollBehavior === 'compact-on-scroll' && isCompact ? { paddingTop: '4px', paddingBottom: '4px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' } : {}),
           display: 'flex',
-          flexDirection: logoPosition === 'center' ? 'column' : (orientation === 'vertical' ? 'column' : 'row'),
-          justifyContent: logoPosition === 'center' ? 'center' : alignment,
-          alignItems: 'center',
-          gap: safeLayout?.gap ? `${safeLayout.gap}px` : (logoPosition === 'center' ? '16px' : (orientation === 'vertical' ? '16px' : '24px')),
-          maxWidth: safeLayout?.containerMaxWidth ? `${safeLayout.containerMaxWidth}px` : 'none',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'stretch',
           // Visual feedback for selection and hover
           ...(selected && !hideEditorUI && {
             outline: '2px solid #3b82f6',
@@ -2809,24 +2785,16 @@ export const NavBar = ({
             outlineOffset: '1px',
             boxShadow: '0 0 0 2px rgba(209, 213, 219, 0.1)'
           }),
-          // Override margin when centerContent is enabled
-          ...(safeLayout?.centerContent && {
-            marginLeft: 'auto',
-            marginRight: 'auto'
-          }),
           position: position || 'sticky',
           ...(position === 'sticky' && { top: 0 }),
           ...(position === 'fixed' && { top: 0, left: 0, right: 0, zIndex: 1000 }),
           transition: 'outline 0.2s ease, box-shadow 0.2s ease'
         }}
-        onMouseEnter={hideEditorUI ? undefined : () => {
-          setIsHovered(true);
-          updateBoxPosition();
-        }}
+        onMouseEnter={hideEditorUI ? undefined : () => { setIsHovered(true); updateBoxPosition(); }}
         onMouseLeave={hideEditorUI ? undefined : () => setIsHovered(false)}
         onContextMenu={hideEditorUI ? undefined : handleContextMenu}
       >
-        {/* Center Logo Layout */}
+        <div style={{ width: '100%', maxWidth: isSafeArea ? `${safeLayout?.containerMaxWidth || 1200}px` : '100%', margin: '0 auto', display: 'flex', flexDirection: logoPosition === 'center' ? 'column' : (orientation === 'vertical' ? 'column' : 'row'), justifyContent: logoPosition === 'center' ? 'center' : alignment, alignItems: 'center', gap: safeLayout?.gap ? `${safeLayout.gap}px` : (logoPosition === 'center' ? '16px' : (orientation === 'vertical' ? '16px' : '24px')), width: '100%' }}>
         {logoPosition === 'center' ? (
           <>
             {/* Logo at top center */}
@@ -2910,6 +2878,7 @@ export const NavBar = ({
                   alignItems: 'center',
                   gap: '12px'
                 }}>
+                  {cartState && navBar.cart?.enabled!==false && <NavCartButton onClick={()=>setCartOpen(true)} config={mergedCartConfig} />}
                   {/* Search Bar */}
                   {showSearch && !isMobile && (
                     <Input.Search
@@ -3057,7 +3026,8 @@ export const NavBar = ({
                 flexDirection: orientation === 'vertical' ? 'column' : 'row',
                 alignItems: 'center',
                 gap: orientation === 'vertical' ? '8px' : '16px',
-                flex: logoPosition === 'center' ? 'none' : 1
+                flex: logoPosition === 'center' ? 'none' : 1,
+                justifyContent: navItemsJustify
               }}>
                 {navigation.map((item) => (                <NavItem
                   key={item.id}
@@ -3080,6 +3050,7 @@ export const NavBar = ({
               alignItems: 'center',
               gap: '12px'
             }}>
+              {cartState && navBar.cart?.enabled!==false && <NavCartButton onClick={()=>setCartOpen(true)} config={mergedCartConfig} />}
               {/* Search Bar */}
               {showSearch && !isMobile && (
                 <Input.Search
@@ -3171,10 +3142,11 @@ export const NavBar = ({
               )}
             </div>
           </>
-        )}
+  )}
+  </div>
 
         {children}
-      </div>
+  </div>
 
       {/* Mobile Menu */}
       <MobileMenu
@@ -3209,6 +3181,12 @@ export const NavBar = ({
           onClose={closeContextMenu}
           targetNodeId={nodeId}
         />
+      )}
+    {cartState && (
+        <>
+          {navBar.cart?.enabled!==false && (<CartDrawer open={cartOpen} onClose={()=>setCartOpen(false)} config={mergedCartConfig} />)}
+      {isMobile && cartState.items?.length>0 && <CartStickyBar onOpen={()=>setCartOpen(true)} />}
+        </>
       )}
     </>
   );
@@ -3343,6 +3321,14 @@ NavBar.craft = {
       itemFontWeight: "normal"
     },
     layout: DEFAULT_LAYOUT,
+    cart: {
+      enabled: true,
+      trigger: { placement: 'navbar', icon: 'shopping-cart', showBadge: true, badgeMode: 'count', iconSize: 20 },
+      drawer: { side: 'right', widthDesktop: 420, openOnAdd: true },
+      content: { title: 'Your cart', emptyTitle: 'Your cart is empty', emptySubtitle: 'Keep exploring to find something you love.', showPromo: true, showNotes: false, crossSell: true },
+      style: { bg: '#ffffff', text: '#222', border: '#f0f0f0', radius: '16px', thumbShape: 'rounded', shadow: 'lg' },
+      behavior: { mobileSticky: true }
+    },
     className: "",
     id: ""
   },
@@ -3353,6 +3339,8 @@ NavBar.craft = {
     canMoveOut: () => true,
   },
   custom: {
+  // Flag to indicate this component should never be part of a multi-selection group
+  noMultiSelect: true,
     styleMenu: {
       supportedProps: [
         // Layout & Position
@@ -3364,8 +3352,8 @@ NavBar.craft = {
         // Background & Border
         "backgroundColor", "borderBottom", "border", "borderRadius", "boxShadow",
         
-        // Navigation Settings
-        "navMode", "orientation", "alignment", "logoPosition", "maxMenuDepth", "showHomePage",
+  // Navigation Settings
+  "navMode", "orientation", "alignment", "logoPosition", "navItemsPosition", "maxMenuDepth", "showHomePage", "isSafeArea", "isGlobalNavbar",
         
         // Mobile
         "mobileBreakpoint", "showMobileMenu", "mobileMenuPosition", "mobileMenuStyle", 

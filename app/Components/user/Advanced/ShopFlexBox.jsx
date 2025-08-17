@@ -3,8 +3,10 @@
 import { useNode, useEditor } from "@craftjs/core";
 import { Button, ColorPicker, Divider, Input, Modal, Select, Slider, Switch } from "antd";
 import { useEffect, useRef, useState, useMemo } from "react";
+import { useCart } from '@/contexts/CartContext';
 import { createPortal } from "react-dom";
 import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import ResizeHandles from "../support/ResizeHandles";
 import { onAuthStateChanged } from 'firebase/auth';
@@ -448,8 +450,9 @@ export const ShopFlexBox = ({
     const [isAdjusting, setIsAdjusting] = useState(false);
     const cardRef = useRef(null);
     const dragRef = useRef(null);
+    // Removed custom isDragging flag for MOVE handle; Craft manages drag lifecycle
     const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
-    const [isResizing, setIsResizing] = useState(false);
+    // Local resize state removed; centralized resize logic now lives in <ResizeHandles>
 
     // Firestore product sourcing
     const [fsProducts, setFsProducts] = useState([]);
@@ -619,17 +622,40 @@ export const ShopFlexBox = ({
         setCurrentImageIndex(prev => ({ ...prev, [productId]: newIndex }));
     };
 
+    // Cart context (graceful fallback if provider missing)
+    let addItem = () => {};
+    try { ({ addItem } = useCart()); } catch {/* outside provider */}
+
     const handleQuickAdd = (product) => {
-        if (product.variants && product.variants.length > 1) {
+        if(!product) return;
+        if (Array.isArray(product.variants) && product.variants.length > 1) {
             setCurrentProduct(product);
             setIsVariantModalOpen(true);
-        } else {
-            console.log('Adding to cart:', product.id);
+            return;
         }
+        try {
+            const price = typeof product.price === 'number' ? product.price : Math.round(Number(product.metadata?.price || 0) * 100);
+            addItem({
+                id: product.id,
+                name: product.name || product.title || 'Item',
+                price,
+                images: product.images || [],
+            });
+        } catch(e) { console.warn('[ShopFlexBox] quick add failed', e); }
     };
 
     const handleVariantSelect = (variant) => {
-        console.log('Adding variant to cart:', variant);
+        if(!currentProduct || !variant) { setIsVariantModalOpen(false); return; }
+        try {
+            const base = currentProduct;
+            const price = typeof variant.price === 'number' ? variant.price : (typeof base.price === 'number' ? base.price : 0);
+            addItem({
+                id: base.id,
+                name: `${base.name || base.title || 'Item'} - ${variant.size || variant.name || variant.id}`,
+                price,
+                images: base.images || [],
+            }, { variantId: variant.id || variant.size || variant.name });
+        } catch(e) { console.warn('[ShopFlexBox] variant add failed', e); }
         setIsVariantModalOpen(false);
         setCurrentProduct(null);
     };
@@ -650,12 +676,42 @@ export const ShopFlexBox = ({
         return () => clearInterval(interval);
     }, [autoSlide, slideInterval, currentImageIndex]);
 
-    // Attach MOVE drag handle
+    // Snap + drag connectors (match Box implementation pattern)
+    const { connectors: { connect: snapConnect, drag: snapDrag } } = useCraftSnap(nodeId);
+
+    // Debug helper: expose a quick test to inspect connector attributes
     useEffect(() => {
-        if (dragRef.current) {
-            try { drag(dragRef.current); } catch (e) { /* noop */ }
-        }
-    }, [dragRef.current]);
+        if (typeof window === 'undefined') return;
+        window.testShopFlexBoxConnectors = () => {
+            try {
+                const nodeEl = cardRef.current;
+                const handleEl = dragRef.current;
+                console.log('[ShopFlexBox] connector diagnostics', {
+                    nodeId,
+                    nodeHasDom: !!nodeEl,
+                    nodeDataAttr: nodeEl?.getAttribute('data-craft-node-id'),
+                    handleDataAttr: handleEl?.getAttribute('data-craft-node-id'),
+                    handleClasses: handleEl ? Array.from(handleEl.classList) : [],
+                });
+            } catch (e) {
+                console.warn('[ShopFlexBox] connector diagnostics failed', e);
+            }
+        };
+    }, [nodeId]);
+
+    useEffect(() => {
+        const connectElements = () => {
+            if (cardRef.current) {
+                try { snapConnect(cardRef.current); } catch(e) { try { connect(cardRef.current); } catch {} }
+            }
+            if (dragRef.current) {
+                try { drag(dragRef.current); } catch {}
+            }
+        };
+        connectElements();
+        const t = setTimeout(connectElements, 120);
+        return () => clearTimeout(t);
+    }, [snapConnect, connect, drag, isSelected, nodeId]);
 
     // Update portal controls position
     const updateBoxPosition = () => {
@@ -669,6 +725,57 @@ export const ShopFlexBox = ({
             });
         }
     };
+
+    // Keep portal + resize handles synced after Craft MOVE (container switch) or any style/size change
+    useEffect(() => {
+        if (!cardRef.current) return;
+        const el = cardRef.current;
+
+        // 1. Observe size changes
+        const resizeObs = new ResizeObserver(() => updateBoxPosition());
+        try { resizeObs.observe(el); } catch {}
+
+        // 2. Observe attribute / style changes (position, transform, etc.)
+        const mutationObs = new MutationObserver(muts => {
+            for (const m of muts) {
+                if (m.type === 'attributes') {
+                    updateBoxPosition();
+                    break;
+                }
+            }
+        });
+        try { mutationObs.observe(el, { attributes: true, attributeFilter: ['style', 'class'] }); } catch {}
+
+        // 3. Handle MOVE drag lifecycle (Craft internal drag) by listening on dragRef
+        let isPointerDragging = false;
+        const handleMouseDown = () => { isPointerDragging = true; };
+        const handleMouseUp = () => {
+            if (!isPointerDragging) return;
+            isPointerDragging = false;
+            // Schedule a few delayed updates to catch final layout after Craft re-parenting
+            updateBoxPosition();
+            setTimeout(updateBoxPosition, 30);
+            setTimeout(updateBoxPosition, 120);
+        };
+        const dragHandle = dragRef.current;
+        if (dragHandle) {
+            dragHandle.addEventListener('mousedown', handleMouseDown, { capture: true });
+        }
+        window.addEventListener('mouseup', handleMouseUp, true);
+
+        // Initial sync (in case of late mount)
+        updateBoxPosition();
+
+        return () => {
+            try { resizeObs.disconnect(); } catch {}
+            try { mutationObs.disconnect(); } catch {}
+            if (dragHandle) {
+                dragHandle.removeEventListener('mousedown', handleMouseDown, { capture: true });
+            }
+            window.removeEventListener('mouseup', handleMouseUp, true);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cardRef.current, dragRef.current, nodeId]);
     useEffect(() => {
         if (!isSelected) return;
         updateBoxPosition();
@@ -682,115 +789,12 @@ export const ShopFlexBox = ({
         };
     }, [isSelected]);
 
-    // Resize logic with snapping (mirrors Box)
-    const handleResizeStart = (e, direction) => {
-        e.stopPropagation();
-        e.preventDefault();
-
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const rect = cardRef.current.getBoundingClientRect();
-        const startWidth = rect.width;
-        const startHeight = rect.height;
-        setIsResizing(true);
-
-        // Register other elements for snapping
-    const nodes = craftQuery.getNodes();
-        Object.entries(nodes).forEach(([id, node]) => {
-            if (id !== nodeId && node.dom) {
-                const elementRect = node.dom.getBoundingClientRect();
-                const editorRoot = document.querySelector('[data-editor="true"]');
-                if (editorRoot) {
-                    const editorRect = editorRoot.getBoundingClientRect();
-                    const registrationBounds = {
-                        x: elementRect.left - editorRect.left,
-                        y: elementRect.top - editorRect.top,
-                        width: elementRect.width,
-                        height: elementRect.height,
-                    };
-                    snapGridSystem.registerElement(id, node.dom, registrationBounds);
-                }
-            }
-        });
-
-        const handleMouseMove = (moveEvent) => {
-            const deltaX = moveEvent.clientX - startX;
-            const deltaY = moveEvent.clientY - startY;
-            let newWidth = startWidth;
-            let newHeight = startHeight;
-
-            switch (direction) {
-                case 'se': newWidth = startWidth + deltaX; newHeight = startHeight + deltaY; break;
-                case 'sw': newWidth = startWidth - deltaX; newHeight = startHeight + deltaY; break;
-                case 'ne': newWidth = startWidth + deltaX; newHeight = startHeight - deltaY; break;
-                case 'nw': newWidth = startWidth - deltaX; newHeight = startHeight - deltaY; break;
-                case 'e': newWidth = startWidth + deltaX; break;
-                case 'w': newWidth = startWidth - deltaX; break;
-                case 's': newHeight = startHeight + deltaY; break;
-                case 'n': newHeight = startHeight - deltaY; break;
-            }
-
-            newWidth = Math.max(newWidth, 50);
-            newHeight = Math.max(newHeight, 20);
-
-            const currentRect = cardRef.current.getBoundingClientRect();
-            const editorRoot = document.querySelector('[data-editor="true"]');
-            if (editorRoot) {
-                const editorRect = editorRoot.getBoundingClientRect();
-                let intendedBounds = {
-                    left: currentRect.left - editorRect.left,
-                    top: currentRect.top - editorRect.top,
-                    width: newWidth,
-                    height: newHeight
-                };
-                if (direction.includes('w')) {
-                    const widthDelta = newWidth - currentRect.width;
-                    intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
-                }
-                if (direction.includes('n')) {
-                    const heightDelta = newHeight - currentRect.height;
-                    intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
-                }
-                intendedBounds.right = intendedBounds.left + intendedBounds.width;
-                intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
-                intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
-                intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
-
-                const snapResult = snapGridSystem.getResizeSnapPosition(
-                    nodeId,
-                    direction,
-                    intendedBounds,
-                    newWidth,
-                    newHeight
-                );
-                if (snapResult?.snapped) {
-                    newWidth = snapResult.bounds.width;
-                    newHeight = snapResult.bounds.height;
-                }
-            }
-
-            editorActions.history.throttle(500).setProp(nodeId, (props) => {
-                props.width = Math.round(newWidth);
-                props.height = Math.round(newHeight);
-            });
-        };
-
-        const handleMouseUp = () => {
-            setIsResizing(false);
-            snapGridSystem.clearSnapIndicators();
-            setTimeout(() => snapGridSystem.cleanupTrackedElements(), 100);
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    };
+    // Local resize handler removed; centralized <ResizeHandles> internal logic will manage snapping & constraints
 
     // Create product item
     const createProductItem = (product) => {
         const currentImg = currentImageIndex[product.id] || 0;
-        const hasDiscount = product.originalPrice && product.originalPrice > product.price;
+            const hasDiscount = product.originalPrice && product.originalPrice > product.price; // Check if there is a discount
         const discountPercent = hasDiscount ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0;
 
         return (
@@ -1047,7 +1051,8 @@ export const ShopFlexBox = ({
     return (
         <>
             <div
-                ref={(ref) => { if (!ref) return; cardRef.current = ref; connect(drag(ref)); }}
+                ref={cardRef}
+                data-craft-node-id={nodeId}
                 className={`${isSelected ? 'ring-2 ring-blue-500' : ''} ${className} shop-flexbox`}
                 style={{
                     width,
@@ -1076,8 +1081,19 @@ export const ShopFlexBox = ({
                             dragRef={dragRef}
                             nodeId={nodeId}
                             onEdit={() => setIsEditModalOpen(true)}
+                            updateBoxPosition={updateBoxPosition}
                         />
-                        <ResizeHandles boxPosition={boxPosition} onResizeStart={handleResizeStart} />
+                        <ResizeHandles 
+                            boxPosition={boxPosition}
+                            nodeId={nodeId}
+                            targetRef={cardRef}
+                            editorActions={editorActions}
+                            craftQuery={craftQuery}
+                            minWidth={50}
+                            minHeight={20}
+                            onResize={updateBoxPosition}
+                            onResizeEnd={updateBoxPosition}
+                        />
                     </>
                 )}
                 {/* Edit button now lives inside portal controls */}
@@ -1247,7 +1263,7 @@ export const ShopFlexBox = ({
 };
 
 // Portal controls (MOVE and POS) similar to Box
-const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit }) => {
+const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit, updateBoxPosition }) => {
     if (typeof window === 'undefined') return null;
     return createPortal(
         <div style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 99999 }}>
@@ -1261,76 +1277,77 @@ const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit }) => {
                     background: 'white',
                     borderRadius: '16px',
                     border: '2px solid #d9d9d9',
-                    overflow: 'hidden',
-                    fontSize: '10px',
-                    fontWeight: 600,
+                    fontSize: '9px',
+                    fontWeight: 'bold',
                     userSelect: 'none',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                     pointerEvents: 'auto',
                 }}
             >
-                {/* Segment 1: MOVE (left) */}
+                {/* Left - MOVE */}
                 <div
                     ref={dragRef}
-                    data-handle-type="move"
                     data-craft-node-id={nodeId}
+                    className="move-handle"
                     style={{
                         background: '#52c41a',
                         color: 'white',
-                        padding: '4px 10px',
+                        padding: '2px',
+                        borderRadius: '14px 0 0 14px',
                         cursor: 'grab',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        minWidth: 56,
+                        gap: '2px',
+                        minWidth: '48px',
                         justifyContent: 'center',
-                        transition: 'background 0.2s ease',
-                        borderRight: '1px solid rgba(255,255,255,0.6)'
+                        transition: 'background 0.2s ease'
                     }}
                     title="Drag to move between containers"
                 >
-                    MOVE
+                    📦 MOVE
                 </div>
-
-                {/* Segment 2: EDIT (middle) */}
+                {/* Center - EDIT */}
                 <div
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
                     style={{
                         background: '#722ed1',
                         color: 'white',
-                        padding: '4px 10px',
+                        padding: '4px 8px',
+                        borderRadius: '0',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        minWidth: 48,
+                        gap: '2px',
+                        minWidth: '48px',
                         justifyContent: 'center',
-                        transition: 'background 0.2s ease',
-                        borderRight: '1px solid rgba(255,255,255,0.6)'
+                        transition: 'background 0.2s ease'
                     }}
                     title="Configure shop items"
                 >
-                    EDIT
+                    ⚙️ EDIT
                 </div>
-
-                {/* Segment 3: POS (right) */}
+                {/* Right - POS */}
                 <SnapPositionHandle
                     nodeId={nodeId}
                     style={{
                         background: '#1890ff',
                         color: 'white',
-                        padding: '4px 10px',
+                        padding: '4px',
+                        borderRadius: '0 14px 14px 0',
                         cursor: 'move',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        minWidth: 56,
+                        gap: '2px',
+                        minWidth: '48px',
                         justifyContent: 'center',
                         transition: 'background 0.2s ease'
                     }}
+                    onDragStart={() => updateBoxPosition?.()}
+                    onDragMove={() => updateBoxPosition?.()}
+                    onDragEnd={() => updateBoxPosition?.()}
                 >
-                    POS
+                    ↕↔ POS
                 </SnapPositionHandle>
             </div>
 
@@ -2029,6 +2046,8 @@ const StyleEditorModal = ({
 // Craft.js configuration
 ShopFlexBox.craft = {
     displayName: "ShopBox",
+    // Mark as a Craft canvas so other nodes can be dropped inside if allowed by rules
+    canvas: true,
     props: {
     // Container Positioning (align with Box)
     position: "relative",
@@ -2120,7 +2139,8 @@ ShopFlexBox.craft = {
     rules: {
         canDrag: () => true,
         canDrop: () => true,
-        canMoveIn: () => false,
+        // Allow moving other nodes into this container similar to Box
+        canMoveIn: () => true,
         canMoveOut: () => true,
     },
     related: {

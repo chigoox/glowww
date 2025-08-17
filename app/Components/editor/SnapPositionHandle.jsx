@@ -65,25 +65,10 @@ const SnapPositionHandle = ({
         current = current.parentElement;
       }
       
-      // Final fallback to root canvas - safely check query methods with additional error handling
-      let dropPlaceholder = null;
-      try {
-        if (query && typeof query.getDropPlaceholder === 'function') {
-          dropPlaceholder = query.getDropPlaceholder();
-          // Additional safety check - ensure dropPlaceholder has expected properties
-          if (dropPlaceholder && typeof dropPlaceholder === 'object' && !dropPlaceholder.id) {
-            console.warn('getDropPlaceholder returned object without id property:', dropPlaceholder);
-            dropPlaceholder = null;
-          }
-        }
-      } catch (placeholderError) {
-        console.warn('Error calling getDropPlaceholder:', placeholderError);
-        dropPlaceholder = null;
-      }
-      
-      const fallbackElement = dropPlaceholder || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
-      
-      return fallbackElement;
+  // Final fallback to root canvas (removed getDropPlaceholder call due to runtime errors)
+  // We rely purely on DOM markers now.
+  const fallbackElement = document.querySelector('[data-cy="editor-root"], [data-editor="true"], [data-craft-node-id="ROOT"]') || document.body;
+  return fallbackElement;
     } catch (error) {
       console.warn('Error in getParentContainer:', error);
       // Return safe fallback

@@ -6,18 +6,18 @@ import { useEditorSettings } from "../context/EditorSettingsContext";
 
 /**
  * Drop Position Correction System for New and Existing Components
- * 
+ *
  * This system works WITH the existing Craft.js drag system:
  * 1. Let Craft.js handle component creation/movement (which works reliably)
  * 2. Detect when a new component is added from toolbox OR existing component is moved
  * 3. Calculate the intended position based on mouse position during drop
  * 4. Move the component to the correct position after creation/movement
- * 
+ *
  * Handles BOTH new components from toolbox AND existing component moves
  */
 export const useDropPositionCorrection = () => {
   const { actions, query } = useEditor();
-  
+
   // Try to get settings, but provide defaults if context is not available
   let settings;
   try {
@@ -38,7 +38,7 @@ export const useDropPositionCorrection = () => {
       }
     };
   }
-  
+
   const dropStateRef = useRef({
     isNewDrop: false,
     isExistingMove: false,
@@ -49,55 +49,296 @@ export const useDropPositionCorrection = () => {
     draggedNodeId: null,
     potentialDragNodeId: null, // Track potential drag from move handle
     craftDragActive: false, // Track if Craft.js drag is active
-    dragStartTime: 0 // Track when drag started
+  dragStartTime: 0, // Track when drag started
+  lastDetectedContainer: null // Remember last valid container to reduce ROOT fallbacks
   });
 
-  // Find the best container at mouse position
-  const findContainerAtPosition = useCallback((x, y) => {
-    // Get all elements at position
-    const elements = document.elementsFromPoint(x, y);
-    
-    // Find craft elements that are canvas containers
-    const canvasElements = [];
-    
-    for (const element of elements) {
-      const nodeId = element.getAttribute('data-craft-node-id');
-      if (nodeId && nodeId !== 'ROOT') {
-        try {
-          const node = query.node(nodeId);
-          if (node && node.isCanvas()) {
-            canvasElements.push({
-              nodeId,
-              element,
-              rect: element.getBoundingClientRect()
-            });
-          }
-        } catch (error) {
-          continue;
+  // Reliable reparent with retries to avoid node snapping back to ROOT
+  const ensureParent = useCallback(async (nodeId, targetParentId, { attempts = 5, interval = 80, index = 0 } = {}) => {
+    if (!nodeId || !targetParentId) return false;
+    let success = false;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const currentParent = query.node(nodeId).get().data.parent;
+        // Protection: never downgrade a node from a non-ROOT canvas parent to ROOT due to detection failure
+        if (targetParentId === 'ROOT' && currentParent && currentParent !== 'ROOT') {
+          try {
+            const n = query.node(currentParent);
+            const isCanvasParent = n?.isCanvas?.() || ['Box','FlexBox','GridBox'].includes(n?.get()?.data?.displayName || n?.get()?.data?.type);
+            if (isCanvasParent) {
+              console.log('🛡️ Preventing reparent to ROOT; keeping existing canvas parent', { nodeId, currentParent });
+              return true; // treat as success to stop retries
+            }
+          } catch(_) {}
         }
+        if (currentParent === targetParentId) {
+          success = true;
+          break;
+        }
+        // Validate target container is a canvas & droppable
+        let targetOk = true;
+        try {
+          const targetNode = query.node(targetParentId);
+          if (!targetNode || !targetNode.isCanvas()) targetOk = false;
+          const rules = targetNode.get().data?.rules;
+          if (rules && rules.canMoveIn) {
+            // If rules exist and disallow node, skip move
+            if (!rules.canMoveIn(query.node(nodeId).get())) targetOk = false;
+          }
+        } catch (_) {
+          targetOk = false;
+        }
+        if (!targetOk) {
+          console.warn('🚫 Target container not valid for move', { nodeId, targetParentId });
+          break;
+        }
+        actions.move(nodeId, targetParentId, index);
+      } catch (err) {
+        console.warn('⚠️ move attempt failed', i + 1, err);
       }
+      // Wait before next verification
+      await new Promise(r => setTimeout(r, interval));
     }
-
-
-    const isRoot = (elements[0]?.getAttribute('data-cy') === 'editor-root');
-
-    // Check if this is for a new component or existing component
-    const isNewComponent = dropStateRef.current.isNewDrop;
-    const isExistingComponent = dropStateRef.current.isExistingMove;
-    
-    if (isNewComponent) {
-      // NEW COMPONENTS: Return string nodeId for coordinate conversion
-      if (canvasElements.length > 0) {
-        // Return the first (topmost) container's nodeId
-        return canvasElements[0].nodeId;
-      } else {
-        // No containers found, return ROOT
-        return 'ROOT';
-      }
+    // Final verify
+    try {
+      const finalParent = query.node(nodeId).get().data.parent;
+      success = success || finalParent === targetParentId;
+    } catch (_) {}
+    if (!success) {
+      console.warn('❌ Failed to reparent node after retries', { nodeId, targetParentId });
     } else {
-      // EXISTING COMPONENTS: Return array for existing logic
-      return isRoot ? 'ROOT' : canvasElements;
+      console.log('✅ Reparent confirmed', { nodeId, parent: targetParentId });
     }
+    return success;
+  }, [actions, query]);
+
+  // Find the best container at mouse position (robust multi-strategy)
+  const findContainerAtPosition = useCallback((x, y) => {
+    const elements = document.elementsFromPoint(x, y);
+    const debugInfo = [];
+
+    // Whitelist of known canvas display names/types provided by user
+    const FORCED_CANVAS_NAMES = new Set(['Box', 'FlexBox', 'GridBox']);
+    // Optional DOM class / attribute markers (can be added to components later)
+    const CANVAS_CLASS_MARKERS = ['gl-canvas', 'editor-canvas', 'craft-canvas'];
+    const CANVAS_ATTR_MARKERS = ['data-gl-canvas', 'data-canvas', 'data-editor-canvas'];
+
+    const isCanvasNode = (nodeId) => {
+      try {
+        const n = query.node(nodeId);
+        if (!n) return false;
+        // Primary Craft flag
+        if (n.isCanvas()) return true;
+        // Fallback: check displayName / type against forced list
+        try {
+          const data = n.get()?.data;
+          const displayName = data?.displayName || data?.type || '';
+          if (displayName && FORCED_CANVAS_NAMES.has(displayName)) {
+            return true;
+          }
+        } catch (_) {}
+        // Fallback: inspect DOM element markers
+        const domEl = n.dom;
+        if (domEl) {
+          try {
+            // Class markers
+            const classList = Array.from(domEl.classList || []);
+            if (classList.some(c => CANVAS_CLASS_MARKERS.includes(c))) return true;
+            // Attribute markers
+            for (const attr of CANVAS_ATTR_MARKERS) {
+              if (domEl.hasAttribute(attr)) return true;
+            }
+            // Heuristic: data-component attribute in whitelist
+            const compAttr = domEl.getAttribute('data-component');
+            if (compAttr && FORCED_CANVAS_NAMES.has(compAttr)) return true;
+          } catch (_) {}
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const getFirstCanvasAncestor = (nodeId) => {
+      if (!nodeId || nodeId === 'ROOT') return null;
+      try {
+        if (isCanvasNode(nodeId)) return nodeId;
+        const n = query.node(nodeId).get();
+        const ancestors = n.data?.parent ? [n.data.parent, ...(n.data.linkedNodes ? Object.values(n.data.linkedNodes) : [])] : [];
+        // Walk up simple parent chain first
+        let current = n.data.parent;
+        const visited = new Set();
+        while (current && !visited.has(current)) {
+          visited.add(current);
+            if (isCanvasNode(current)) return current;
+          try {
+            current = query.node(current).get().data.parent;
+          } catch (_) {
+            break;
+          }
+        }
+      } catch (_) {}
+      return null;
+    };
+
+    // Pass 1: direct ancestor walk from hit elements
+    for (const el of elements) {
+      let current = el;
+      while (current) {
+        const nodeId = current.getAttribute?.('data-craft-node-id');
+        if (nodeId && nodeId !== 'ROOT') {
+          const canvasAncestor = getFirstCanvasAncestor(nodeId);
+          if (canvasAncestor) {
+            const rect = current.getBoundingClientRect();
+            debugInfo.push({ stage: 'ancestor-hit', nodeId, canvasAncestor, rect });
+            dropStateRef.current.lastDetectedContainer = canvasAncestor;
+            console.log('🎯 Canvas ancestor detected:', canvasAncestor, { x, y, via: nodeId, rect });
+            return canvasAncestor;
+          }
+        }
+        current = current.parentElement;
+      }
+    }
+
+    // Pass 2: collect all craft nodes, map to canvases
+    const candidateMap = new Map();
+    for (const el of elements) {
+      const nodeId = el.getAttribute?.('data-craft-node-id');
+      if (!nodeId || nodeId === 'ROOT') continue;
+      const canvasAncestor = getFirstCanvasAncestor(nodeId);
+      if (canvasAncestor) {
+        try {
+          const rect = el.getBoundingClientRect();
+          const area = rect.width * rect.height;
+          const existing = candidateMap.get(canvasAncestor);
+          // Keep the smallest area rect for specificity
+          if (!existing || area < existing.area) {
+            candidateMap.set(canvasAncestor, { rect, area, via: nodeId });
+          }
+          debugInfo.push({ stage: 'direct-candidate', nodeId, canvasAncestor, rect });
+        } catch (_) {}
+      }
+    }
+
+    let chosenId = null;
+    if (candidateMap.size) {
+      // Pick canvas with smallest area (most specific)
+      const sorted = [...candidateMap.entries()].sort((a, b) => a[1].area - b[1].area);
+      chosenId = sorted[0][0];
+      debugInfo.push({ stage: 'smallest-area-picked', chosenId });
+    }
+console.log('first')
+    // Pass 3: global scan (expensive) only if still no candidate
+    if (!chosenId) {
+      try {
+        const allNodes = query.getNodes();
+        const globalCandidates = [];
+        Object.keys(allNodes).forEach(id => {
+          if (id === 'ROOT') return;
+          if (!isCanvasNode(id)) return;
+          try {
+            const domEl = query.node(id)?.dom;
+            if (!domEl) return;
+            const rect = domEl.getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+              globalCandidates.push({ id, rect, area: rect.width * rect.height });
+              debugInfo.push({ stage: 'global-contained', nodeId: id, rect });
+            }
+          } catch (_) {}
+        });
+        if (globalCandidates.length) {
+          globalCandidates.sort((a, b) => a.area - b.area);
+          chosenId = globalCandidates[0].id;
+          debugInfo.push({ stage: 'global-picked', chosenId });
+        }
+      } catch (e) {
+        debugInfo.push({ stage: 'global-scan-error', error: e.message });
+      }
+    }
+console.log('second')
+    // Pass 4: reuse last detected container
+    if (!chosenId && dropStateRef.current.lastDetectedContainer) {
+      chosenId = dropStateRef.current.lastDetectedContainer;
+      debugInfo.push({ stage: 'reuse-last', nodeId: chosenId });
+    }
+
+    // Pass 5: Pure DOM scan fallback (in case Craft node wrapping differs)
+    if (!chosenId) {
+      try {
+        const FORCED_CANVAS_NAMES = new Set(['Box','FlexBox','GridBox']);
+        const CLASS_MARKERS = ['gl-canvas','editor-canvas','craft-canvas'];
+        const ATTR_MARKERS = ['data-gl-canvas','data-canvas','data-editor-canvas'];
+        const domCandidates = [];
+        // Collect all DOM elements that look like canvases
+        const selector = CLASS_MARKERS.map(c=>'.'+c).join(',') + ', ' + ATTR_MARKERS.map(a=>`[${a}]`).join(',') + ', [data-component]';
+        const possible = document.querySelectorAll(selector);
+        possible.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+            // Heuristic name
+            const compAttr = el.getAttribute('data-component');
+            const looksForced = compAttr && FORCED_CANVAS_NAMES.has(compAttr);
+            const classList = Array.from(el.classList||[]);
+            const hasMarkerClass = classList.some(c=>CLASS_MARKERS.includes(c));
+            const hasAttrMarker = ATTR_MARKERS.some(a=>el.hasAttribute(a));
+            if (looksForced || hasMarkerClass || hasAttrMarker) {
+              // Map to craft node id if present
+              const nid = el.getAttribute('data-craft-node-id');
+              domCandidates.push({ id: nid, rect, area: rect.width * rect.height, compAttr });
+            }
+          }
+        });
+        // Filter to ones that map to existing craft nodes & look like canvases
+        const validated = domCandidates.filter(c => {
+          if (!c.id || c.id === 'ROOT') return false;
+            try {
+              const n = query.node(c.id);
+              if (!n) return false;
+              if (n.isCanvas()) return true;
+              const data = n.get()?.data;
+              const dn = data?.displayName || data?.type;
+              if (['Box','FlexBox','GridBox'].includes(dn)) return true;
+            } catch(_) { return false; }
+            return false;
+        });
+        if (validated.length) {
+          validated.sort((a,b)=>a.area-b.area);
+          chosenId = validated[0].id;
+          debugInfo.push({ stage: 'dom-fallback-picked', chosenId });
+        }
+      } catch(domErr) {
+        debugInfo.push({ stage: 'dom-fallback-error', error: domErr.message });
+      }
+    }
+
+    if (chosenId) {
+      dropStateRef.current.lastDetectedContainer = chosenId;
+      console.log('🎯 Container detected:', chosenId, { x, y, debugInfo });
+      return chosenId;
+    }
+
+    // Diagnostics when totally failing
+    console.log('📍 Container detection -> ROOT', { x, y, reason: 'no-canvas-candidates', debugInfo, hint: 'Verify components set isCanvas: true in their craft config.' });
+    // Provide one-time helper listing canvases
+    if (!window.__listedCanvases) {
+      window.__listedCanvases = true;
+      try {
+        const all = query.getNodes();
+        const canvases = Object.keys(all).filter(id => id !== 'ROOT').map(id => {
+          let nodeWrapper, data, displayName, isCanvasFlag = false, forced = false;
+          try { nodeWrapper = query.node(id); data = nodeWrapper.get().data; displayName = data.displayName || data.type; isCanvasFlag = nodeWrapper.isCanvas(); } catch(_) {}
+          if (!isCanvasFlag && displayName && FORCED_CANVAS_NAMES.has(displayName)) forced = true;
+          const dom = nodeWrapper?.dom; let rect = null; try { rect = dom?.getBoundingClientRect(); } catch(_){}
+          return { id, displayName, isCanvasFlag, forcedCanvas: forced, hasDOM: !!dom, rect };        
+        });
+        console.log('🧾 Available canvases snapshot:', canvases);
+        if (!canvases.some(c => c.isCanvasFlag || c.forcedCanvas)) {
+          console.warn('⚠️ No canvases detected. Ensure components export craft = { rules: { canMoveIn: ... }, displayName, ... } and set canMoveIn / isCanvas where needed.');
+        }
+      } catch (e) { console.warn('Canvas snapshot failed', e); }
+    }
+    console.log('returning root')
+    return 'ROOT';
   }, [query]);
 
   // Get component dimensions for accurate centering - use actual component craft props
@@ -216,6 +457,8 @@ export const useDropPositionCorrection = () => {
 
   // Helper function to get container screen bounds
   const getContainerScreenBounds = useCallback((containerId) => {
+    console.log('🔍 Getting bounds for container:', containerId);
+    
     try {
       if (containerId === 'ROOT') {
         // For ROOT, find the main editor canvas area with enhanced selectors
@@ -236,7 +479,9 @@ export const useDropPositionCorrection = () => {
         for (const selector of selectors) {
           const element = document.querySelector(selector);
           if (element) {
-            return element.getBoundingClientRect();
+            const bounds = element.getBoundingClientRect();
+            console.log('📐 ROOT bounds found via', selector, ':', bounds);
+            return bounds;
           }
         }
         
@@ -246,12 +491,13 @@ export const useDropPositionCorrection = () => {
           const rect = element.getBoundingClientRect();
           // Look for a large element that could be the editor canvas
           if (rect.width > 400 && rect.height > 300) {
+            console.log('📐 ROOT bounds found via large element:', rect);
             return rect;
           }
         }
         
         // Final fallback to viewport
-        return {
+        const viewportBounds = {
           left: 0,
           top: 0,
           right: window.innerWidth,
@@ -259,99 +505,163 @@ export const useDropPositionCorrection = () => {
           width: window.innerWidth,
           height: window.innerHeight
         };
+        console.log('📐 ROOT bounds using viewport fallback:', viewportBounds);
+        return viewportBounds;
       } else {
-        // For specific containers, use the Craft.js node
-        const containerNode = query.node(containerId);
-        if (containerNode && containerNode.dom) {
-          return containerNode.dom.getBoundingClientRect();
+        // For specific containers, try multiple methods
+        console.log('🔍 Looking for non-ROOT container:', containerId);
+        
+        // Method 1: Use Craft.js node
+        try {
+          const containerNode = query.node(containerId);
+          if (containerNode && containerNode.dom) {
+            const bounds = containerNode.dom.getBoundingClientRect();
+            console.log('📐 Container bounds via Craft node:', bounds);
+            return bounds;
+          }
+        } catch (error) {
+          console.log('⚠️ Craft node lookup failed for', containerId, ':', error.message);
         }
+        
+        // Method 2: Direct DOM lookup
+        const containerElement = document.querySelector(`[data-craft-node-id="${containerId}"]`);
+        if (containerElement) {
+          const bounds = containerElement.getBoundingClientRect();
+          console.log('📐 Container bounds via direct DOM:', bounds);
+          return bounds;
+        }
+        
+        console.log('❌ No bounds found for container:', containerId);
       }
     } catch (error) {
-      // Could not get container bounds
+      console.error('❌ Error getting container bounds:', error);
     }
     return null;
   }, [query]);
 
+  // ---------------------------------------------------------------------------
+  // Unified low-level coordinate converter (client -> container local)
+  // Replaces ad-hoc logic inside convertToContainerCoordinates. Handles:
+  // - window scroll
+  // - container padding + borders
+  // - inner scroll
+  // - optional centering of component
+  // - clamping inside content box
+  // NOTE: CSS transforms / nested offset contexts not explicitly handled yet.
+  // ---------------------------------------------------------------------------
+  function toContainerCoords({
+    clientX,
+    clientY,
+    containerEl,
+    compWidth = 0,
+    compHeight = 0,
+    center = true,
+    clamp = true
+  }) {
+    if (!containerEl || !containerEl.getBoundingClientRect) {
+      return { x: 0, y: 0 };
+    }
+
+    // 1) client -> page
+    const pageX = clientX + window.scrollX;
+    const pageY = clientY + window.scrollY;
+
+    // 2) container rect (viewport) -> page
+    const rect = containerEl.getBoundingClientRect();
+    const containerPageLeft = rect.left + window.scrollX;
+    const containerPageTop  = rect.top  + window.scrollY;
+
+    // 3) styles (padding/borders)
+    const cs = window.getComputedStyle(containerEl);
+    const padL = parseFloat(cs.paddingLeft)  || 0;
+    const padT = parseFloat(cs.paddingTop)   || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const padB = parseFloat(cs.paddingBottom)|| 0;
+    const borL = parseFloat(cs.borderLeftWidth)   || 0;
+    const borT = parseFloat(cs.borderTopWidth)    || 0;
+    const borR = parseFloat(cs.borderRightWidth)  || 0;
+    const borB = parseFloat(cs.borderBottomWidth) || 0;
+
+    // 4) inner scroll
+    const scrollL = containerEl.scrollLeft || 0;
+    const scrollT = containerEl.scrollTop  || 0;
+
+    // 5) convert to content-box local coords
+    let x = pageX - containerPageLeft - borL - padL + scrollL;
+    let y = pageY - containerPageTop  - borT - padT + scrollT;
+
+    if (center) {
+      x -= compWidth / 2;
+      y -= compHeight / 2;
+    }
+
+    // 6) clamp (optional)
+    if (clamp) {
+      const innerW = rect.width  - padL - padR - borL - borR;
+      const innerH = rect.height - padT - padB - borT - borB;
+      const maxX = Math.max(0, innerW - compWidth);
+      const maxY = Math.max(0, innerH - compHeight);
+      x = Math.min(Math.max(0, x), maxX);
+      y = Math.min(Math.max(0, y), maxY);
+    }
+
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+
   // Option 1: Convert coordinates between different coordinate systems
   const convertToContainerCoordinates = useCallback((screenX, screenY, targetContainerId, componentDimensions = null) => {
-    try {
-      
-      const containerBounds = getContainerScreenBounds(targetContainerId);
-      if (!containerBounds) {
-        
-        // Enhanced fallback - use mouse position relative to viewport for ROOT
-        if (targetContainerId === 'ROOT' || targetContainerId === '') {
-          const compWidth = componentDimensions?.width || 200;
-          const compHeight = componentDimensions?.height || 200;
-          
-          // For ROOT without bounds, use screen coordinates directly with centering
-          let fallbackX = screenX;
-          let fallbackY = screenY;
-          
-          if (settings.dropPosition.mode === 'center') {
-            fallbackX = screenX - (compWidth / 2);
-            fallbackY = screenY - (compHeight / 2);
-          }
-          
-          // Ensure component stays within viewport
-          fallbackX = Math.max(0, Math.min(fallbackX, window.innerWidth - compWidth));
-          fallbackY = Math.max(0, Math.min(fallbackY, window.innerHeight - compHeight));
-          
-          return { x: fallbackX, y: fallbackY };
-        }
-        
-        // For other containers, return safe fallback
-        return { x: 50, y: 50 };
+    // Normalize id variants
+    if (Array.isArray(targetContainerId)) {
+      const first = targetContainerId[0];
+      targetContainerId = first ? (first.nodeId || first.id || 'ROOT') : 'ROOT';
+    } else if (targetContainerId && typeof targetContainerId === 'object') {
+      targetContainerId = targetContainerId.nodeId || targetContainerId.id || 'ROOT';
+    }
+    if (typeof targetContainerId !== 'string') targetContainerId = 'ROOT';
+
+    const compWidth = componentDimensions?.width || 200;
+    const compHeight = componentDimensions?.height || 200;
+    const center = settings.dropPosition.mode === 'center';
+
+    // Resolve container element
+    let containerEl = null;
+    if (targetContainerId === 'ROOT') {
+      containerEl = document.querySelector('[data-cy="editor-root"], .craft-renderer, [data-craft-node-id="ROOT"], .editor-canvas, [data-editor="true"]');
+      if (!containerEl) {
+        // As a last resort, use body (will clamp to viewport via custom logic)
+        containerEl = document.body;
       }
-
-      // Get component dimensions for centering
-      const compWidth = componentDimensions?.width || 200;
-      const compHeight = componentDimensions?.height || 200;
-
-      // Calculate relative position within container based on positioning mode
-      let relativeX, relativeY;
-      
-      if (settings.dropPosition.mode === 'center') {
-        // CENTER MODE: Center the component at screen position
-        relativeX = screenX - containerBounds.left - (compWidth / 2);
-        relativeY = screenY - containerBounds.top - (compHeight / 2);
-      } else {
-        // TOP-LEFT MODE: Position top-left corner at screen position
-        relativeX = screenX - containerBounds.left;
-        relativeY = screenY - containerBounds.top;
+    } else {
+      try {
+        const node = query.node(targetContainerId);
+        containerEl = node?.dom || document.querySelector(`[data-craft-node-id="${targetContainerId}"]`);
+      } catch (_) {
+        containerEl = document.querySelector(`[data-craft-node-id="${targetContainerId}"]`);
       }
+    }
 
-      // Account for container padding if available
-      if (targetContainerId !== 'ROOT') {
-        try {
-          const containerNode = query.node(targetContainerId);
-          if (containerNode && containerNode.dom) {
-            const containerStyle = window.getComputedStyle(containerNode.dom);
-            const paddingLeft = parseFloat(containerStyle.paddingLeft) || 0;
-            const paddingTop = parseFloat(containerStyle.paddingTop) || 0;
-            relativeX -= paddingLeft;
-            relativeY -= paddingTop;
-          }
-        } catch (error) {
-          // Could not get container padding
-        }
-      }
-
-      // Apply reasonable bounds
-      const minX = 0;
-      const minY = 0;
-      const maxX = Math.max(50, containerBounds.width - compWidth);
-      const maxY = Math.max(50, containerBounds.height - compHeight);
-      
-      const finalX = Math.max(minX, Math.min(relativeX, maxX));
-      const finalY = Math.max(minY, Math.min(relativeY, maxY));
-
-    
-      return { x: finalX, y: finalY };
-    } catch (error) {
+    if (!containerEl) {
+      console.warn('⚠️ No containerEl resolved, using fallback (50,50)');
       return { x: 50, y: 50 };
     }
-  }, [query, settings.dropPosition.mode, getContainerScreenBounds]);
+
+    try {
+      const result = toContainerCoords({
+        clientX: screenX,
+        clientY: screenY,
+        containerEl,
+        compWidth,
+        compHeight,
+        center,
+        clamp: true
+      });
+      console.log('✅ toContainerCoords result:', { targetContainerId, ...result });
+      return result;
+    } catch (err) {
+      console.error('❌ toContainerCoords error, fallback (50,50)', err);
+      return { x: 50, y: 50 };
+    }
+  }, [query, settings.dropPosition.mode]);
 
   // Enhanced calculate position that handles all transition types
   const calculateRelativePosition = useCallback((mouseX, mouseY, containerId, componentDimensions = null) => {
@@ -367,7 +677,7 @@ export const useDropPositionCorrection = () => {
   // Helper function to apply positioning for NEW and EXISTING components
   // Helper function to apply positioning with snap to grid support
 // Enhanced applyPositioning function that handles new vs existing components correctly
-const applyPositioning = useCallback((nodeId, position) => {
+const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT') => {
   try {
     // Get the actual component dimensions for precision
     const componentDimensions = getExistingComponentDimensions(nodeId);
@@ -387,7 +697,7 @@ const applyPositioning = useCallback((nodeId, position) => {
     const isExistingComponent = dropStateRef.current.isExistingMove;
     
 
-    actions.setProp(nodeId, (props) => {
+  actions.setProp(nodeId, (props) => {
       try {
         props.position = 'absolute';
         
@@ -399,40 +709,83 @@ const applyPositioning = useCallback((nodeId, position) => {
         } catch (error) {
           // Could not get parent from node data
         }
-        
-        if (isNewComponent) {
-          // NEW COMPONENTS: Always use calculated finalX/finalY from coordinate conversion
-          props.left = finalX;
-          props.top = finalY;
-        } else if (isExistingComponent) {
-          // EXISTING COMPONENTS: Use your preferred existing component logic
-          if (parentId && parentId !== 'ROOT') {
-            // For existing components moved to containers, use relative positioning
-            try {
-              const containerNode = query.node(parentId);
-              if (containerNode && containerNode.dom) {
-                const rect = containerNode.dom.getBoundingClientRect();
-                props.left = dropStateRef.current.mousePosition.x - rect.left;
-                props.top = dropStateRef.current.mousePosition.y - rect.top;
-              } else {
-                // Fallback to coordinate conversion if container not found
-                props.left = finalX;
-                props.top = finalY;
-              }
-            } catch (error) {
-              // Fallback to coordinate conversion
-              props.left = finalX;
-              props.top = finalY;
+        // If the position was calculated against a different container (often ROOT) adjust to actual parent
+        if (parentId !== containerIdUsed && parentId !== 'ROOT') {
+          try {
+            const parentDom = query.node(parentId)?.dom;
+            let usedDom = null;
+            if (containerIdUsed === 'ROOT') {
+              usedDom = document.querySelector('[data-cy="editor-root"], .craft-renderer, [data-craft-node-id="ROOT"]');
+            } else {
+              usedDom = query.node(containerIdUsed)?.dom;
             }
-          } else {
-            // For ROOT, use coordinate conversion for consistency
-            props.left = finalX;
-            props.top = finalY;
+            if (parentDom && usedDom) {
+              const parentRect = parentDom.getBoundingClientRect();
+              const usedRect = usedDom.getBoundingClientRect();
+              // Translate coordinates from used container space into parent container space
+              const deltaX = usedRect.left - parentRect.left;
+              const deltaY = usedRect.top - parentRect.top;
+              console.log(parentRect)
+              finalX -= deltaX;
+              finalY -= deltaY;
+              // Clamp within parent bounds
+              const pW = parentRect.width || 1;
+              const pH = parentRect.height || 1;
+              const maxX = Math.max(0, pW - componentDimensions.width);
+              const maxY = Math.max(0, pH - componentDimensions.height);
+              if (finalX < 0 || finalY < 0 || finalX > maxX || finalY > maxY) {
+                finalX = Math.min(Math.max(0, finalX), maxX);
+                finalY = Math.min(Math.max(0, finalY), maxY);
+              }
+              console.log('🧭 Adjusted position from', containerIdUsed, 'space to parent', parentId, { finalX, finalY, deltaX, deltaY });
+            }
+          } catch (adjErr) {
+            console.warn('⚠️ Position adjustment failed', adjErr);
           }
-        } else {
-          // FALLBACK: If we can't determine type, use coordinate conversion (safest)
-          props.left = finalX;
-          props.top = finalY;
+        }
+
+        // Always trust (possibly adjusted) coordinates
+        props.left = finalX;
+        props.top = finalY;
+
+        // Percentage conversion only for newly dropped components and only once
+        if (isNewComponent && !props._percentConverted) {
+          try {
+            let containerEl = null;
+            if (parentId && parentId !== 'ROOT') {
+              const containerNode = query.node(parentId);
+              containerEl = containerNode?.dom || null;
+            } else {
+              // Attempt to find main editor root element
+              containerEl = document.querySelector('[data-cy="editor-root"], .craft-renderer, [data-craft-node-id="ROOT"]');
+            }
+            if (containerEl) {
+              const crect = containerEl.getBoundingClientRect();
+              const cW = crect.width || 1;
+              const cH = crect.height || 1;
+              // If left/top numeric, convert to % strings
+              if (typeof props.left === 'number') {
+                const pctLeft = (props.left / cW) * 100;
+                props.left = parseFloat(pctLeft.toFixed(3)) + '%';
+              }
+              if (typeof props.top === 'number') {
+                const pctTop = (props.top / cH) * 100;
+                props.top = parseFloat(pctTop.toFixed(3)) + '%';
+              }
+              // Width/height: if numeric (explicit) convert too
+              if (typeof props.width === 'number' && props.width > 0) {
+                const pctW = (props.width / cW) * 100;
+                props.width = parseFloat(pctW.toFixed(3)) + '%';
+              }
+              if (typeof props.height === 'number' && props.height > 0) {
+                const pctH = (props.height / cH) * 100;
+                props.height = parseFloat(pctH.toFixed(3)) + '%';
+              }
+              props._percentConverted = true; // flag to prevent double conversion
+            }
+          } catch (convErr) {
+            // Silent fail; keep px values
+          }
         }
       } catch (error) {
         // Failed to apply positioning to props
@@ -471,7 +824,45 @@ const applyPositioning = useCallback((nodeId, position) => {
               dropStateRef.current.mousePosition = { x: fallbackX, y: fallbackY };
             }
             
-            const targetContainer = findContainerAtPosition(mouseX, mouseY);
+            let targetContainer = findContainerAtPosition(mouseX, mouseY);
+
+            // Helper to judge if a nodeId is a canvas-y container
+            const isLikelyCanvas = (id) => {
+              if (!id || id === 'ROOT') return false;
+              try {
+                const nodeWrapper = query.node(id);
+                if (nodeWrapper?.isCanvas()) return true;
+                const data = nodeWrapper?.get()?.data;
+                const name = data?.displayName || data?.type;
+                if (['Box','FlexBox','GridBox'].includes(name)) return true;
+                const domEl = nodeWrapper?.dom;
+                if (domEl) {
+                  const cls = Array.from(domEl.classList||[]);
+                  if (cls.some(c=>['gl-canvas','editor-canvas','craft-canvas'].includes(c))) return true;
+                  for (const attr of ['data-gl-canvas','data-canvas','data-editor-canvas']) {
+                    if (domEl.hasAttribute(attr)) return true;
+                  }
+                }
+              } catch(_) {}
+              return false;
+            };
+
+            // If detection fell back to ROOT but Craft already assigned a non-ROOT parent, prefer existing parent
+            try {
+              const nodeDataPre = query.node(newNodeId).get();
+              const currentParentPre = nodeDataPre.data.parent;
+              if (targetContainer === 'ROOT' && currentParentPre && currentParentPre !== 'ROOT' && isLikelyCanvas(currentParentPre)) {
+                // Validate mouse position is inside current parent bounds
+                const parentDom = query.node(currentParentPre)?.dom;
+                if (parentDom) {
+                  const rect = parentDom.getBoundingClientRect();
+                  if (mouseX >= rect.left && mouseX <= rect.right && mouseY >= rect.top && mouseY <= rect.bottom) {
+                    console.log('🛡️ Preserving existing parent (new component) instead of ROOT:', currentParentPre);
+                    targetContainer = currentParentPre;
+                  }
+                }
+              }
+            } catch(_) {}
             
             // Wait a moment for the new component to be fully rendered
             setTimeout(() => {
@@ -488,13 +879,14 @@ const applyPositioning = useCallback((nodeId, position) => {
               
               // Move to correct container if needed
               if (currentParent !== targetContainer) {
-                actions.move(newNodeId, targetContainer, 0);
-                // Wait longer after moving to ensure Box component's coordinate conversion runs first
-                setTimeout(() => {
-                  applyPositioning(newNodeId, position);
-                }, 600);
+                console.log('↪️ Attempting reparent (new component)', { newNodeId, targetContainer });
+                ensureParent(newNodeId, targetContainer, { attempts: 6, interval: 90, index: 0 }).then(() => {
+                  // Apply positioning after final parent confirmation
+                  setTimeout(() => applyPositioning(newNodeId, position, targetContainer), 40);
+                    setTimeout(() => applyPositioning(newNodeId, position, targetContainer), 300);
+                });
               } else {
-                applyPositioning(newNodeId, position);
+                  applyPositioning(newNodeId, position, targetContainer);
               }
             }, 50); // Small delay to ensure DOM is ready for dimension calculation
             
@@ -546,7 +938,104 @@ const applyPositioning = useCallback((nodeId, position) => {
         return;
       }
       
-      const targetContainer = findContainerAtPosition(dropStateRef.current.mousePosition.x, dropStateRef.current.mousePosition.y);
+      // Retry-based detection to allow DOM mounting
+      // Helper to find a canvas ancestor from the dragged element's DOM (fallback when pointer misses)
+      const fallbackCanvasFromDom = () => {
+        try {
+          const nodeWrapper = query.node(nodeId);
+          const el = nodeWrapper?.dom;
+          if (!el) return null;
+          const FORCED_CANVAS_NAMES = new Set(['Box', 'FlexBox', 'GridBox']);
+          const CLASS_MARKERS = ['gl-canvas', 'editor-canvas', 'craft-canvas'];
+          const ATTR_MARKERS = ['data-gl-canvas', 'data-canvas', 'data-editor-canvas'];
+          let current = el.parentElement;
+          while (current && current !== document.body) {
+            const ancestorId = current.getAttribute('data-craft-node-id');
+            if (ancestorId && ancestorId !== 'ROOT') {
+              try {
+                const ancNode = query.node(ancestorId);
+                if (ancNode && ancNode.isCanvas()) return ancestorId;
+                const data = ancNode?.get()?.data;
+                const displayName = data?.displayName || data?.type;
+                if (displayName && FORCED_CANVAS_NAMES.has(displayName)) return ancestorId;
+                // DOM marker heuristics
+                const classList = Array.from(current.classList || []);
+                if (classList.some(c => CLASS_MARKERS.includes(c))) return ancestorId;
+                for (const attr of ATTR_MARKERS) {
+                  if (current.hasAttribute(attr)) return ancestorId;
+                }
+                const compAttr = current.getAttribute('data-component');
+                if (compAttr && FORCED_CANVAS_NAMES.has(compAttr)) return ancestorId;
+              } catch(_){}
+            }
+            current = current.parentElement;
+          }
+        } catch(_) {}
+        return null;
+      };
+
+      const attemptDetect = (attempt = 0, maxAttempts = 5) => {
+        const detectedNow = findContainerAtPosition(dropStateRef.current.mousePosition.x, dropStateRef.current.mousePosition.y);
+        let target = Array.isArray(detectedNow) ? (detectedNow[0]?.nodeId || 'ROOT') : detectedNow;
+
+        const isLikelyCanvas = (id) => {
+          if (!id || id === 'ROOT') return false;
+          try {
+            const nw = query.node(id);
+            if (nw?.isCanvas()) return true;
+            const data = nw?.get()?.data;
+            const name = data?.displayName || data?.type;
+            if (['Box','FlexBox','GridBox'].includes(name)) return true;
+            const el = nw?.dom;
+            if (el) {
+              const cls = Array.from(el.classList||[]);
+              if (cls.some(c=>['gl-canvas','editor-canvas','craft-canvas'].includes(c))) return true;
+              for (const attr of ['data-gl-canvas','data-canvas','data-editor-canvas']) {
+                if (el.hasAttribute(attr)) return true;
+              }
+            }
+          } catch(_) {}
+          return false;
+        };
+
+        // Prefer current parent if detection is ROOT but current parent is a canvas and mouse is inside
+        try {
+          const nodeData = query.node(nodeId).get();
+          const currentParent = nodeData.data.parent;
+          if (target === 'ROOT' && currentParent && currentParent !== 'ROOT' && isLikelyCanvas(currentParent)) {
+            const parentDom = query.node(currentParent)?.dom;
+            if (parentDom) {
+              const rect = parentDom.getBoundingClientRect();
+              const { x: mx, y: my } = dropStateRef.current.mousePosition;
+              if (mx >= rect.left && mx <= rect.right && my >= rect.top && my <= rect.bottom) {
+                console.log('🛡️ Preserving existing parent (existing move) instead of ROOT:', currentParent);
+                target = currentParent;
+              }
+            }
+          }
+        } catch(_) {}
+
+        // If still ROOT, try lastDetectedContainer
+        if (target === 'ROOT' && dropStateRef.current.lastDetectedContainer && dropStateRef.current.lastDetectedContainer !== 'ROOT') {
+          console.log('🛟 Using lastDetectedContainer fallback:', dropStateRef.current.lastDetectedContainer);
+          target = dropStateRef.current.lastDetectedContainer;
+        }
+        // If still ROOT, try DOM ancestor fallback
+        if (target === 'ROOT') {
+          const domFallback = fallbackCanvasFromDom();
+          if (domFallback && domFallback !== 'ROOT') {
+            console.log('🛟 Using DOM ancestor fallback canvas:', domFallback);
+            target = domFallback;
+          }
+        }
+        if (target !== 'ROOT' || attempt >= maxAttempts - 1) {
+          proceedWithContainer(target);
+        } else {
+          setTimeout(() => attemptDetect(attempt + 1, maxAttempts), 70);
+        }
+      };
+
+      const proceedWithContainer = (targetContainer) => {
       
       // Wait for component to be fully moved/positioned
       setTimeout(() => {
@@ -568,28 +1057,26 @@ const applyPositioning = useCallback((nodeId, position) => {
           
           // Move to correct container if needed
           if (currentParent !== targetContainer) {
-            
-            try {
-              // Enable actual container moves with coordinate conversion
-              actions.move(nodeId, targetContainer, 0);
-              applyPositioning(nodeId, position);
-              
-              // Wait longer after moving to ensure position conversion completes
-              setTimeout(() => {
-                applyPositioning(nodeId, position);
-              }, 600);
-            } catch (moveError) {
-              // Apply positioning anyway in case the move partially succeeded
-              setTimeout(() => {
-                applyPositioning(nodeId, position);
-              }, 300);
-            }
+            console.log('↪️ Attempting reparent (existing move)', { nodeId, targetContainer });
+            ensureParent(nodeId, targetContainer, { attempts: 6, interval: 90, index: 0 }).then((ok) => {
+              if (!ok) {
+                // Still apply positioning relative to whatever parent we have
+                applyPositioning(nodeId, position, targetContainer);
+                return;
+              }
+              // Apply positioning now that parent confirmed
+              setTimeout(() => applyPositioning(nodeId, position, targetContainer), 30);
+              setTimeout(() => applyPositioning(nodeId, position, targetContainer), 250);
+            });
           } else {
-            applyPositioning(nodeId, position);
+            applyPositioning(nodeId, position, targetContainer);
           }
         } catch (positioningError) {
         }
       }, 50);
+      };
+
+      attemptDetect();
       
     } catch (error) {
     }
@@ -715,7 +1202,8 @@ const applyPositioning = useCallback((nodeId, position) => {
         lastMousePositionRef.current = { x: mouseX, y: mouseY };
         
         // Container detection still works (just no visual feedback)
-        const targetContainer = findContainerAtPosition(mouseX, mouseY);
+          const detected = findContainerAtPosition(mouseX, mouseY);
+          const targetContainer = Array.isArray(detected) ? (detected[0]?.nodeId || 'ROOT') : detected;
         
       } else if (dropStateRef.current.potentialDragNodeId) {
         // Check if this is a Craft.js drag operation in progress
@@ -880,7 +1368,7 @@ const applyPositioning = useCallback((nodeId, position) => {
       document.removeEventListener('dragenter', handleDragEnter);
   document.removeEventListener('dragend', handleDragEnd);
   document.removeEventListener('mouseup', handleMouseUp, true);
-      document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mousemove', handleMouseMove);
       clearInterval(monitorInterval);
       clearInterval(craftMonitorInterval);
     };
@@ -895,6 +1383,7 @@ const applyPositioning = useCallback((nodeId, position) => {
         
         setTimeout(() => {
           const targetContainer = findContainerAtPosition(x, y);
+          console.log(targetContainer)
           const componentDimensions = getExistingComponentDimensions(nodeId);
           const position = calculateRelativePosition(x, y, targetContainer, componentDimensions);
           
@@ -917,10 +1406,44 @@ const applyPositioning = useCallback((nodeId, position) => {
       // Enhanced container detection testing
       window.testContainerDetection = (x, y) => {
         console.log('🧪 Testing container detection at:', { x, y });
+        
+        // Show all elements at position
+        const elements = document.elementsFromPoint(x, y);
+        console.log('📋 All elements at position:', elements.map(el => ({
+          tag: el.tagName,
+          nodeId: el.getAttribute('data-craft-node-id'),
+          classes: el.className,
+          id: el.id
+        })));
+        
+        // Test our function
         const container = findContainerAtPosition(x, y);
         const position = calculateRelativePosition(x, y, container, { width: 100, height: 50 });
         console.log('🧪 Container detection result:', { container, position });
-        return { container, position };
+        
+        // Show all available craft containers
+        const allCraftElements = Array.from(document.querySelectorAll('[data-craft-node-id]'));
+        const containers = allCraftElements.filter(el => {
+          const nodeId = el.getAttribute('data-craft-node-id');
+          if (nodeId && nodeId !== 'ROOT') {
+            try {
+              const node = query.node(nodeId);
+              return node && node.isCanvas();
+            } catch (error) {
+              return false;
+            }
+          }
+          return false;
+        });
+        
+        console.log('📦 All available containers:', containers.map(el => ({
+          nodeId: el.getAttribute('data-craft-node-id'),
+          rect: el.getBoundingClientRect(),
+          tag: el.tagName,
+          classes: el.className
+        })));
+        
+        return { container, position, allContainers: containers };
       };
 
       // Test new coordinate conversion system
@@ -1168,6 +1691,7 @@ const applyPositioning = useCallback((nodeId, position) => {
     // Expose methods for manual control if needed
     correctPosition: useCallback((nodeId, mouseX, mouseY) => {
       const targetContainer = findContainerAtPosition(mouseX, mouseY);
+      console.log(targetContainer);
       const position = calculateRelativePosition(mouseX, mouseY, targetContainer);
       
       actions.setProp(nodeId, (props) => {
@@ -1185,7 +1709,7 @@ const applyPositioning = useCallback((nodeId, position) => {
       
       setTimeout(() => {
         handleExistingComponentMove();
-      }, 50);
+  }, 50);
     }, [handleExistingComponentMove])
   };
 };

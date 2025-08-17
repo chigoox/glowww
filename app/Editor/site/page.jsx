@@ -992,14 +992,10 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
     // Open preview in new tab
     let previewUrl = `/u/${user.username}/${site.name}`;
     
-    // If not on home page, append the page path
-    if (currentPageId !== 'home') {
-      // For now, use the page ID as the path
-      // This could be enhanced to use actual page slug/path from the page data
-      previewUrl += `/${currentPageId}`;
-    }
-    
-    window.open(previewUrl, '_blank');
+  // Always include a page path: use currentPageId when available, otherwise 'home'
+  const pageSegment = currentPageId || 'home';
+  previewUrl += `/${pageSegment}`;
+  window.open(previewUrl, '_blank');
   };
 
   // Publish/Unpublish function

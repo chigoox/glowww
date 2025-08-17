@@ -1,14 +1,15 @@
 "use client";
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { snapGridSystem } from '../../utils/grid/SnapGridSystem';
 
 /**
  * Reusable resize handles overlay (portal-based) mirroring Box resize behavior.
  *
  * Props:
  *  - boxPosition: { top, left, width, height } (absolute screen coords via getBoundingClientRect + scroll)
- *  - onResizeStart: (event, direction) => void (direction in: 'n','s','e','w','ne','nw','se','sw')
+ *  - onResizeStart: (event, direction) => void (legacy external handler; direction in: 'n','s','e','w','ne','nw','se','sw')
  *  - showCorners: boolean (default true)
  *  - showEdges: boolean (default true)
  *  - accentColor: string (primary color for handles) default '#1890ff'
@@ -17,6 +18,16 @@ import { createPortal } from 'react-dom';
  *  - edgeThickness: number (thickness of edge handle) default 8
  *  - portal: boolean (wrap in createPortal to document.body) default true
  *  - zIndex: number (stacking for portal root) default 99999
+ *  - enableInternalResize: boolean (default true) if true and deps provided, uses internal logic
+ *  - nodeId: string (Craft node id) required for internal logic
+ *  - targetRef: React ref to element being resized (required for internal logic)
+ *  - editorActions: Craft editor actions (editorActions from useEditor())
+ *  - craftQuery: Craft query object (query from useEditor())
+ *  - minWidth: number (default 50)
+ *  - minHeight: number (default 20)
+ *  - maintainAspect: boolean (optional) preserve aspect ratio when resizing diagonally
+ *  - onResize: (dimensions) => void callback during resize (internal logic only)
+ *  - onResizeEnd: (finalDimensions) => void after mouseup (internal logic only)
  */
 export const ResizeHandles = ({
   boxPosition,
@@ -29,9 +40,233 @@ export const ResizeHandles = ({
   edgeThickness = 8,
   portal = true,
   zIndex = 99999,
+  enableInternalResize = true,
+  nodeId,
+  targetRef,
+  editorActions,
+  craftQuery,
+  minWidth = 50,
+  minHeight = 20,
+  maintainAspect = false,
+  onResize,
+  onResizeEnd,
 }) => {
   if (typeof window === 'undefined') return null; // SSR guard
   if (!boxPosition) return null;
+
+  // Internal resize starter replicating Box.jsx logic
+  const internalResizeStart = useCallback((e, direction) => {
+    if (!enableInternalResize || !nodeId || !targetRef?.current || !editorActions || !craftQuery) {
+      // Fallback to legacy external handler
+      onResizeStart?.(e, direction);
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = targetRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    let startLeft = rect.left;
+    let startTop = rect.top;
+    const parentEl = targetRef.current.offsetParent;
+    if (parentEl) {
+      const parentRect = parentEl.getBoundingClientRect();
+      startLeft = rect.left - parentRect.left;
+      startTop = rect.top - parentRect.top;
+    }
+
+    // Register elements for snapping
+    const nodes = craftQuery.getNodes();
+    Object.entries(nodes).forEach(([id, node]) => {
+      if (id !== nodeId && node.dom) {
+        const elementRect = node.dom.getBoundingClientRect();
+        const editorRoot = document.querySelector('[data-editor="true"]');
+        if (editorRoot) {
+          const editorRect = editorRoot.getBoundingClientRect();
+          const registrationBounds = {
+            x: elementRect.left - editorRect.left,
+            y: elementRect.top - editorRect.top,
+            width: elementRect.width,
+            height: elementRect.height,
+          };
+          snapGridSystem.registerElement(id, node.dom, registrationBounds);
+        }
+      }
+    });
+
+    const aspectRatio = startWidth / startHeight;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+
+      let newWidth = startWidth;
+      let newHeight = startHeight;
+      let newLeft = startLeft;
+      let newTop = startTop;
+
+      switch (direction) {
+        case 'se':
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight + deltaY;
+          break;
+        case 'sw':
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight + deltaY;
+          newLeft = startLeft + deltaX;
+          break;
+        case 'ne':
+          newWidth = startWidth + deltaX;
+          newHeight = startHeight - deltaY;
+          newTop = startTop + deltaY;
+          break;
+        case 'nw':
+          newWidth = startWidth - deltaX;
+          newHeight = startHeight - deltaY;
+          newLeft = startLeft + deltaX;
+          newTop = startTop + deltaY;
+          break;
+        case 'e':
+          newWidth = startWidth + deltaX;
+          break;
+        case 'w':
+          newWidth = startWidth - deltaX;
+          newLeft = startLeft + deltaX;
+          break;
+        case 's':
+          newHeight = startHeight + deltaY;
+          break;
+        case 'n':
+          newHeight = startHeight - deltaY;
+          newTop = startTop + deltaY;
+          break;
+      }
+
+      // Enforce min constraints without moving box further once min reached (freeze leading edge)
+      if (direction.includes('w')) {
+        const attemptWidth = newWidth;
+        if (attemptWidth < minWidth) {
+          // Keep right edge fixed: shift left so width = min while right edge stays where it was at min threshold
+          newWidth = minWidth;
+          newLeft = startLeft + (startWidth - minWidth);
+        }
+      }
+      if (direction.includes('n')) {
+        const attemptHeight = newHeight;
+        if (attemptHeight < minHeight) {
+          newHeight = minHeight;
+          newTop = startTop + (startHeight - minHeight);
+        }
+      }
+
+      if (maintainAspect && direction.length === 2) {
+        // Diagonal resize preserving aspect
+        const ratioBasedHeight = newWidth / aspectRatio;
+        const ratioBasedWidth = newHeight * aspectRatio;
+        if (Math.abs(ratioBasedHeight - newHeight) < Math.abs(ratioBasedWidth - newWidth)) {
+          newHeight = ratioBasedHeight;
+        } else {
+          newWidth = ratioBasedWidth;
+        }
+      }
+
+      newWidth = Math.max(newWidth, minWidth);
+      newHeight = Math.max(newHeight, minHeight);
+
+      const currentRect = targetRef.current.getBoundingClientRect();
+      const editorRoot = document.querySelector('[data-editor="true"]');
+      if (editorRoot) {
+        const editorRect = editorRoot.getBoundingClientRect();
+        let intendedBounds = {
+          left: currentRect.left - editorRect.left,
+          top: currentRect.top - editorRect.top,
+          width: newWidth,
+          height: newHeight
+        };
+        if (direction.includes('w')) {
+          const widthDelta = newWidth - currentRect.width;
+            intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
+        }
+        if (direction.includes('n')) {
+          const heightDelta = newHeight - currentRect.height;
+          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
+        }
+        intendedBounds.right = intendedBounds.left + intendedBounds.width;
+        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
+        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
+        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
+
+        const snapResult = snapGridSystem.getResizeSnapPosition(
+          nodeId,
+          direction,
+          intendedBounds,
+          newWidth,
+          newHeight
+        );
+        if (snapResult.snapped) {
+          newWidth = snapResult.bounds.width;
+          newHeight = snapResult.bounds.height;
+          if (direction.includes('w') && typeof snapResult.bounds.left === 'number') {
+            newLeft = snapResult.bounds.left;
+          }
+          if (direction.includes('n') && typeof snapResult.bounds.top === 'number') {
+            newTop = snapResult.bounds.top;
+          }
+        }
+      }
+
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+        if (direction.includes('w')) props.left = Math.round(newLeft);
+        if (direction.includes('n')) props.top = Math.round(newTop);
+        if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
+          props.position = 'absolute';
+        }
+      });
+      onResize?.({ width: newWidth, height: newHeight, left: newLeft, top: newTop, direction });
+    };
+
+    const handleMouseUp = () => {
+      snapGridSystem.clearSnapIndicators();
+      setTimeout(() => snapGridSystem.cleanupTrackedElements(), 100);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      if (targetRef?.current) {
+        const finalRect = targetRef.current.getBoundingClientRect();
+        // Optional: Preserve percentage units if original width/height were %
+        try {
+          const nodeWrapper = craftQuery?.node(nodeId);
+          const nodeData = nodeWrapper?.get?.();
+          const originalProps = nodeData?.data?.props || {};
+          const parentEl = targetRef.current.offsetParent;
+          let parentWidth = parentEl?.getBoundingClientRect().width;
+          let parentHeight = parentEl?.getBoundingClientRect().height;
+          if (parentWidth && parentHeight) {
+            const widthWasPercent = typeof originalProps.width === 'string' && originalProps.width.trim().endsWith('%');
+            const heightWasPercent = typeof originalProps.height === 'string' && originalProps.height.trim().endsWith('%');
+            if (widthWasPercent || heightWasPercent) {
+              editorActions.setProp(nodeId, (p) => {
+                if (widthWasPercent) {
+                  p.width = parseFloat(((finalRect.width / parentWidth) * 100).toFixed(3)) + '%';
+                }
+                if (heightWasPercent) {
+                  p.height = parseFloat(((finalRect.height / parentHeight) * 100).toFixed(3)) + '%';
+                }
+              });
+            }
+          }
+        } catch (_) {}
+        onResizeEnd?.({ width: finalRect.width, height: finalRect.height });
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [enableInternalResize, nodeId, targetRef, editorActions, craftQuery, minWidth, minHeight, maintainAspect, onResize, onResizeEnd]);
 
   const handles = (
     <div
@@ -49,29 +284,29 @@ export const ResizeHandles = ({
         <>
           {/* NW */}
           <div
-            style={cornerStyle(boxPosition.top, boxPosition.left, cornerSize, accentColor)}
-            onMouseDown={(e) => onResizeStart?.(e, 'nw')}
+            style={cornerStyle(boxPosition.top, boxPosition.left, cornerSize, accentColor, 'nw')}
+            onMouseDown={(e) => internalResizeStart(e, 'nw')}
             title="Resize"
             data-direction="nw"
           />
           {/* NE */}
             <div
-              style={cornerStyle(boxPosition.top, boxPosition.left + boxPosition.width - cornerSize, cornerSize, accentColor, 'ne')}
-              onMouseDown={(e) => onResizeStart?.(e, 'ne')}
+              style={cornerStyle(boxPosition.top, boxPosition.left + boxPosition.width, cornerSize, accentColor, 'ne')}
+              onMouseDown={(e) => internalResizeStart(e, 'ne')}
               title="Resize"
               data-direction="ne"
             />
           {/* SW */}
           <div
-            style={cornerStyle(boxPosition.top + boxPosition.height - cornerSize, boxPosition.left, cornerSize, accentColor, 'sw')}
-            onMouseDown={(e) => onResizeStart?.(e, 'sw')}
+            style={cornerStyle(boxPosition.top + boxPosition.height, boxPosition.left, cornerSize, accentColor, 'sw')}
+            onMouseDown={(e) => internalResizeStart(e, 'sw')}
             title="Resize"
             data-direction="sw"
           />
           {/* SE */}
           <div
-            style={cornerStyle(boxPosition.top + boxPosition.height - cornerSize, boxPosition.left + boxPosition.width - cornerSize, cornerSize, accentColor, 'se')}
-            onMouseDown={(e) => onResizeStart?.(e, 'se')}
+            style={cornerStyle(boxPosition.top + boxPosition.height, boxPosition.left + boxPosition.width, cornerSize, accentColor, 'se')}
+            onMouseDown={(e) => internalResizeStart(e, 'se')}
             title="Resize"
             data-direction="se"
           />
@@ -91,7 +326,7 @@ export const ResizeHandles = ({
               cursor: 'n-resize',
               accentColor,
             })}
-            onMouseDown={(e) => onResizeStart?.(e, 'n')}
+            onMouseDown={(e) => internalResizeStart(e, 'n')}
             title="Resize height"
             data-direction="n"
           />
@@ -105,7 +340,7 @@ export const ResizeHandles = ({
               cursor: 's-resize',
               accentColor,
             })}
-            onMouseDown={(e) => onResizeStart?.(e, 's')}
+            onMouseDown={(e) => internalResizeStart(e, 's')}
             title="Resize height"
             data-direction="s"
           />
@@ -119,7 +354,7 @@ export const ResizeHandles = ({
               cursor: 'w-resize',
               accentColor,
             })}
-            onMouseDown={(e) => onResizeStart?.(e, 'w')}
+            onMouseDown={(e) => internalResizeStart(e, 'w')}
             title="Resize width"
             data-direction="w"
           />
@@ -133,7 +368,7 @@ export const ResizeHandles = ({
               cursor: 'e-resize',
               accentColor,
             })}
-            onMouseDown={(e) => onResizeStart?.(e, 'e')}
+            onMouseDown={(e) => internalResizeStart(e, 'e')}
             title="Resize width"
             data-direction="e"
           />
@@ -147,10 +382,11 @@ export const ResizeHandles = ({
 
 // Corner style helper
 function cornerStyle(top, left, size, accentColor, dir) {
+  // Position at exact corner and center using transform so it straddles edges
   return {
     position: 'absolute',
-    top: top - 4, // match existing Box offset
-    left: left - 4,
+    top: top,
+    left: left,
     width: size,
     height: size,
     background: 'white',
@@ -160,6 +396,7 @@ function cornerStyle(top, left, size, accentColor, dir) {
     zIndex: 10001,
     pointerEvents: 'auto',
     boxSizing: 'border-box',
+    transform: 'translate(-50%, -50%)'
   };
 }
 

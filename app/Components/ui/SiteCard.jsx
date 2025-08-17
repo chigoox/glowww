@@ -41,13 +41,51 @@ const SiteCard = ({
 
   const username = user?.username || user?.displayName || 'user';
   const siteName = site.subdomain || site.name;
-  const publicUrl = `${window.location.origin}/u/${username}/${siteName}`;
-  const previewUrl = `${window.location.origin}/Preview`;
+  // Resolve whether base path or /home is publicly accessible (handles incognito vs normal dev behaviour)
+  const origin = (typeof window !== 'undefined') ? window.location.origin : '';
+  const basePath = `${origin}/u/${username}/${siteName}`;
+  const homePath = `${basePath}/home`;
+  const [publicUrl, setPublicUrl] = useState(basePath);
+  const [previewUrl, setPreviewUrl] = useState(basePath);
 
-  // Load thumbnail when component mounts or site changes
+  useEffect(() => {
+    let mounted = true;
+    async function ok(url) {
+      try {
+        const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+        return res.ok;
+      } catch (e) {
+        return false;
+      }
+    }
+    async function resolve() {
+      // Try base first (you mentioned /u/gang/v2 works in incognito)
+      if (!origin) return; // safety during SSR
+      if (await ok(basePath)) {
+        if (!mounted) return;
+        setPublicUrl(basePath);
+        setPreviewUrl(basePath);
+        return;
+      }
+      if (await ok(homePath)) {
+        if (!mounted) return;
+        setPublicUrl(homePath);
+        setPreviewUrl(homePath);
+        return;
+      }
+      // Fallback to homePath
+      if (!mounted) return;
+      setPublicUrl(homePath);
+      setPreviewUrl(homePath);
+    }
+    resolve();
+    return () => { mounted = false; };
+  }, [origin, basePath, homePath]);
+
+  // Load thumbnail when component mounts or site changes (and when publicUrl resolved)
   useEffect(() => {
     loadThumbnail();
-  }, [site.id, site.updatedAt, site.isPublished]);
+  }, [site.id, site.updatedAt, site.isPublished, publicUrl]);
 
   const loadThumbnail = async () => {
     if (!site.isPublished) {
@@ -60,7 +98,9 @@ const SiteCard = ({
       setThumbnailLoading(true);
       setThumbnailError(false);
       
-      const thumbnailData = await getCachedOrGenerateThumbnail(site, username);
+  // Choose pageKey based on resolved public URL (if it ends with /home, request pageKey 'home')
+  const pageKey = publicUrl && publicUrl.endsWith('/home') ? 'home' : undefined;
+  const thumbnailData = await getCachedOrGenerateThumbnail(site, username, { pageKey });
       
       if (thumbnailData) {
         setThumbnail(thumbnailData);
@@ -283,13 +323,13 @@ const SiteCard = ({
                   />
                 </Tooltip>
                 <Tooltip title="Open in new tab">
-                  <Button 
+          <Button 
                     type="text" 
                     size="small" 
                     icon={<LinkOutlined />}
                     onClick={(e) => {
                       e.stopPropagation();
-                      openInNewTab(publicUrl);
+            openInNewTab(publicUrl);
                     }}
                     style={{ padding: '2px', minWidth: 'auto' }}
                   />
@@ -300,13 +340,13 @@ const SiteCard = ({
             {/* Quick Actions */}
             <Space size="small" style={{ width: '100%', justifyContent: 'space-between' }}>
               <div>
-                <Button 
+        <Button 
                   type="link" 
                   size="small" 
                   icon={<PlayCircleOutlined />}
                   onClick={(e) => {
                     e.stopPropagation();
-                    openInNewTab(previewUrl);
+          openInNewTab(previewUrl);
                   }}
                   style={{ padding: 0, height: 'auto' }}
                 >

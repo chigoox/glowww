@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,21 +29,93 @@ export async function POST(req) {
 
 	try {
 		switch (event.type) {
-			case 'checkout.session.completed':
-					{
-						const session = event.data.object;
-						const userId = session.metadata?.userId;
-						const customerId = session.customer;
-						if (userId) {
-							await adminDb.collection('users').doc(userId).set({
-								subscriptionTier: 'pro',
-								stripe: { customerId },
-								subscriptionStatus: 'active',
-								lastCheckoutCompletedAt: new Date(),
+			case 'checkout.session.expired': {
+				const session = event.data.object;
+				const orderId = session.metadata?.orderId;
+				const userId = session.metadata?.userId;
+				if(orderId && userId) {
+					const orderRef = adminDb.collection('users').doc(userId).collection('orders').doc(orderId);
+					await adminDb.runTransaction(async (t)=>{
+						const snap = await t.get(orderRef);
+						if(!snap.exists) return;
+						const data = snap.data();
+						if(data.lifecycleStatus !== 'pending_payment') return;
+						const items = Array.isArray(data.items)? data.items: [];
+						for(const line of items){
+							const prodRef = adminDb.collection('products').doc(line.productId);
+							const prodSnap = await t.get(prodRef);
+							if(!prodSnap.exists) continue;
+							const prod = prodSnap.data();
+							if(line.variantId && Array.isArray(prod.variants)) {
+								const variants = prod.variants.map(v => {
+									if(v.id === line.variantId || v.variantId === line.variantId){
+										const reserved = typeof v.reserved==='number'? v.reserved:0;
+										return { ...v, reserved: Math.max(0, reserved - line.qty) };
+									}
+									return v;
+								});
+								t.update(prodRef, { variants });
+							} else {
+								const reserved = typeof prod.reserved==='number'? prod.reserved:0;
+								t.update(prodRef, { reserved: Math.max(0, reserved - line.qty) });
+							}
+						}
+						const history = Array.isArray(data.statusHistory)? [...data.statusHistory]:[];
+						history.push({ from: data.lifecycleStatus, to: 'expired', at: Date.now(), note: 'checkout_session_expired' });
+						t.update(orderRef, { lifecycleStatus:'expired', status:'expired', expiredAt: new Date(), statusHistory: history.slice(-200) });
+					});
+				}
+				break;
+			}
+			case 'checkout.session.completed': {
+				const session = event.data.object;
+				const userId = session.metadata?.userId;
+				const sellerUserId = session.metadata?.sellerUserId || session.metadata?.seller || null;
+				const siteId = session.metadata?.siteId || null;
+				const customerId = session.customer;
+				const orderId = session.metadata?.orderId;
+				if (userId) {
+					if (orderId) {
+						const orderRef = adminDb.collection('users').doc(userId).collection('orders').doc(orderId);
+						await adminDb.runTransaction(async (t) => {
+							const snap = await t.get(orderRef);
+							if(!snap.exists) return;
+							const data = snap.data();
+							const history = Array.isArray(data.statusHistory) ? [...data.statusHistory] : [];
+							if(data.lifecycleStatus !== 'paid') {
+								history.push({ from: data.lifecycleStatus || 'pending_payment', to: 'paid', at: Date.now(), note: 'checkout.session.completed' });
+							}
+							t.update(orderRef, {
+								status: 'paid',
+								lifecycleStatus: 'paid',
+								paidAt: new Date(),
+								sellerUserId: sellerUserId || null,
+								siteId: siteId || null,
+								stripe: { checkoutSessionId: session.id, paymentIntent: session.payment_intent || null },
+								statusHistory: history.slice(-200)
+							});
+						});
+						if (sellerUserId) {
+							await adminDb.collection('sellers').doc(sellerUserId).collection('orders').doc(orderId).set({
+								status: 'paid',
+								paidAt: new Date(),
+								userId,
+								orderId,
+								siteId: siteId || null,
+								stripe: { checkoutSessionId: session.id, paymentIntent: session.payment_intent || null }
 							}, { merge: true });
 						}
+					} else {
+						await adminDb.collection('users').doc(userId).set({
+							subscriptionTier: 'pro',
+							stripe: { customerId },
+							subscriptionStatus: 'active',
+							lastCheckoutCompletedAt: new Date(),
+						}, { merge: true });
 					}
+				}
 				break;
+			}
 			case 'customer.subscription.updated':
 			case 'customer.subscription.created':
 				case 'customer.subscription.deleted':
@@ -69,10 +142,58 @@ export async function POST(req) {
 						}
 					}
 				break;
-			case 'invoice.payment_failed':
-			case 'invoice.payment_succeeded':
-				// Optional: handle payment status
+			case 'charge.refunded': {
+				const charge = event.data.object;
+				const orderId = charge.metadata?.orderId;
+				const userId = charge.metadata?.userId;
+				const sellerUserId = charge.metadata?.sellerUserId || null;
+				if(orderId && userId) {
+					await adminDb.collection('users').doc(userId).collection('orders').doc(orderId).set({ status:'refunded', refundedAt: new Date() }, { merge:true });
+					if (sellerUserId) {
+						await adminDb.collection('sellers').doc(sellerUserId).collection('orders').doc(orderId).set({ status:'refunded', refundedAt: new Date() }, { merge:true });
+					}
+				}
 				break;
+			}
+			case 'payment_intent.payment_failed': {
+				const intent = event.data.object;
+				const orderId = intent.metadata?.orderId;
+				const userId = intent.metadata?.userId;
+				const sellerUserId = intent.metadata?.sellerUserId || null;
+				if(orderId && userId) {
+					const orderRef = adminDb.collection('users').doc(userId).collection('orders').doc(orderId);
+					await adminDb.runTransaction(async (t)=>{
+						const snap = await t.get(orderRef);
+						if(!snap.exists) return;
+						const data = snap.data();
+						const items = Array.isArray(data.items)? data.items: [];
+						for(const line of items){
+							const prodRef = adminDb.collection('products').doc(line.productId);
+							const prodSnap = await t.get(prodRef);
+							if(!prodSnap.exists) continue;
+							const prod = prodSnap.data();
+							if(line.variantId && Array.isArray(prod.variants)) {
+								const variants = prod.variants.map(v => {
+									if(v.id === line.variantId || v.variantId === line.variantId) {
+										const reserved = typeof v.reserved==='number'? v.reserved:0;
+										return { ...v, reserved: Math.max(0, reserved - line.qty) };
+									}
+									return v;
+								});
+								t.update(prodRef, { variants });
+							} else {
+								const reserved = typeof prod.reserved==='number'? prod.reserved:0;
+								t.update(prodRef, { reserved: Math.max(0, reserved - line.qty) });
+							}
+						}
+						t.update(orderRef, { status:'payment_failed', lifecycleStatus:'payment_failed', updatedAt: new Date() });
+					});
+					if (sellerUserId) {
+						await adminDb.collection('sellers').doc(sellerUserId).collection('orders').doc(orderId).set({ status:'payment_failed', updatedAt: new Date() }, { merge:true });
+					}
+				}
+				break;
+			}
 			default:
 				break;
 		}

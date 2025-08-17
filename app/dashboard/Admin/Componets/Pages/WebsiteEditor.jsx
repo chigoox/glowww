@@ -63,6 +63,8 @@ import {
 } from "next/font/google";
 
 import { message } from 'antd';
+import PaymentProvidersSettings from "../Componets/Sections/PaymentProvidersSettings";
+import { useCart } from '@/contexts/CartContext';
 
 
 
@@ -171,6 +173,7 @@ const pageFonts = [
 const user = getAuth();
 
 const WebsiteEditor = ({ SITEINFO }) => {
+  const { setSiteScope, setSellerUserId } = useCart?.() || {};
   const [loading, setLoading] = useState(false);
   const [siteInfo, setSiteInfo] = useState(
     SITEINFO || {
@@ -201,6 +204,8 @@ const WebsiteEditor = ({ SITEINFO }) => {
   const [colHas, setColHas] = useState('all'); // all | has | empty
 
 const [showTextEditor, setShowTextEditor] = useState(false)
+  const [providerState, setProviderState] = useState({ stripe:true, paypal:true });
+  const [savingProviders, setSavingProviders] = useState(false);
   const pageFont =
     siteInfo?.font == "Roboto"
       ? roboto
@@ -254,7 +259,25 @@ const [showTextEditor, setShowTextEditor] = useState(false)
       categories: Array.isArray(SITEINFO.categories) ? SITEINFO.categories : (prev?.categories || []),
       collections: Array.isArray(SITEINFO.collections) ? SITEINFO.collections : (prev?.collections || []),
     }));
+    // Initialize cart multi-tenant scoping early when site info arrives
+    try {
+      if (SITEINFO?.id && typeof setSiteScope === 'function') setSiteScope(SITEINFO.id);
+      if (SITEINFO?.userId && typeof setSellerUserId === 'function') setSellerUserId(SITEINFO.userId);
+    } catch {}
   }, [SITEINFO]);
+
+  // Load payment providers (default both on)
+  useEffect(()=>{
+    if(!SITEINFO?.userId || !SITEINFO?.id) return;
+    getDoc(doc(db, 'users', SITEINFO.userId, 'sites', SITEINFO.id)).then(snap => {
+      if(snap.exists()) {
+        const data = snap.data();
+        if(data.paymentProviders && typeof data.paymentProviders==='object') {
+          setProviderState({ stripe: data.paymentProviders.stripe !== false, paypal: data.paymentProviders.paypal !== false });
+        }
+      }
+    }).catch(()=>{});
+  }, [SITEINFO?.userId, SITEINFO?.id]);
 
   // Load this user's products for collection picker
   useEffect(() => {
@@ -721,6 +744,16 @@ const showError = (errorMessage) => {
       <div className="mb-6 md:mb-8">
         <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">Website Settings</h1>
         <p className="text-gray-500 mt-1">Manage your storefront categories, collections, and product groupings.</p>
+      </div>
+
+      {/* Payment Providers moved to reusable component */}
+      <div className="mb-10">
+        <PaymentProvidersSettings
+          userId={SITEINFO?.userId}
+            siteId={SITEINFO?.id}
+            initial={providerState}
+            onSaved={(st)=> setProviderState(st)}
+        />
       </div>
 
       {/* Tabs: Categories and Collections */}

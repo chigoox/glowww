@@ -2,6 +2,7 @@ import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import "./globals.css";
 import { PagesProvider } from "./Components/utils/context/PagesContext";
 import { AuthProvider } from "../contexts/AuthContext";
+import { CartProvider } from "../contexts/CartContext";
 import { EditorSettingsProvider } from "./Components/utils/context/EditorSettingsContext";
 import ThemeInitializer from "./Components/utils/ThemeInitializer";
 
@@ -37,12 +38,14 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          <EditorSettingsProvider>
-            <PagesProvider>
-              <ThemeInitializer />
-              {children}
-            </PagesProvider>
-          </EditorSettingsProvider>
+          <CartProvider>
+            <EditorSettingsProvider>
+              <PagesProvider>
+                <ThemeInitializer />
+                {children}
+              </PagesProvider>
+            </EditorSettingsProvider>
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>

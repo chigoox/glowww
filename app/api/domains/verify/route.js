@@ -2,7 +2,8 @@
 import { NextResponse } from 'next/server';
 // NOTE: This file is nested (app/api/domains/verify/), so we need four levels up to reach /lib
 import { getDomain, updateDomainStatus } from '../../../../lib/domains';
-import { db } from '../../../../lib/firebase';
+import { updateSite } from '../../../../lib/sites';
+import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export const runtime = 'nodejs';
@@ -12,15 +13,27 @@ const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
 
 async function checkTxtRecord(domain, expectedValue) {
-  // Use public DNS API (e.g. Google) to check TXT record
-  try {
-    const res = await fetch(`https://dns.google/resolve?name=_glow-verify.${domain}&type=TXT`);
-    const data = await res.json();
-    const txts = (data?.Answer || []).map(a => a.data.replace(/"/g, ''));
-    return txts.includes(expectedValue);
-  } catch {
-    return false;
+  const host = `_glow-verify.${domain}`;
+  const resolvers = [
+    { name: 'google', url: `https://dns.google/resolve?name=${host}&type=TXT`, type: 'google' },
+    { name: 'cloudflare', url: `https://cloudflare-dns.com/dns-query?name=${host}&type=TXT`, type: 'cloudflare', headers: { Accept: 'application/dns-json' } },
+  ];
+  let found = false;
+  const details = [];
+  for (const r of resolvers) {
+    try {
+      const res = await fetch(r.url, { headers: r.headers });
+      const data = await res.json();
+      const answers = (data?.Answer || []).map(a => (a.data || '').replace(/"/g, '').trim());
+      const match = answers.includes(expectedValue.trim());
+      if (match) found = true;
+      details.push({ resolver: r.name, answers, match });
+      if (found) break; // stop early if any resolver matches
+    } catch (e) {
+      details.push({ resolver: r.name, error: e.message });
+    }
   }
+  return { found, details };
 }
 
 async function attachToVercel(domain) {
@@ -39,23 +52,52 @@ async function attachToVercel(domain) {
 
 export async function POST(req) {
   try {
-    const { userId, siteId, domain } = await req.json();
+  const { userId, siteId, domain, attachOnly } = await req.json();
     if (!userId || !siteId || !domain) return NextResponse.json({ ok: false, error: 'Missing params' }, { status: 400 });
     const domainDoc = await getDomain(userId, siteId, domain);
     if (!domainDoc) return NextResponse.json({ ok: false, error: 'Domain not found' }, { status: 404 });
-    // Check TXT record
-    const verified = await checkTxtRecord(domain, domainDoc.verificationToken);
-    if (!verified) {
-      await updateDomainStatus(userId, siteId, domain, 'pending', 'TXT record not found or incorrect');
-      return NextResponse.json({ ok: false, error: 'TXT record not found or incorrect' });
+    let details = [];
+    if (!attachOnly) {
+      const check = await checkTxtRecord(domain, domainDoc.verificationToken);
+      details = check.details;
+      if (!check.found) {
+        const msg = 'TXT record not found yet. DNS may still be propagating.';
+        await updateDomainStatus(userId, siteId, domain, 'pending', msg);
+        return NextResponse.json({ ok: false, error: msg, resolvers: details });
+      }
+      if (domainDoc.status !== 'active') {
+        await updateDomainStatus(userId, siteId, domain, 'verified');
+      }
+    } else {
+      // attachOnly path: must already be verified or active
+      if (!['verified','active'].includes(domainDoc.status)) {
+        return NextResponse.json({ ok: false, error: 'Domain not verified yet' }, { status: 400 });
+      }
     }
-    // Attach to Vercel
-    const vercelRes = await attachToVercel(domain);
-    if (vercelRes.error) {
-      await updateDomainStatus(userId, siteId, domain, 'error', vercelRes.error.message || 'Vercel error');
-      return NextResponse.json({ ok: false, error: vercelRes.error.message || 'Vercel error' });
+
+    // Attach to Vercel (if env configured)
+    let attached = false;
+    let vercelWarning = null;
+    if (!VERCEL_PROJECT_ID || !VERCEL_TOKEN) {
+      vercelWarning = 'VERCEL_PROJECT_ID / VERCEL_TOKEN missing; add them then re-verify to attach.';
+    } else {
+      const vercelRes = await attachToVercel(domain);
+      if (vercelRes?.error) {
+        const code = vercelRes.error.code || vercelRes.error.message || '';
+        if (/already/i.test(code)) {
+          attached = true; // already attached to this / another project but accessible
+        } else {
+          await updateDomainStatus(userId, siteId, domain, 'error', vercelRes.error.message || 'Vercel error');
+          return NextResponse.json({ ok: false, error: vercelRes.error.message || 'Vercel error', resolvers: details, stage: 'attach' });
+        }
+      } else {
+        attached = true;
+      }
     }
-    await updateDomainStatus(userId, siteId, domain, 'active');
+
+    if (attached) {
+      await updateDomainStatus(userId, siteId, domain, 'active');
+    }
 
     // Create global mapping for middleware lookups
     try {
@@ -75,7 +117,10 @@ export async function POST(req) {
       });
     } catch {}
 
-    return NextResponse.json({ ok: true, domain, status: 'active' });
+    // Update site document with customDomain if absent or different (do this once verified even if not yet attached)
+    try { await updateSite(userId, siteId, { customDomain: domain }); } catch {}
+
+  return NextResponse.json({ ok: true, domain, status: attached ? 'active' : 'verified', attached, warning: vercelWarning, resolvers: details });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }

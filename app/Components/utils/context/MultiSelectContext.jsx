@@ -82,6 +82,10 @@ export const MultiSelectProvider = ({ children }) => {
 
     selectedNodes.forEach(nodeId => {
       const node = nodes[nodeId];
+      // Skip nodes that explicitly opt out of multi-select (e.g., NavBar)
+      if (node?.data?.custom?.noMultiSelect) {
+        return;
+      }
       if (node && node.dom) {
         // Only include elements with actual size (filter out 0-width/height elements)
         const rect = node.dom.getBoundingClientRect();
@@ -349,6 +353,8 @@ export const MultiSelectProvider = ({ children }) => {
         Object.keys(nodes).forEach(nodeId => {
           const node = nodes[nodeId];
           if (node && node.dom && nodeId !== 'ROOT') {
+            // Skip nodes that are not allowed in multi-select
+            if (node?.data?.custom?.noMultiSelect) return;
             const rect = node.dom.getBoundingClientRect();
             
             // Check if element intersects with selection rectangle
@@ -429,16 +435,24 @@ export const MultiSelectProvider = ({ children }) => {
   const addToSelection = useCallback((nodeId) => {
     setSelectedNodes(prev => {
       const newSet = new Set(prev);
+      const node = query.getNodes()?.[nodeId];
+      if (node?.data?.custom?.noMultiSelect) {
+        return newSet; // ignore attempts to add excluded node
+      }
       newSet.add(nodeId);
       setIsMultiSelecting(newSet.size > 0);
       return newSet;
     });
-  }, []);
+  }, [query]);
 
   // Add node to selection with key handling (for internal use)
   const addToSelectionWithKeys = useCallback((nodeId) => {
     setSelectedNodes(prev => {
       const newSet = new Set(prev);
+      const node = query.getNodes()?.[nodeId];
+      if (node?.data?.custom?.noMultiSelect) {
+        return newSet; // do nothing if excluded
+      }
       
       // If Ctrl/Cmd is held, add to selection (check multiple key variations)
       const isCtrlHeld = keysPressed.current.has('control') || 

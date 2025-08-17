@@ -190,48 +190,9 @@ const SnapPositionHandle = ({
         current = current.parentElement;
       }
       
-      // Final fallback to root canvas - safely check query methods with additional error handling
-      let dropPlaceholder = null;
-      try {
-        // Enhanced safety checks before calling getDropPlaceholder
-        if (query && 
-            typeof query.getDropPlaceholder === 'function' && 
-            query.getState && 
-            query.getState()) {
-          
-          // Additional check to ensure we're not in the middle of a problematic state transition
-          const state = query.getState();
-          if (state && state.nodes && Object.keys(state.nodes).length > 0) {
-            // Additional safety: wrap getDropPlaceholder in its own try-catch
-            try {
-              dropPlaceholder = query.getDropPlaceholder();
-              
-              // Additional safety check - ensure dropPlaceholder has expected properties
-              if (dropPlaceholder && typeof dropPlaceholder === 'object' && !dropPlaceholder.id) {
-                console.warn('getDropPlaceholder returned object without id property:', dropPlaceholder);
-                dropPlaceholder = null;
-              }
-            } catch (dropPlaceholderError) {
-              // Handle the specific error that's causing issues
-              console.log('Error calling getDropPlaceholder (silenced):', dropPlaceholderError.message);
-              dropPlaceholder = null;
-            }
-          } else {
-            console.log('Skipping getDropPlaceholder - editor state not ready');
-          }
-        }
-      } catch (placeholderError) {
-        // Silently handle getDropPlaceholder errors - this is common during state transitions
-        // Only log if it's not the common "Cannot read properties of undefined" error
-        if (!placeholderError.message?.includes('Cannot read properties of undefined')) {
-          console.warn('getDropPlaceholder error (non-critical):', placeholderError.message);
-        }
-        dropPlaceholder = null;
-      }
-      
-      const fallbackElement = dropPlaceholder || document.querySelector('[data-cy="editor-root"], [data-editor="true"]') || document.body;
-      
-      return fallbackElement;
+  // Final fallback to root canvas (removed getDropPlaceholder usage to prevent noisy errors)
+  const fallbackElement = document.querySelector('[data-cy="editor-root"], [data-editor="true"], [data-craft-node-id="ROOT"]') || document.body;
+  return fallbackElement;
     } catch (error) {
       console.warn('Error in getParentContainer:', error);
       // Return safe fallback

@@ -51,7 +51,7 @@ import {
 import MediaLibrary from './MediaLibrary';
 
 // Figma-style draggable input component
-const DragInput = ({ 
+export const DragInput = ({ 
   icon, 
   value, 
   onChange, 

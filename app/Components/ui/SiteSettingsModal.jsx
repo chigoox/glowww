@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Input, Button, message, Divider, Typography, Space, Tag, Alert, Tooltip, List, theme } from 'antd';
-import { CopyOutlined, GlobalOutlined, EditOutlined, LinkOutlined, SettingOutlined, CheckOutlined, StopOutlined, EyeOutlined } from '@ant-design/icons';
+import PaymentProvidersSettings from '@/app/dashboard/Admin/Componets/Sections/PaymentProvidersSettings';
+import { CopyOutlined, GlobalOutlined, EditOutlined, LinkOutlined, SettingOutlined, CheckOutlined, StopOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { updateSite } from '../../../lib/sites';
 
 const { Text, Title } = Typography;
@@ -27,6 +28,8 @@ const SiteSettingsModal = ({
   const [domains, setDomains] = useState([]);
   const [addingDomain, setAddingDomain] = useState(false);
   const [verifying, setVerifying] = useState(null);
+  const [removing, setRemoving] = useState(null);
+  const retryTimer = useRef(null);
   const [published, setPublished] = useState(site?.isPublished || false);
   const [publishing, setPublishing] = useState(false);
 
@@ -104,10 +107,24 @@ const SiteSettingsModal = ({
     }
   };
 
+  const normalizeDomain = (raw) => {
+    if (!raw) return '';
+    let d = raw.trim().toLowerCase();
+    d = d.replace(/^https?:\/\//, '');
+    d = d.replace(/\/.*$/, ''); // strip path
+    d = d.replace(/[#?].*$/, ''); // strip hash/query
+    if (d.endsWith('.')) d = d.slice(0, -1);
+    return d;
+  };
+
+  const domainPattern = /^(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,}$/; // simple FQDN pattern
+
   const handleAddDomain = async () => {
     try {
-      const domain = (form.getFieldValue('customDomain') || '').trim().toLowerCase();
+      let domain = normalizeDomain(form.getFieldValue('customDomain'));
       if (!domain) return message.warning('Enter a domain first');
+      if (!domainPattern.test(domain)) return message.error('Enter a valid domain like mysite.com or shop.mysite.co');
+      form.setFieldsValue({ customDomain: domain });
       setAddingDomain(true);
       const res = await fetch('/api/domains', {
         method: 'POST',
@@ -116,7 +133,8 @@ const SiteSettingsModal = ({
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || 'Failed to add domain');
-      message.success('Domain added. Add the TXT record, then click Verify.');
+      message.success('Domain added. Create the TXT record below, wait a few minutes, then click Verify.');
+      form.setFieldsValue({ customDomain: '' });
       await loadDomains();
     } catch (e) {
       message.error(e.message);
@@ -134,8 +152,17 @@ const SiteSettingsModal = ({
         body: JSON.stringify({ userId: user.uid, siteId: site.id, domain }),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || 'Verification failed');
-      message.success('Domain verified and attached. DNS may take time to propagate.');
+      if (!json.ok) {
+        // If still propagating, schedule another attempt (max 5 tries per session per domain could be implemented later)
+        if (/not found yet/i.test(json.error)) {
+          message.info('Still propagating. Will retry automatically in 30s.');
+          retryTimer.current = setTimeout(() => handleVerify(domain), 30000);
+        } else {
+          message.error(json.error || 'Verification failed');
+        }
+      } else {
+        message.success('Domain verified and attached. DNS may take time to fully propagate.');
+      }
       await loadDomains();
     } catch (e) {
       message.error(e.message);
@@ -144,8 +171,9 @@ const SiteSettingsModal = ({
     }
   };
 
-  const handleRemove = async (domain) => {
+  const actuallyRemove = async (domain) => {
     try {
+      setRemoving(domain);
       const res = await fetch(`/api/domains/${encodeURIComponent(domain)}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -155,10 +183,25 @@ const SiteSettingsModal = ({
       if (!json.ok) throw new Error(json.error || 'Failed to remove');
       message.success('Domain removed');
       await loadDomains();
-    } catch (e) {
-      message.error(e.message);
+    } finally {
+      setRemoving(null);
     }
   };
+
+  const handleRemove = (domain) => {
+    Modal.confirm({
+      title: 'Remove domain?',
+      icon: <ExclamationCircleOutlined />,
+      content: `${domain} will stop pointing to this site.`,
+      okType: 'danger',
+      okText: 'Remove',
+      centered: true,
+      onOk: () => actuallyRemove(domain),
+    });
+  };
+
+  // Cleanup any retry timer on unmount or site change
+  useEffect(() => () => { if (retryTimer.current) clearTimeout(retryTimer.current); }, [site?.id]);
 
   const copyToClipboard = (text, label) => {
     navigator.clipboard.writeText(text);
@@ -342,6 +385,21 @@ const SiteSettingsModal = ({
           style={{ marginBottom: 16 }}
         />
 
+        {/* Payment Providers */}
+        <Divider />
+        <PaymentProvidersSettings
+          userId={user?.uid}
+          siteId={site?.id}
+          onSaved={() => message.success('Payment providers updated')}
+        />
+        <Alert
+          type="info"
+          showIcon
+          className="mt-3"
+          message="Seller account requirement"
+          description={<span style={{ fontSize:12 }}>Cart & checkout stay disabled until the site owner connects a Stripe account. After connecting, return here to enable providers.</span>}
+        />
+
         {/* Site Stats */}
         <Divider />
         <Title level={5}>Site Information</Title>
@@ -373,54 +431,109 @@ const SiteSettingsModal = ({
         <Alert
           type="info"
           showIcon
-          message="Connect your own domain"
+          message="How to connect a domain"
           description={
-            <div>
-              <div style={{ marginBottom: 8 }}>
-                1) Add a TXT record to verify ownership:
-                <div>
-                  <Text code>_glow-verify.yourdomain.com</Text> → <Text code>glow-xxxxxxxxxxxx</Text>
-                </div>
+            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+              <div><strong>Step 1.</strong> Enter your root domain (example: <Text code>myshop.com</Text>) below and click <strong>Add</strong>.</div>
+              <div><strong>Step 2.</strong> In your DNS provider create a TXT record to verify ownership:</div>
+              <div style={{ margin: '4px 0 4px 12px' }}>
+                Host: <Text code>_glow-verify.yourdomain.com</Text> → Value: <Text code>glow-xxxxxxxx</Text>
               </div>
-              <div>
-                2) After verification, point DNS:
-                <div><Text code>@</Text> (apex) A → <Text code>76.76.21.21</Text></div>
+              <div><strong>Step 3.</strong> Wait 1-5 minutes (sometimes longer) then click <strong>Verify</strong>. Once status becomes <Tag color="green" style={{ marginInline: 4 }}>active</Tag> continue.</div>
+              <div><strong>Step 4.</strong> Point DNS to serve traffic:</div>
+              <div style={{ margin: '4px 0 4px 12px' }}>
+                <div><Text code>@</Text> A → <Text code>76.76.21.21</Text></div>
                 <div><Text code>www</Text> CNAME → <Text code>cname.vercel-dns.com</Text></div>
               </div>
+              <div><strong>Tip:</strong> Use <Text code>dig</Text> or <Text code>whatsmydns.net</Text> to inspect propagation.</div>
             </div>
           }
           style={{ marginBottom: 12 }}
         />
 
-        <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
-          <Input placeholder="mydomain.com" value={form.getFieldValue('customDomain')} onChange={(e)=> form.setFieldsValue({ customDomain: e.target.value })} />
-          <Button type="primary" onClick={handleAddDomain} loading={addingDomain}>Add</Button>
-        </Space.Compact>
+        <Form.Item
+          label="Domain"
+          name="customDomain"
+          rules={[
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!value) return Promise.resolve();
+                const norm = normalizeDomain(value);
+                if (!domainPattern.test(norm)) return Promise.reject(new Error('Invalid domain format'));
+                return Promise.resolve();
+              }
+            })
+          ]}
+          extra={<span style={{ fontSize: 12 }}>Root only (no http://, paths, or trailing slash)</span>}
+        >
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              placeholder="mydomain.com"
+              allowClear
+              onBlur={(e)=> {
+                const norm = normalizeDomain(e.target.value);
+                form.setFieldsValue({ customDomain: norm });
+              }}
+            />
+            <Button type="primary" onClick={handleAddDomain} loading={addingDomain}>Add</Button>
+          </Space.Compact>
+        </Form.Item>
 
         <List
           bordered
           dataSource={domains}
+          rowKey={(d)=> d.domain}
           locale={{ emptyText: 'No custom domains yet' }}
-          renderItem={(d) => (
-            <List.Item
-              actions={[
-                <Button key="verify" size="small" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain} disabled={d.status==='active'}>Verify</Button>,
-                <Button key="remove" size="small" danger onClick={() => handleRemove(d.domain)}>Remove</Button>,
-              ]}
-            >
-              <Space direction="vertical" size={0}>
-                <Space>
-                  <Text strong>{d.domain}</Text>
-                  <Tag color={d.status==='active' ? 'green' : d.status==='error' ? 'red' : 'orange'}>{d.status}</Tag>
+          renderItem={(d) => {
+            const active = d.status === 'active';
+            const pending = d.status === 'pending';
+            return (
+              <List.Item
+                actions={[
+                  d.status === 'verified' && !active ? (
+                    <Tooltip title="Attach domain (final step)" key="activate-tip">
+                      <Button key="activate" size="small" type="primary" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain}>Activate</Button>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title={active ? 'Already active' : 'Verify TXT record'} key="verify-tip">
+                      <Button key="verify" size="small" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain} disabled={active}>{active ? 'Active' : 'Verify'}</Button>
+                    </Tooltip>
+                  ),
+                  <Tooltip title="Remove domain" key="remove-tip">
+                    <Button key="remove" size="small" danger onClick={() => handleRemove(d.domain)} loading={removing===d.domain} disabled={verifying===d.domain || removing===d.domain}>Remove</Button>
+                  </Tooltip>,
+                ]}
+              >
+                <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                  <Space wrap>
+                    <Text strong>{d.domain}</Text>
+                    <Tag color={active ? 'green' : d.status==='error' ? 'red' : 'orange'}>{d.status}</Tag>
+                  </Space>
+                  {d.verificationToken && !active && (
+                    <div style={{ fontSize: 12 }}>
+                      TXT host: <Text code>_glow-verify.{d.domain}</Text> value: <Text code>{d.verificationToken}</Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<CopyOutlined />}
+                        onClick={() => copyToClipboard(d.verificationToken, 'Verification token')}
+                        style={{ paddingInline: 4 }}
+                      />
+                    </div>
+                  )}
+                  {d.status === 'verified' && (
+                    <Text type="secondary" style={{ fontSize: 11 }}>Verified. Attaching to infrastructure… retry if not active in a minute.</Text>
+                  )}
+                  {d.lastError && !active && d.status !== 'verified' && (
+                    <Text type="secondary" style={{ fontSize: 11 }}>Last check: {d.lastError}</Text>
+                  )}
+                  {active && (
+                    <Text type="secondary" style={{ fontSize: 11 }}>Active. DNS changes can take up to 24h globally.</Text>
+                  )}
                 </Space>
-                {d.verificationToken && (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    TXT host: <Text code>_glow-verify.{d.domain}</Text> value: <Text code>{d.verificationToken}</Text>
-                  </Text>
-                )}
-              </Space>
-            </List.Item>
-          )}
+              </List.Item>
+            );
+          }}
         />
 
         {/* Action Buttons */}

@@ -458,198 +458,7 @@ placeContent,
     }
   }, [isSelected, isHovered]);
 
-  // Handle resize start (left/top-aware; mirrors Box implementation)
-  const handleResizeStart = (e, direction) => {
-    e.stopPropagation();
-    e.preventDefault();
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const rect = cardRef.current.getBoundingClientRect();
-    const startWidth = rect.width;
-    const startHeight = rect.height;
-    // Get minWidth/minHeight from props or fallback
-    const minW = typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50;
-    const minH = typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20;
-    // Capture starting left/top relative to positioned parent container
-    let startLeft = rect.left;
-    let startTop = rect.top;
-    const parentEl = cardRef.current.offsetParent; // closest positioned ancestor
-    if (parentEl) {
-      const parentRect = parentEl.getBoundingClientRect();
-      startLeft = rect.left - parentRect.left;
-      startTop = rect.top - parentRect.top;
-    } else {
-      // fallback to viewport relative
-      startLeft = rect.left;
-      startTop = rect.top;
-    }
-
-    setIsResizing(true);
-
-    // Register all elements for snapping during resize
-    const nodes = query.getNodes();
-    Object.entries(nodes).forEach(([id, node]) => {
-      if (id !== nodeId && node.dom) {
-        const elementRect = node.dom.getBoundingClientRect();
-        const editorRoot = document.querySelector('[data-editor="true"]');
-        if (editorRoot) {
-          const editorRect = editorRoot.getBoundingClientRect();
-          const computedStyle = window.getComputedStyle(node.dom);
-
-          // Get border widths for reference
-          const borderLeft = parseFloat(computedStyle.borderLeftWidth) || 0;
-          const borderRight = parseFloat(computedStyle.borderRightWidth) || 0;
-          const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
-          const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
-
-          const registrationBounds = {
-            x: elementRect.left - editorRect.left,
-            y: elementRect.top - editorRect.top,
-            width: elementRect.width,
-            height: elementRect.height,
-          };
-
-            snapGridSystem.registerElement(id, node.dom, registrationBounds);
-        }
-      }
-    });
-
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-
-      let newWidth = startWidth;
-      let newHeight = startHeight;
-      let newLeft = startLeft;
-      let newTop = startTop;
-
-      // Calculate new dimensions based on resize direction
-      switch (direction) {
-        case 'se': // bottom-right
-          newWidth = startWidth + deltaX;
-          newHeight = startHeight + deltaY;
-          break;
-        case 'sw': // bottom-left
-          newWidth = startWidth - deltaX;
-          newHeight = startHeight + deltaY;
-          newLeft = startLeft + deltaX;
-          break;
-        case 'ne': // top-right
-          newWidth = startWidth + deltaX;
-          newHeight = startHeight - deltaY;
-          newTop = startTop + deltaY;
-          break;
-        case 'nw': // top-left
-          newWidth = startWidth - deltaX;
-          newHeight = startHeight - deltaY;
-          newLeft = startLeft + deltaX;
-          newTop = startTop + deltaY;
-          break;
-        case 'e': // right edge
-          newWidth = startWidth + deltaX;
-          break;
-        case 'w': // left edge
-          newWidth = startWidth - deltaX;
-          newLeft = startLeft + deltaX;
-          break;
-        case 's': // bottom edge
-          newHeight = startHeight + deltaY;
-          break;
-        case 'n': // top edge
-          newHeight = startHeight - deltaY;
-          newTop = startTop + deltaY;
-          break;
-      }
-
-      // Clamp left/top-aware resizing at minimums
-      // If resizing left and hit minWidth, freeze left
-      if (direction.includes('w') && newWidth <= minW) {
-        newWidth = minW;
-        newLeft = startLeft + (startWidth - minW);
-      }
-      // If resizing top and hit minHeight, freeze top
-      if (direction.includes('n') && newHeight <= minH) {
-        newHeight = minH;
-        newTop = startTop + (startHeight - minH);
-      }
-      // Apply minimum constraints (for right/bottom)
-      newWidth = Math.max(newWidth, minW);
-      newHeight = Math.max(newHeight, minH);
-
-      // Get current position for snap calculations
-      const currentRect = cardRef.current.getBoundingClientRect();
-      const editorRoot = document.querySelector('[data-editor="true"]');
-      if (editorRoot) {
-        const editorRect = editorRoot.getBoundingClientRect();
-
-        let intendedBounds = {
-          left: currentRect.left - editorRect.left,
-          top: currentRect.top - editorRect.top,
-          width: newWidth,
-          height: newHeight
-        };
-
-        if (direction.includes('w')) {
-          const widthDelta = newWidth - currentRect.width;
-          intendedBounds.left = (currentRect.left - editorRect.left) - widthDelta;
-        }
-        if (direction.includes('n')) {
-          const heightDelta = newHeight - currentRect.height;
-          intendedBounds.top = (currentRect.top - editorRect.top) - heightDelta;
-        }
-
-        intendedBounds.right = intendedBounds.left + intendedBounds.width;
-        intendedBounds.bottom = intendedBounds.top + intendedBounds.height;
-        intendedBounds.centerX = intendedBounds.left + intendedBounds.width / 2;
-        intendedBounds.centerY = intendedBounds.top + intendedBounds.height / 2;
-
-        const snapResult = snapGridSystem.getResizeSnapPosition(
-          nodeId,
-          direction,
-          intendedBounds,
-          newWidth,
-          newHeight
-        );
-        if (snapResult.snapped) {
-          newWidth = snapResult.bounds.width;
-          newHeight = snapResult.bounds.height;
-          if (direction.includes('w') && typeof snapResult.bounds.left === 'number') {
-            newLeft = snapResult.bounds.left;
-          }
-          if (direction.includes('n') && typeof snapResult.bounds.top === 'number') {
-            newTop = snapResult.bounds.top;
-          }
-        }
-      }
-
-      editorActions.history.throttle(500).setProp(nodeId, (props) => {
-        props.width = Math.round(newWidth);
-        props.height = Math.round(newHeight);
-        if (direction.includes('w')) {
-          props.left = Math.round(newLeft);
-        }
-        if (direction.includes('n')) {
-          props.top = Math.round(newTop);
-        }
-        if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
-          props.position = 'absolute';
-        }
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      snapGridSystem.clearSnapIndicators();
-      setTimeout(() => {
-        snapGridSystem.cleanupTrackedElements();
-      }, 100);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
+  // Local resize handler removed; using centralized ResizeHandles logic
 
   // Handle custom drag for position changes - REPLACED by SnapPositionHandle
   // const handleDragStart = (e) => {
@@ -846,9 +655,23 @@ placeContent,
     }
   });
 
+  // Safe min dimension parsing (prevents explicit 0 being coerced to fallback)
+  const parseNonNegativeInt = (val) => {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed) && parsed >= 0) return parsed;
+    }
+    return undefined; // caller provides fallback
+  };
+  const safeMinWidth = parseNonNegativeInt(minWidth) ?? 50;  // 50px fallback
+  const safeMinHeight = parseNonNegativeInt(minHeight) ?? 20; // 20px fallback
+
   return (
     <div
-      className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
+  className={`gl-canvas ${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
+  data-gl-canvas="true"
+  data-component="FlexBox"
       ref={cardRef}
       style={{
         ...computedStyles,
@@ -898,12 +721,22 @@ placeContent,
           <PortalControls
             boxPosition={boxPosition}
             dragRef={dragRef}
-            handleResizeStart={handleResizeStart}
             nodeId={nodeId}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
+            updateBoxPosition={updateBoxPosition}
           />
-          <ResizeHandles boxPosition={boxPosition} onResizeStart={handleResizeStart} />
+          <ResizeHandles 
+            boxPosition={boxPosition} 
+            nodeId={nodeId}
+            targetRef={cardRef}
+            editorActions={editorActions}
+            craftQuery={query}
+            minWidth={safeMinWidth}
+            minHeight={safeMinHeight}
+            onResize={updateBoxPosition}
+            onResizeEnd={updateBoxPosition}
+          />
         </>
       )}
       {children}
@@ -928,7 +761,8 @@ const PortalControls = ({
   handleResizeStart,
   nodeId,
   isDragging,
-  setIsDragging
+  setIsDragging,
+  updateBoxPosition
 }) => {
   if (typeof window === 'undefined') return null; // SSR check
   
@@ -1003,13 +837,14 @@ const PortalControls = ({
           }}
           onDragStart={(e) => {
             setIsDragging(true);
+            updateBoxPosition?.();
           }}
           onDragMove={(e, { x, y, snapped }) => {
-            // Optional: Add visual feedback for snapping
-            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
+            updateBoxPosition?.();
           }}
           onDragEnd={(e) => {
             setIsDragging(false);
+            updateBoxPosition?.();
           }}
         >
           ↕↔ POS
@@ -1033,7 +868,7 @@ FlexBox.craft = {
     height: "200px",
     minHeight: "200px",
     minWidth: "200px",
-    display: "block",
+    display: "flex",
     position: "relative",
     top: 0,
     right: 0,
