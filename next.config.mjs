@@ -21,10 +21,6 @@ const nextConfig = {
 	webpack(config) {
 		config.resolve = config.resolve || {};
 		config.resolve.alias = config.resolve.alias || {};
-		// IMPORTANT: Alias must point to the absolute path of the wrapper.
-		// The wrapper itself internally resolves the real Firestore implementation
-		// via an absolute path to avoid recursive aliasing.
-		config.resolve.alias['firebase/firestore'] = path.resolve(__dirname, 'lib/firestoreDebug.js');
 		return config;
 	}
 };
