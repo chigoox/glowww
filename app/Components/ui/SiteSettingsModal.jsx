@@ -25,6 +25,7 @@ const SiteSettingsModal = ({
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [publicUrl, setPublicUrl] = useState('');
+  const [subdomainValue, setSubdomainValue] = useState('');
   const [domains, setDomains] = useState([]);
   const [addingDomain, setAddingDomain] = useState(false);
   const [verifying, setVerifying] = useState(null);
@@ -45,12 +46,16 @@ const SiteSettingsModal = ({
       });
 
       // Generate URLs
-      const baseUrl = window.location.origin;
-      const username = user.username || user.displayName || 'user';
-      const siteName = site.subdomain || site.name;
-      
-      setPreviewUrl(`${baseUrl}/Preview`);
-      setPublicUrl(`${baseUrl}/u/${username}/${siteName}`);
+  const baseUrl = window.location.origin;
+  const username = user.username || user.displayName || 'user';
+  const siteName = site.subdomain || site.name;
+  // determine platform root domain (example: gloweditor.com)
+  const hostParts = window.location.hostname.split('.');
+  const platformDomain = hostParts.length > 1 ? hostParts.slice(-2).join('.') : window.location.hostname;
+  const subdomainHost = site.subdomain && !site.subdomain.includes('.') ? `${site.subdomain}.${platformDomain}` : (site.subdomain || '');
+  setPreviewUrl(''); // preview is removed; keep empty for now
+  setPublicUrl(subdomainHost ? `${window.location.protocol}//${subdomainHost}` : `${baseUrl}/u/${username}/${siteName}`);
+  setSubdomainValue(site.subdomain || site.name);
       setPublished(!!site.isPublished);
     }
   }, [site, user, form]);
@@ -377,10 +382,22 @@ const SiteSettingsModal = ({
                         const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
                         if (value !== e.target.value) {
                           form.setFieldsValue({ subdomain: value });
+                          setSubdomainValue(value);
+                        } else {
+                          // keep a controlled reflection for change indicator
+                          setSubdomainValue(value);
                         }
                       }}
                     />
                   </Form.Item>
+
+                  {/* Subdomain changed indicator */}
+                  {subdomainValue !== (site.subdomain || '') && (
+                    <div style={{ marginBottom: 12 }}>
+                      <Tag color="orange">Changed</Tag>
+                      <Text type="secondary" style={{ marginLeft: 8 }}>You have unsaved changes to the subdomain.</Text>
+                    </div>
+                  )}
 
                   {/* Claim Subdomain UI */}
                   <div style={{ marginBottom: 12 }}>
@@ -444,20 +461,6 @@ const SiteSettingsModal = ({
                               size="small" 
                               icon={<GlobalOutlined />}
                               onClick={() => openInNewTab(publicUrl)}
-                            />
-                          </Tooltip>
-                        </div>
-                        <div>
-                          <Text strong>Preview URL: </Text>
-                          <Text code copyable={{ onCopy: () => copyToClipboard(previewUrl, 'Preview URL') }}>
-                            {previewUrl}
-                          </Text>
-                          <Tooltip title="Open in new tab">
-                            <Button 
-                              type="link" 
-                              size="small" 
-                              icon={<EditOutlined />}
-                              onClick={() => openInNewTab(previewUrl)}
                             />
                           </Tooltip>
                         </div>
