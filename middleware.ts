@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// PLATFORM_DOMAIN should be set to your canonical platform host (example: "glowbuildr.com" or "localhost:3000")
 const PLATFORM_DOMAIN = process.env.PLATFORM_DOMAIN || 'localhost:3000';
+// Normalize a host without port for comparisons (e.g. 'localhost' from 'localhost:3000')
+const PLATFORM_HOST_NO_PORT = PLATFORM_DOMAIN.split(':')[0];
+// Build a canonical origin to call internal APIs on (use https by default in production)
+const PLATFORM_ORIGIN = process.env.PLATFORM_ORIGIN || `https://${PLATFORM_HOST_NO_PORT}`;
 
 export async function middleware(req: NextRequest) {
   const host = req.headers.get('host')?.toLowerCase();
   if (!host) return NextResponse.next();
 
-  // Skip if request is already for our platform domain or internal paths
-  if (host.endsWith(PLATFORM_DOMAIN)) return NextResponse.next();
+  // Skip if the request is for the canonical platform host (exact match).
+  // IMPORTANT: do not `endsWith` here — that would also match subdomains like "sitename.platform.com"
+  const hostNoPort = host.split(':')[0];
+  if (hostNoPort === PLATFORM_HOST_NO_PORT) return NextResponse.next();
 
   try {
-    const proto = req.nextUrl.protocol || 'http:';
-    const base = `${proto}//${req.nextUrl.host}`;
+    // Use the canonical platform origin for internal API calls. Fetching the incoming host
+    // can result in Vercel returning DEPLOYMENT_NOT_FOUND if that host isn't aliased to this project yet.
+    const base = PLATFORM_ORIGIN;
 
     // First, check for explicit custom domain mapping (top-level domains managed via /api/domain-lookup)
     try {
