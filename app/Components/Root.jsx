@@ -12,9 +12,9 @@ import MultiSelectBoundingBox from "./utils/selection/MultiSelectBoundingBox";
 export const Root = ({
   // Layout & Position
   width = "full",
-  height = "auto",
+  height = "auto", // allow content to define height
   minWidth = '100%',
-  maxWidth = '100%',
+  maxWidth = 'auto',
   minHeight,
   maxHeight ,
   display = "block",
@@ -206,6 +206,13 @@ placeContent,
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [viewportSize, setViewportSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1200, height: typeof window !== 'undefined' ? window.innerHeight : 800 });
+  const [canvasHeight, setCanvasHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800); // dynamic height for overlay
+  const resizeObsRef = useRef(null);
+
+  // Global drag tracking refs for auto-scroll
+  const isGlobalDraggingRef = useRef(false);
+  const lastPointerYRef = useRef(null);
+  const rafScrollRef = useRef(null);
   
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
@@ -270,7 +277,123 @@ placeContent,
     setIsClient(true);
     const handleResize = () => setViewportSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
+    // ResizeObserver to keep canvasHeight in sync with content growth
+    if (RootRef.current && 'ResizeObserver' in window) {
+      resizeObsRef.current = new ResizeObserver(() => {
+        // Use scrollHeight to capture content height
+        const h = RootRef.current.scrollHeight;
+        setCanvasHeight(Math.max(window.innerHeight, h));
+      });
+      resizeObsRef.current.observe(RootRef.current);
+    }
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Auto-scroll when dragging near viewport edges (top/bottom)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Config can be tweaked at runtime: window.__GLOW_EDITOR_SCROLL = { threshold: 280, maxSpeed: 65, ease: 'cubic', debug: true }
+    const getConfig = () => {
+      const cfg = (window.__GLOW_EDITOR_SCROLL || {});
+      return {
+        threshold: cfg.threshold ?? 260,      // size of activation zone from each edge
+        maxSpeed: cfg.maxSpeed ?? 55,         // max px per frame
+        ease: cfg.ease ?? 'cubic',            // 'linear' | 'cubic'
+        debug: cfg.debug ?? false
+      };
+    };
+
+    // Debug overlay elements (created on demand)
+    let debugTop, debugBottom;
+    const ensureDebugOverlays = (threshold) => {
+      if (!getConfig().debug) return;
+      if (!debugTop) {
+        debugTop = document.createElement('div');
+        debugBottom = document.createElement('div');
+        [debugTop, debugBottom].forEach(el => {
+          el.style.position = 'fixed';
+          el.style.left = '0';
+          el.style.width = '100%';
+          el.style.pointerEvents = 'none';
+          el.style.background = 'rgba(0,123,255,0.08)';
+          el.style.zIndex = '99998';
+          document.body.appendChild(el);
+        });
+        debugTop.style.top = '0';
+        debugBottom.style.bottom = '0';
+      }
+      debugTop.style.height = threshold + 'px';
+      debugBottom.style.height = threshold + 'px';
+    };
+
+    const startScrollLoop = () => {
+      if (rafScrollRef.current) return;
+      const step = () => {
+        if (!isGlobalDraggingRef.current) { rafScrollRef.current = null; return; }
+        const { threshold, maxSpeed, ease } = getConfig();
+        const y = lastPointerYRef.current;
+        if (typeof y === 'number') {
+          const vh = window.innerHeight;
+          let speed = 0;
+          if (y < threshold) {
+            // distance into the zone (0 at edge -> threshold at inner boundary)
+            const t = (threshold - y) / threshold; // 0..1
+            const f = ease === 'cubic' ? Math.pow(t, 3) : t; // ease in
+            speed = -f * maxSpeed;
+          } else if (y > vh - threshold) {
+            const t = (y - (vh - threshold)) / threshold;
+            const f = ease === 'cubic' ? Math.pow(t, 3) : t;
+            speed = f * maxSpeed;
+          }
+          if (speed !== 0) {
+            window.scrollBy(0, speed);
+          }
+        }
+        rafScrollRef.current = requestAnimationFrame(step);
+      };
+      rafScrollRef.current = requestAnimationFrame(step);
+    };
+
+    const stopScrollLoop = () => {
+      if (rafScrollRef.current) {
+        cancelAnimationFrame(rafScrollRef.current);
+        rafScrollRef.current = null;
+      }
+    };
+
+    const handlePointerMove = (e) => {
+      if (!isGlobalDraggingRef.current) return;
+      lastPointerYRef.current = e.clientY;
+      startScrollLoop();
+    };
+
+    const markDragStart = () => { isGlobalDraggingRef.current = true; ensureDebugOverlays(getConfig().threshold); };
+    const markDragEnd = () => { isGlobalDraggingRef.current = false; stopScrollLoop(); };
+
+    document.addEventListener('dragstart', markDragStart, true);
+    document.addEventListener('dragend', markDragEnd, true);
+    document.addEventListener('pointerdown', (e) => {
+      if (e.buttons === 1 && e.target.closest('[data-craft-node-id]')) {
+        markDragStart(); // manual drags within editor
+      }
+    }, true);
+    document.addEventListener('pointerup', markDragEnd, true);
+    document.addEventListener('pointermove', handlePointerMove, { passive: true });
+
+    // Initial debug overlay if already enabled
+    if (getConfig().debug) ensureDebugOverlays(getConfig().threshold);
+
+    return () => {
+      document.removeEventListener('dragstart', markDragStart, true);
+      document.removeEventListener('dragend', markDragEnd, true);
+      document.removeEventListener('pointerup', markDragEnd, true);
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      stopScrollLoop();
+      if (resizeObsRef.current) resizeObsRef.current.disconnect();
+      if (debugTop) debugTop.remove();
+      if (debugBottom) debugBottom.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -615,7 +738,7 @@ placeContent,
         <SnapGridOverlay
           canvasRef={RootRef}
           canvasWidth={viewportSize.width}
-          canvasHeight={viewportSize.height}
+          canvasHeight={canvasHeight}
         />
       )}
       
@@ -671,9 +794,10 @@ Root.craft = {
   props: {
     // Layout & Position
     width: "auto",
-    height: "900px",
-    minHeight: "900px",
-  maxWidth: '100vw',
+  height: "auto", // allow growth with content
+  minHeight: "100vh", // initial full-screen canvas
+    maxHeight: "auto",
+    maxWidth: '100vw',
     display: "block",
     position: "relative",
     zIndex: 1,

@@ -31,6 +31,25 @@ import { Flex } from 'antd';
 import { Root } from '../Components/core/Root';
 import { MultiSelectProvider } from '../Components/utils/context/MultiSelectContext';
 import { SelectDropProvider, useSelectDrop } from '../Components/utils/context/SelectDropContext';
+import { useEditorSettings } from '../Components/utils/context/EditorSettingsContext';
+
+function EditorViewportFrame({ children }){
+  const { settings } = useEditorSettings();
+  const bp = settings?.breakpoints || { current: 'auto', widths: {} };
+  const current = bp.current || 'auto';
+  let style = {};
+  if (current && current !== 'auto'){
+    const w = bp.widths?.[current] || (current === 'custom' && bp.customWidth) || null;
+    if (w) {
+      style = { maxWidth: w + 'px', margin: '0 auto', width: '100%' };
+    }
+  }
+  return (
+    <div className="editor-viewport-wrapper" style={style}>
+      {children}
+    </div>
+  );
+}
 
 // Create a component that uses useEditor inside the Editor context
 const EditorLayout = () => {
@@ -131,7 +150,9 @@ useEffect(() => {
         {/* Canvas Area */}
           <div className="flex-1 p-4 overflow-auto bg-gray-100">
             <div className="w-full max-w-none">
-              <Frame className="w-full min-h-[900px] pb-8">
+              {/* Apply forced viewport width when a breakpoint is selected */}
+              <EditorViewportFrame>
+                <Frame className="w-full min-h-[900px] pb-8">
                 <Element 
                   is={Root} 
                   padding={0} 
@@ -145,7 +166,8 @@ useEffect(() => {
                 >
                   {/* Canvas content goes here */}
                 </Element>
-              </Frame>
+                </Frame>
+              </EditorViewportFrame>
             </div>
           </div>
 

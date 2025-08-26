@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Form, Input, Button, message, Divider, Typography, Space, Tag, Alert, Tooltip, List, theme } from 'antd';
+import { Modal, Form, Input, Button, message, Divider, Typography, Space, Tag, Alert, Tooltip, List, Tabs, theme } from 'antd';
 import PaymentProvidersSettings from '@/app/dashboard/Admin/Componets/Sections/PaymentProvidersSettings';
 import { CopyOutlined, GlobalOutlined, EditOutlined, LinkOutlined, SettingOutlined, CheckOutlined, StopOutlined, EyeOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { updateSite } from '../../../lib/sites';
@@ -32,6 +32,7 @@ const SiteSettingsModal = ({
   const retryTimer = useRef(null);
   const [published, setPublished] = useState(site?.isPublished || false);
   const [publishing, setPublishing] = useState(false);
+  const [claimSub, setClaimSub] = useState('');
 
   // Initialize form and URLs when site changes
   useEffect(() => {
@@ -274,266 +275,317 @@ const SiteSettingsModal = ({
           customDomain: site.customDomain || '',
         }}
       >
-        {/* Basic Information */}
-        <Title level={5}>Basic Information</Title>
-        
-        <Form.Item
-          name="name"
-          label="Site Name"
-          rules={[
-            { required: true, message: 'Please enter a site name' },
-            { min: 2, max: 50, message: 'Site name must be between 2 and 50 characters' }
-          ]}
-        >
-          <Input 
-            placeholder="My Awesome Site"
-            prefix={<EditOutlined />}
-          />
-        </Form.Item>
+        <Tabs
+          defaultActiveKey="general"
+          items={[
+            {
+              key: 'general',
+              label: 'General',
+              children: (
+                <>
+                  <Title level={5}>Basic Information</Title>
+                  <Form.Item
+                    name="name"
+                    label="Site Name"
+                    rules={[
+                      { required: true, message: 'Please enter a site name' },
+                      { min: 2, max: 50, message: 'Site name must be between 2 and 50 characters' }
+                    ]}
+                  >
+                    <Input 
+                      placeholder="My Awesome Site"
+                      prefix={<EditOutlined />}
+                    />
+                  </Form.Item>
 
-        <Form.Item
-          name="description"
-          label="Description"
-        >
-          <TextArea 
-            placeholder="Brief description of your website..."
-            rows={3}
-            showCount
-            maxLength={500}
-          />
-        </Form.Item>
+                  <Form.Item
+                    name="description"
+                    label="Description"
+                  >
+                    <TextArea 
+                      placeholder="Brief description of your website..."
+                      rows={3}
+                      showCount
+                      maxLength={500}
+                    />
+                  </Form.Item>
 
-        <Divider />
+                  <Divider />
 
-        {/* URL Configuration */}
-        <Title level={5}>URL Configuration</Title>
-        
-        <Form.Item
-          name="subdomain"
-          label="Subdomain"
-          help="This will be used in your public URL"
-          rules={[
-            { required: true, message: 'Please enter a subdomain' },
-            { 
-              pattern: /^[a-z0-9-]+$/, 
-              message: 'Only lowercase letters, numbers, and hyphens allowed' 
-            },
-            { min: 2, max: 30, message: 'Subdomain must be between 2 and 30 characters' }
-          ]}
-        >
-          <Input 
-            placeholder="my-site"
-            prefix={<LinkOutlined />}
-            addonBefore={`${window.location.origin}/u/${user.username || user.displayName || 'user'}/`}
-            onChange={(e) => {
-              const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-              if (value !== e.target.value) {
-                form.setFieldsValue({ subdomain: value });
-              }
-            }}
-          />
-        </Form.Item>
-
-  {/* Removed old inline custom domain input to avoid duplication — managed below */}
-
-        {/* URL Preview */}
-        <Alert
-          message="URL Preview"
-          description={
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <div>
-                <Text strong>Public URL: </Text>
-                <Text code copyable={{ onCopy: () => copyToClipboard(publicUrl, 'Public URL') }}>
-                  {publicUrl}
-                </Text>
-                <Tooltip title="Open in new tab">
-                  <Button 
-                    type="link" 
-                    size="small" 
-                    icon={<GlobalOutlined />}
-                    onClick={() => openInNewTab(publicUrl)}
+                  <Title level={5}>Publishing</Title>
+                  <Alert
+                    message={published ? 'Your site is live and accessible to the public' : 'Your site is in draft mode and only visible to you'}
+                    type={published ? 'success' : 'warning'}
+                    style={{ marginBottom: 16 }}
                   />
-                </Tooltip>
-              </div>
-              <div>
-                <Text strong>Preview URL: </Text>
-                <Text code copyable={{ onCopy: () => copyToClipboard(previewUrl, 'Preview URL') }}>
-                  {previewUrl}
-                </Text>
-                <Tooltip title="Open in new tab">
-                  <Button 
-                    type="link" 
-                    size="small" 
-                    icon={<EditOutlined />}
-                    onClick={() => openInNewTab(previewUrl)}
+
+                  <PaymentProvidersSettings
+                    userId={user?.uid}
+                    siteId={site?.id}
+                    onSaved={() => message.success('Payment providers updated')}
                   />
-                </Tooltip>
-              </div>
-            </Space>
-          }
-          type="info"
-          style={{ marginBottom: 16 }}
-        />
 
-        <Divider />
-
-        {/* Publishing */}
-        <Title level={5}>Publishing</Title>
-        <Alert
-          message={published ? 'Your site is live and accessible to the public' : 'Your site is in draft mode and only visible to you'}
-          type={published ? 'success' : 'warning'}
-          style={{ marginBottom: 16 }}
-        />
-
-        {/* Payment Providers */}
-        <Divider />
-        <PaymentProvidersSettings
-          userId={user?.uid}
-          siteId={site?.id}
-          onSaved={() => message.success('Payment providers updated')}
-        />
-        <Alert
-          type="info"
-          showIcon
-          className="mt-3"
-          message="Seller account requirement"
-          description={<span style={{ fontSize:12 }}>Cart & checkout stay disabled until the site owner connects a Stripe account. After connecting, return here to enable providers.</span>}
-        />
-
-        {/* Site Stats */}
-        <Divider />
-        <Title level={5}>Site Information</Title>
-        
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Text type="secondary">Created: </Text>
-            <Text>{new Date(site.createdAt.toDate()).toLocaleDateString()}</Text>
-          </div>
-          <div>
-            <Text type="secondary">Last Updated: </Text>
-            <Text>{new Date(site.updatedAt.toDate()).toLocaleDateString()}</Text>
-          </div>
-          {site.publishedAt && (
-            <div>
-              <Text type="secondary">Published: </Text>
-              <Text>{new Date(site.publishedAt.toDate()).toLocaleDateString()}</Text>
-            </div>
-          )}
-          <div>
-            <Text type="secondary">Site ID: </Text>
-            <Text code copyable>{site.id}</Text>
-          </div>
-        </Space>
-
-  {/* Custom Domain */}
-        <Divider />
-        <Title level={5}>Custom Domain</Title>
-        <Alert
-          type="info"
-          showIcon
-          message="How to connect a domain"
-          description={
-            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-              <div><strong>Step 1.</strong> Enter your root domain (example: <Text code>myshop.com</Text>) below and click <strong>Add</strong>.</div>
-              <div><strong>Step 2.</strong> In your DNS provider create a TXT record to verify ownership:</div>
-              <div style={{ margin: '4px 0 4px 12px' }}>
-                Host: <Text code>_glow-verify.yourdomain.com</Text> → Value: <Text code>glow-xxxxxxxx</Text>
-              </div>
-              <div><strong>Step 3.</strong> Wait 1-5 minutes (sometimes longer) then click <strong>Verify</strong>. Once status becomes <Tag color="green" style={{ marginInline: 4 }}>active</Tag> continue.</div>
-              <div><strong>Step 4.</strong> Point DNS to serve traffic:</div>
-              <div style={{ margin: '4px 0 4px 12px' }}>
-                <div><Text code>@</Text> A → <Text code>76.76.21.21</Text></div>
-                <div><Text code>www</Text> CNAME → <Text code>cname.vercel-dns.com</Text></div>
-              </div>
-              <div><strong>Tip:</strong> Use <Text code>dig</Text> or <Text code>whatsmydns.net</Text> to inspect propagation.</div>
-            </div>
-          }
-          style={{ marginBottom: 12 }}
-        />
-
-        <Form.Item
-          label="Domain"
-          name="customDomain"
-          rules={[
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value) return Promise.resolve();
-                const norm = normalizeDomain(value);
-                if (!domainPattern.test(norm)) return Promise.reject(new Error('Invalid domain format'));
-                return Promise.resolve();
-              }
-            })
-          ]}
-          extra={<span style={{ fontSize: 12 }}>Root only (no http://, paths, or trailing slash)</span>}
-        >
-          <Space.Compact style={{ width: '100%' }}>
-            <Input
-              placeholder="mydomain.com"
-              allowClear
-              onBlur={(e)=> {
-                const norm = normalizeDomain(e.target.value);
-                form.setFieldsValue({ customDomain: norm });
-              }}
-            />
-            <Button type="primary" onClick={handleAddDomain} loading={addingDomain}>Add</Button>
-          </Space.Compact>
-        </Form.Item>
-
-        <List
-          bordered
-          dataSource={domains}
-          rowKey={(d)=> d.domain}
-          locale={{ emptyText: 'No custom domains yet' }}
-          renderItem={(d) => {
-            const active = d.status === 'active';
-            const pending = d.status === 'pending';
-            return (
-              <List.Item
-                actions={[
-                  d.status === 'verified' && !active ? (
-                    <Tooltip title="Attach domain (final step)" key="activate-tip">
-                      <Button key="activate" size="small" type="primary" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain}>Activate</Button>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip title={active ? 'Already active' : 'Verify TXT record'} key="verify-tip">
-                      <Button key="verify" size="small" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain} disabled={active}>{active ? 'Active' : 'Verify'}</Button>
-                    </Tooltip>
-                  ),
-                  <Tooltip title="Remove domain" key="remove-tip">
-                    <Button key="remove" size="small" danger onClick={() => handleRemove(d.domain)} loading={removing===d.domain} disabled={verifying===d.domain || removing===d.domain}>Remove</Button>
-                  </Tooltip>,
-                ]}
-              >
-                <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                  <Space wrap>
-                    <Text strong>{d.domain}</Text>
-                    <Tag color={active ? 'green' : d.status==='error' ? 'red' : 'orange'}>{d.status}</Tag>
-                  </Space>
-                  {d.verificationToken && !active && (
-                    <div style={{ fontSize: 12 }}>
-                      TXT host: <Text code>_glow-verify.{d.domain}</Text> value: <Text code>{d.verificationToken}</Text>
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<CopyOutlined />}
-                        onClick={() => copyToClipboard(d.verificationToken, 'Verification token')}
-                        style={{ paddingInline: 4 }}
-                      />
+                  <Divider />
+                  <Title level={5}>Site Information</Title>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <div>
+                      <Text type="secondary">Created: </Text>
+                      <Text>{new Date(site.createdAt.toDate()).toLocaleDateString()}</Text>
                     </div>
-                  )}
-                  {d.status === 'verified' && (
-                    <Text type="secondary" style={{ fontSize: 11 }}>Verified. Attaching to infrastructure… retry if not active in a minute.</Text>
-                  )}
-                  {d.lastError && !active && d.status !== 'verified' && (
-                    <Text type="secondary" style={{ fontSize: 11 }}>Last check: {d.lastError}</Text>
-                  )}
-                  {active && (
-                    <Text type="secondary" style={{ fontSize: 11 }}>Active. DNS changes can take up to 24h globally.</Text>
-                  )}
-                </Space>
-              </List.Item>
-            );
-          }}
+                    <div>
+                      <Text type="secondary">Last Updated: </Text>
+                      <Text>{new Date(site.updatedAt.toDate()).toLocaleDateString()}</Text>
+                    </div>
+                    {site.publishedAt && (
+                      <div>
+                        <Text type="secondary">Published: </Text>
+                        <Text>{new Date(site.publishedAt.toDate()).toLocaleDateString()}</Text>
+                      </div>
+                    )}
+                    <div>
+                      <Text type="secondary">Site ID: </Text>
+                      <Text code copyable>{site.id}</Text>
+                    </div>
+                  </Space>
+                </>
+              )
+            },
+            {
+              key: 'url',
+              label: 'URL',
+              children: (
+                <>
+                  <Title level={5}>URL Configuration</Title>
+                  <Form.Item
+                    name="subdomain"
+                    label="Subdomain"
+                    help="This will be used in your public URL"
+                    rules={[
+                      { required: true, message: 'Please enter a subdomain' },
+                      { 
+                        pattern: /^[a-z0-9-]+$/, 
+                        message: 'Only lowercase letters, numbers, and hyphens allowed' 
+                      },
+                      { min: 2, max: 30, message: 'Subdomain must be between 2 and 30 characters' }
+                    ]}
+                  >
+                    <Input 
+                      placeholder="my-site"
+                      prefix={<LinkOutlined />}
+                      addonBefore={`${window.location.origin}/u/${user.username || user.displayName || 'user'}/`}
+                      onChange={(e) => {
+                        const value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                        if (value !== e.target.value) {
+                          form.setFieldsValue({ subdomain: value });
+                        }
+                      }}
+                    />
+                  </Form.Item>
+
+                  {/* Claim Subdomain UI */}
+                  <div style={{ marginBottom: 12 }}>
+                    <Text type="secondary">Claim a subdomain on gloweditor.com</Text>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <Input
+                        placeholder="desired-subdomain"
+                        onChange={(e) => {
+                          const v = (e.target.value || '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                          setClaimSub(v);
+                        }}
+                        value={claimSub}
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        onClick={async () => {
+                          const v = (claimSub || '').toString().trim().toLowerCase();
+                          if (!v) return message.warning('Enter a subdomain to check');
+                          try {
+                            const res = await fetch(`/api/subdomain-available?subdomain=${encodeURIComponent(v)}`);
+                            const json = await res.json();
+                            if (!res.ok || !json.ok) return message.error(json.error || 'Availability check failed');
+                            if (!json.available) {
+                              return message.error(json.reason === 'reserved' ? 'That subdomain is reserved' : 'Subdomain not available');
+                            }
+                            // Claim by updating the site record
+                            await updateSite(user.uid, site.id, { subdomain: v });
+                            message.success('Subdomain claimed and saved');
+                            form.setFieldsValue({ subdomain: v });
+                            setClaimSub('');
+                            // Refresh preview/public urls
+                            const baseUrl = window.location.origin;
+                            const username = user.username || user.displayName || 'user';
+                            setPublicUrl(`${baseUrl}/u/${username}/${v}`);
+                            if (onSiteUpdated) onSiteUpdated({ ...site, subdomain: v });
+                          } catch (e) {
+                            console.error('Claim failed', e);
+                            message.error(e?.message || 'Failed to claim subdomain');
+                          }
+                        }}
+                      >
+                        Claim
+                      </Button>
+                    </div>
+                    <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>Note: Claiming reserves the subdomain for this site. Ensure you save changes if you want it to persist.</Text>
+                  </div>
+
+                  {/* URL Preview */}
+                  <Alert
+                    message="URL Preview"
+                    description={
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        <div>
+                          <Text strong>Public URL: </Text>
+                          <Text code copyable={{ onCopy: () => copyToClipboard(publicUrl, 'Public URL') }}>
+                            {publicUrl}
+                          </Text>
+                          <Tooltip title="Open in new tab">
+                            <Button 
+                              type="link" 
+                              size="small" 
+                              icon={<GlobalOutlined />}
+                              onClick={() => openInNewTab(publicUrl)}
+                            />
+                          </Tooltip>
+                        </div>
+                        <div>
+                          <Text strong>Preview URL: </Text>
+                          <Text code copyable={{ onCopy: () => copyToClipboard(previewUrl, 'Preview URL') }}>
+                            {previewUrl}
+                          </Text>
+                          <Tooltip title="Open in new tab">
+                            <Button 
+                              type="link" 
+                              size="small" 
+                              icon={<EditOutlined />}
+                              onClick={() => openInNewTab(previewUrl)}
+                            />
+                          </Tooltip>
+                        </div>
+                      </Space>
+                    }
+                    type="info"
+                    style={{ marginBottom: 16 }}
+                  />
+                </>
+              )
+            },
+            {
+              key: 'domains',
+              label: 'Domains',
+              children: (
+                <>
+                  <Divider />
+                  <Title level={5}>Custom Domain</Title>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="How to connect a domain"
+                    description={
+                      <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                        <div><strong>Step 1.</strong> Enter your root domain (example: <Text code>myshop.com</Text>) below and click <strong>Add</strong>.</div>
+                        <div><strong>Step 2.</strong> In your DNS provider create a TXT record to verify ownership:</div>
+                        <div style={{ margin: '4px 0 4px 12px' }}>
+                          Host: <Text code>_glow-verify.yourdomain.com</Text> → Value: <Text code>glow-xxxxxxxx</Text>
+                        </div>
+                        <div><strong>Step 3.</strong> Wait 1-5 minutes (sometimes longer) then click <strong>Verify</strong>. Once status becomes <Tag color="green" style={{ marginInline: 4 }}>active</Tag> continue.</div>
+                        <div><strong>Step 4.</strong> Point DNS to serve traffic:</div>
+                        <div style={{ margin: '4px 0 4px 12px' }}>
+                          <div><Text code>@</Text> A → <Text code>76.76.21.21</Text></div>
+                          <div><Text code>www</Text> CNAME → <Text code>cname.vercel-dns.com</Text></div>
+                        </div>
+                        <div><strong>Tip:</strong> Use <Text code>dig</Text> or <Text code>whatsmydns.net</Text> to inspect propagation.</div>
+                      </div>
+                    }
+                    style={{ marginBottom: 12 }}
+                  />
+
+                  <Form.Item
+                    label="Domain"
+                    name="customDomain"
+                    rules={[
+                      ({ getFieldValue }) => ({
+                        validator(_, value) {
+                          if (!value) return Promise.resolve();
+                          const norm = normalizeDomain(value);
+                          if (!domainPattern.test(norm)) return Promise.reject(new Error('Invalid domain format'));
+                          return Promise.resolve();
+                        }
+                      })
+                    ]}
+                    extra={<span style={{ fontSize: 12 }}>Root only (no http://, paths, or trailing slash)</span>}
+                  >
+                    <Space.Compact style={{ width: '100%' }}>
+                      <Input
+                        placeholder="mydomain.com"
+                        allowClear
+                        onBlur={(e)=> {
+                          const norm = normalizeDomain(e.target.value);
+                          form.setFieldsValue({ customDomain: norm });
+                        }}
+                      />
+                      <Button type="primary" onClick={handleAddDomain} loading={addingDomain}>Add</Button>
+                    </Space.Compact>
+                  </Form.Item>
+
+                  <List
+                    bordered
+                    dataSource={domains}
+                    rowKey={(d)=> d.domain}
+                    locale={{ emptyText: 'No custom domains yet' }}
+                    renderItem={(d) => {
+                      const active = d.status === 'active';
+                      return (
+                        <List.Item
+                          actions={[
+                            d.status === 'verified' && !active ? (
+                              <Tooltip title="Attach domain (final step)" key="activate-tip">
+                                <Button key="activate" size="small" type="primary" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain}>Activate</Button>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title={active ? 'Already active' : 'Verify TXT record'} key="verify-tip">
+                                <Button key="verify" size="small" onClick={() => handleVerify(d.domain)} loading={verifying===d.domain} disabled={active}>{active ? 'Active' : 'Verify'}</Button>
+                              </Tooltip>
+                            ),
+                            <Tooltip title="Remove domain" key="remove-tip">
+                              <Button key="remove" size="small" danger onClick={() => handleRemove(d.domain)} loading={removing===d.domain} disabled={verifying===d.domain || removing===d.domain}>Remove</Button>
+                            </Tooltip>,
+                          ]}
+                        >
+                          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                            <Space wrap>
+                              <Text strong>{d.domain}</Text>
+                              <Tag color={active ? 'green' : d.status==='error' ? 'red' : 'orange'}>{d.status}</Tag>
+                            </Space>
+                            {d.verificationToken && !active && (
+                              <div style={{ fontSize: 12 }}>
+                                TXT host: <Text code>_glow-verify.{d.domain}</Text> value: <Text code>{d.verificationToken}</Text>
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  icon={<CopyOutlined />}
+                                  onClick={() => copyToClipboard(d.verificationToken, 'Verification token')}
+                                  style={{ paddingInline: 4 }}
+                                />
+                              </div>
+                            )}
+                            {d.status === 'verified' && (
+                              <Text type="secondary" style={{ fontSize: 11 }}>Verified. Attaching to infrastructure… retry if not active in a minute.</Text>
+                            )}
+                            {d.lastError && !active && d.status !== 'verified' && (
+                              <Text type="secondary" style={{ fontSize: 11 }}>Last check: {d.lastError}</Text>
+                            )}
+                            {active && (
+                              <Text type="secondary" style={{ fontSize: 11 }}>Active. DNS changes can take up to 24h globally.</Text>
+                            )}
+                          </Space>
+                        </List.Item>
+                      );
+                    }}
+                  />
+                </>
+              )
+            }
+          ]}
         />
 
         {/* Action Buttons */}
@@ -578,6 +630,36 @@ const SiteSettingsModal = ({
         }
         .site-settings-modal .ant-list-bordered {
           border-radius: 10px;
+        }
+        /* Tab pill styling for Site Settings modal */
+        .site-settings-modal .ant-tabs-nav::before { border-bottom: none !important; }
+        .site-settings-modal .ant-tabs-ink-bar { display: none !important; }
+        .site-settings-modal .ant-tabs-nav-list { gap: 6px; display: flex; }
+        .site-settings-modal .ant-tabs-tab { margin: 0; padding: 0; }
+        .site-settings-modal .ant-tabs-tab .ant-tabs-tab-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 8px 12px;
+          background: transparent;
+          border: 1px solid ${token.colorBorderSecondary};
+          border-radius: 10px;
+          color: ${token.colorTextSecondary};
+          font-weight: 600;
+          transition: background .18s, color .18s, border-color .18s, box-shadow .18s;
+        }
+        .site-settings-modal .ant-tabs-tab .ant-tabs-tab-btn:hover { background: ${token.colorFillTertiary}; color: ${token.colorText}; }
+        .site-settings-modal .ant-tabs-tab-active .ant-tabs-tab-btn {
+          background: linear-gradient(145deg, ${token.colorFillTertiary}, ${token.colorBgLayout});
+          border-color: ${token.colorBorderSecondary};
+          color: ${token.colorText};
+          box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+        }
+        /* Remove browser blue outline but keep accessible focus ring */
+        .site-settings-modal .ant-tabs-tab .ant-tabs-tab-btn:focus { outline: none; }
+        .site-settings-modal .ant-tabs-tab:focus-visible .ant-tabs-tab-btn,
+        .site-settings-modal .ant-tabs-tab .ant-tabs-tab-btn:focus-visible {
+          box-shadow: 0 0 0 3px rgba(22,119,255,0.14);
         }
       `}</style>
     </Modal>

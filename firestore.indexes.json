@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subdomain", "order": "ASCENDING" },
+        { "fieldPath": "isPublished", "order": "ASCENDING" }
+      ]
+    }
+  ]
+}

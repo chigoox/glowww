@@ -4,15 +4,17 @@ import { v4 as uuid } from 'uuid';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 // TEMP: use debug wrapper to detect improper getDocs argument
-import { doc, getDoc, collection, query, where, limit, getDocs as _getDocs, addDoc, serverTimestamp, onSnapshot } from '@/lib/firestoreDebug';
+import { doc, getDoc, collection, query, where, limit, getDocs as _getDocs, addDoc, serverTimestamp, onSnapshot, setDoc } from '@/lib/firestoreDebug';
 
 /**
  * CartContext: client-side cart state with persistence, discount codes, analytics, and cross-sell.
  * This first pass is client-only; server sync & inventory validation can be added later.
  */
 
-const STORAGE_KEY = 'glow_cart_v1';
+// Replace single STORAGE_KEY with per-site key helper
+const BASE_CART_STORAGE_KEY = 'glow_cart_v1';
 const STORAGE_VERSION = 1;
+const cartStorageKey = (siteId) => `${BASE_CART_STORAGE_KEY}__${siteId || 'global'}`;
 
 const CartContext = createContext(null);
 
@@ -61,24 +63,24 @@ export function CartProvider({ children }) {
   // Load any locally buffered analytics events (unauthenticated/offline) on mount
   useEffect(()=>{ if(typeof window==='undefined') return; try { const raw=localStorage.getItem(LOCAL_EVENTS_KEY); if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)) analyticsBuffer.current.push(...arr); localStorage.removeItem(LOCAL_EVENTS_KEY); } } catch{} },[]);
 
-  // Load persisted
+  // Load persisted (site-specific) whenever siteScope changes (or on mount)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    const raw = localStorage.getItem(cartStorageKey(siteScope));
+    if (!raw) { setItems([]); setAppliedCodes([]); return; }
     const data = safeParse(raw);
-    if (!data || data.version !== STORAGE_VERSION) return;
+    if (!data || data.version !== STORAGE_VERSION) { setItems([]); setAppliedCodes([]); return; }
     setItems(Array.isArray(data.items) ? data.items : []);
-  setAppliedCodes(Array.isArray(data.appliedCodes) ? data.appliedCodes : (data.appliedCode ? [data.appliedCode] : []));
+    setAppliedCodes(Array.isArray(data.appliedCodes) ? data.appliedCodes : (data.appliedCode ? [data.appliedCode] : []));
     setCurrency(data.currency || 'USD');
-  }, []);
+  }, [siteScope]);
 
-  // Persist
+  // Persist to site-specific key
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const payload = { version: STORAGE_VERSION, items, appliedCodes, currency };
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
-  }, [items, appliedCodes, currency]);
+    try { localStorage.setItem(cartStorageKey(siteScope), JSON.stringify(payload)); } catch {}
+  }, [items, appliedCodes, currency, siteScope]);
 
   // Auth watch (for discount fetch scope)
   useEffect(() => {
@@ -118,11 +120,10 @@ export function CartProvider({ children }) {
         }
         return;
       }
-      // Single batched document per flush
       const batchCol = collection(db, 'users', userId, 'cartEventBatches');
       await addDoc(batchCol, { events, count: events.length, createdAt: serverTimestamp(), version: 1 });
     } catch (e) {
-      analyticsBuffer.current.unshift(...events); // requeue
+      analyticsBuffer.current.unshift(...events);
     }
   }, [userId]);
 
@@ -131,8 +132,14 @@ export function CartProvider({ children }) {
     // Auto-enrich analytics payload with multi-tenant context
     const evt = { name, payload: { ...payload, sellerUserId: sellerUserId || null, siteId: siteScope || null }, ts: Date.now() };
     analyticsBuffer.current.push(evt);
+    // Debounce to 10s, or flush immediately if buffer large (>40)
+    if(analyticsBuffer.current.length > 40) {
+      if(flushTimer.current) { clearTimeout(flushTimer.current); flushTimer.current = null; }
+      flushAnalytics();
+      return;
+    }
     if(!flushTimer.current) {
-      flushTimer.current = setTimeout(()=>{ flushAnalytics(); }, 2000);
+      flushTimer.current = setTimeout(()=>{ flushAnalytics(); }, 10000);
     }
   }, [flushAnalytics, sellerUserId, siteScope]);
 
@@ -444,36 +451,92 @@ export function CartProvider({ children }) {
     }
   }, [items, appliedCodes, currency, subtotal, total, emitEvent, validateCart]);
 
-  // Shipping & tax estimate (debounced on cart or discounts change)
+  // Shipping & tax estimate (debounced + hashed to prevent duplicate server calls)
+  const lastEstimateHashRef = useRef('');
   useEffect(()=>{
     if(estimateTimerRef.current) clearTimeout(estimateTimerRef.current);
-    if(!items.length) { setShippingEstimate(0); setTaxEstimate(0); return; }
+    if(!items.length) { setShippingEstimate(0); setTaxEstimate(0); lastEstimateHashRef.current=''; return; }
+    const totalWeight = items.reduce((w,i)=> w + (typeof i.weight==='number'? (i.weight * i.qty):0), 0);
+    const taxCodes = Array.from(new Set(items.map(i=> i.taxCode).filter(Boolean)));
+    const payload = { subtotal, discountAmount, currency, totalWeight, taxCodes };
+    const hash = (()=>{ try { return btoa(JSON.stringify(payload)).slice(-32); } catch { return JSON.stringify(payload); } })();
+    if(hash === lastEstimateHashRef.current) return; // no change -> skip scheduling
+    const baseDelay = 800; // slightly longer to batch rapid edits
     estimateTimerRef.current = setTimeout(async ()=>{
       try {
-  const totalWeight = items.reduce((w,i)=> w + (typeof i.weight==='number'? (i.weight * i.qty):0), 0);
-  const taxCodes = Array.from(new Set(items.map(i=> i.taxCode).filter(Boolean)));
-  const res = await fetch('/api/cart/estimate', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ subtotal, discountAmount, currency, totalWeight, taxCodes }) });
+        const res = await fetch('/api/cart/estimate', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json();
         if(res.ok && data.ok) {
+          lastEstimateHashRef.current = hash;
           setShippingEstimate(data.shipping || 0);
           setTaxEstimate(data.tax || 0);
           emitEvent('cart_estimate_updated', { shipping: data.shipping, tax: data.tax });
         }
       } catch {}
-    }, 600);
+    }, baseDelay);
     return ()=>{ if(estimateTimerRef.current) clearTimeout(estimateTimerRef.current); };
   }, [items, subtotal, discountAmount, appliedCodes, currency, emitEvent]);
 
-  // Abandoned cart heartbeat (every 60s while items exist)
+  // Throttled heartbeat with single-tab leader election (aligned to 5 min server interval)
   useEffect(()=>{
-    if(heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
-    if(!items.length) return;
-    heartbeatTimerRef.current = setInterval(()=>{
-      fetch('/api/cart/heartbeat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ userId }) }).catch(()=>{});
-      emitEvent('cart_abandoned_heartbeat', { itemCount: items.length });
-    }, 60000);
-    return ()=> { if(heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current); };
-  }, [items, userId, emitEvent]);
+    if(!userId || !items.length) return;
+    const LEADER_KEY = 'glow_cart_hb_leader_v1';
+    const LEADER_TTL = 5 * 60 * 1000; // 5 minutes matches server write window
+    const INTERVAL = 5 * 60 * 1000; // attempt exactly every 5 minutes
+    const SESSION_SENT_KEY = 'glow_cart_hb_last_sent_v1'; // per-tab/session localStorage timestamp
+    const clientId = clientIdRef.current;
+
+    const claim = () => {
+      try {
+        const now = Date.now();
+        const raw = localStorage.getItem(LEADER_KEY);
+        if(raw) {
+          const d = JSON.parse(raw);
+          if(d.id === clientId || d.expires < now) {
+            localStorage.setItem(LEADER_KEY, JSON.stringify({ id: clientId, expires: now + LEADER_TTL }));
+            return true;
+          }
+          return d.id === clientId;
+        } else {
+          localStorage.setItem(LEADER_KEY, JSON.stringify({ id: clientId, expires: now + LEADER_TTL }));
+          return true;
+        }
+      } catch { return false; }
+    };
+
+    const isLeader = () => {
+      try {
+        const now = Date.now();
+        const raw = localStorage.getItem(LEADER_KEY);
+        if(!raw) return claim();
+        const d = JSON.parse(raw);
+        if(d.expires < now) return claim();
+        return d.id === clientId;
+      } catch { return claim(); }
+    };
+
+    const send = () => {
+      // Local guard so we don't spam on rapid remounts within interval
+      try {
+        const lastSent = parseInt(localStorage.getItem(SESSION_SENT_KEY)||'0',10);
+        const now = Date.now();
+        if(now - lastSent < INTERVAL - 5000) { // allow 5s early refresh window
+          return; // already sent recently this session
+        }
+        if(isLeader()) {
+          fetch('/api/cart/heartbeat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ userId, siteId: siteScope || null }) }).catch(()=>{});
+          localStorage.setItem(SESSION_SENT_KEY, String(now));
+          emitEvent('cart_abandoned_heartbeat', { itemCount: items.length, leader:true, siteId: siteScope });
+        } else {
+          emitEvent('cart_abandoned_heartbeat', { itemCount: items.length, leader:false, siteId: siteScope });
+        }
+      } catch {}
+    };
+
+    send();
+    const interval = setInterval(send, INTERVAL);
+    return () => { clearInterval(interval); };
+  }, [items, userId, emitEvent, siteScope]);
 
   // Load payment provider settings for current site scope (only if seller connected)
   useEffect(()=>{
@@ -535,49 +598,45 @@ export function CartProvider({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        const cartRef = doc(db, 'users', userId, 'commerce', 'activeCart');
+        const cartRef = doc(db, 'users', userId, 'commerce', siteScope ? `cart__${siteScope}` : 'activeCart');
         const snap = await getDoc(cartRef).catch(()=>null);
         const serverItems = snap?.exists() && Array.isArray(snap.data().items) ? snap.data().items : [];
         if(cancelled) return;
         if(!serverItems.length && !items.length) { mergedUserRef.current = userId; return; }
-        // Duplication guard: if server and local carts are structurally identical (same lines & qty),
-        // treat this as a reload rather than a guest->auth merge to avoid doubling quantities.
-        if(serverItems.length && items.length) {
-          const same = serverItems.length === items.length && serverItems.every(si => {
-            const li = items.find(it => it.productId === si.productId && (it.variantId||null) === (si.variantId||null));
+        const same = serverItems.length && items.length && serverItems.length === items.length && serverItems.every(si => {
+          const li = items.find(it => it.productId === si.productId && (it.variantId||null) === (si.variantId||null));
             return !!li && li.qty === si.qty;
-          });
-          if(same) {
-            const normalized = serverItems.map(si => ({ id: uuid(), productId: si.productId, variantId: si.variantId||null, title: (items.find(i=>i.productId===si.productId && (i.variantId||null)===(si.variantId||null))?.title) || 'Item', image: (items.find(i=>i.productId===si.productId && (i.variantId||null)===(si.variantId||null))?.image) || '', price: si.price, qty: si.qty, lineUpdatedAt: si.lineUpdatedAt || Date.now(), meta: (items.find(i=>i.productId===si.productId && (i.variantId||null)===(si.variantId||null))?.meta) || {} }));
-            setItems(normalized);
-            mergedUserRef.current = userId;
-            emitEvent('cart_merge_skipped_duplicate', { lineCount: normalized.length });
-            return;
-          }
+        });
+        if(same) {
+          const normalized = serverItems.map(si => ({ id: uuid(), productId: si.productId, variantId: si.variantId||null, title: (items.find(i=>i.productId===si.productId && (i.variantId||null)===(si.variantId||null))?.title) || 'Item', image: (items.find(i=>i.productId===si.productId && (i.variantId||null)===(si.variantId||null))?.image) || '', price: si.price, qty: si.qty, lineUpdatedAt: si.lineUpdatedAt || Date.now(), meta: (items.find(i=>i.productId===si.productId && (i.variantId||null)===(si.variantId||null))?.meta) || {}, siteId: siteScope || null }));
+          setItems(normalized);
+          mergedUserRef.current = userId;
+          emitEvent('cart_merge_skipped_duplicate', { lineCount: normalized.length, siteId: siteScope });
+          return;
         }
-        // Build maps
         const now = Date.now();
         const map = {};
         serverItems.forEach(si => { const key = `${si.productId}::${si.variantId||''}`; map[key] = { productId: si.productId, variantId: si.variantId||null, qty: si.qty, price: si.price, lineUpdatedAt: si.lineUpdatedAt || now }; });
         items.forEach(li => { const key = `${li.productId}::${li.variantId||''}`; if(map[key]) { map[key].qty += li.qty; map[key].lineUpdatedAt = now; } else { map[key] = { productId: li.productId, variantId: li.variantId||null, qty: li.qty, price: li.price, lineUpdatedAt: li.lineUpdatedAt || now }; } });
-        const merged = Object.values(map).map(m => ({ id: uuid(), productId: m.productId, variantId: m.variantId, title: (items.find(i=>i.productId===m.productId && i.variantId===m.variantId)?.title) || 'Item', image: (items.find(i=>i.productId===m.productId && i.variantId===m.variantId)?.image) || '', price: m.price, qty: m.qty, lineUpdatedAt: m.lineUpdatedAt, meta: (items.find(i=>i.productId===m.productId && i.variantId===m.variantId)?.meta) || {} }));
+        const merged = Object.values(map).map(m => ({ id: uuid(), productId: m.productId, variantId: m.variantId, title: (items.find(i=>i.productId===m.productId && i.variantId===m.variantId)?.title) || 'Item', image: (items.find(i=>i.productId===m.productId && i.variantId===m.variantId)?.image) || '', price: m.price, qty: m.qty, lineUpdatedAt: m.lineUpdatedAt, meta: (items.find(i=>i.productId===m.productId && i.variantId===m.variantId)?.meta) || {}, siteId: siteScope || null }));
         setItems(merged);
         mergedUserRef.current = userId;
-        emitEvent('cart_merged_guest_to_user', { serverCount: serverItems.length, guestCount: items.length, mergedCount: merged.length });
+        emitEvent('cart_merged_guest_to_user', { serverCount: serverItems.length, guestCount: items.length, mergedCount: merged.length, siteId: siteScope });
         // Immediate sync push
-  const payload = { userId, clientId: clientIdRef.current, items: merged.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty, price: i.price, lineUpdatedAt: i.lineUpdatedAt })), removedKeys: [], discounts: appliedCodes.map(c => ({ code: c.code, type: c.type, amount: c.amount })), currency, baseVersion: snap?.data()?.version || 0 };
+  const payload = { userId, clientId: clientIdRef.current, siteId: siteScope || null, items: merged.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty, price: i.price, lineUpdatedAt: i.lineUpdatedAt })), removedKeys: [], discounts: appliedCodes.map(c => ({ code: c.code, type: c.type, amount: c.amount })), currency, baseVersion: snap?.data()?.version || 0 };
         fetch('/api/cart/sync', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) }).catch(()=>{});
       } catch (e) { console.error('guest->auth merge failed', e); }
     })();
     return ()=> { cancelled = true; };
-  }, [userId, items, appliedCodes, currency, emitEvent]);
+  }, [userId, items, appliedCodes, currency, emitEvent, siteScope]);
+
   // Real-time cart subscription & sync
   const lastServerVersionRef = useRef(0);
   const suppressEchoRef = useRef(false);
 
   useEffect(()=>{
     if(!userId) return;
-    const ref = doc(db, 'users', userId, 'commerce', 'activeCart');
+    const ref = doc(db, 'users', userId, 'commerce', siteScope ? `cart__${siteScope}` : 'activeCart');
     const unsub = onSnapshot(ref, snap => {
       if(!snap.exists()) return;
       const data = snap.data();
@@ -596,28 +655,41 @@ export function CartProvider({ children }) {
     return ()=> unsub();
   }, [userId]);
 
+  // Debounced cart sync with diff hash to skip redundant POSTs
+  const lastSyncHashRef = useRef('');
   useEffect(()=>{
     if(!userId) return;
+    const serialize = () => {
+      // stable minimal representation for hashing
+      const core = items.map(i => ({ p:i.productId, v:i.variantId||null, q:i.qty, pr:i.price })).sort((a,b)=> (a.p+a.v).localeCompare(b.p+b.v));
+      const discs = appliedCodes.map(d=>`${d.code}:${d.amount}`).sort();
+      return JSON.stringify({ core, discs, cur: currency, rem: Array.from(pendingRemovalsRef.current).sort(), site: siteScope||null });
+    };
+    const hash = (()=>{
+      try { return btoa(unescape(encodeURIComponent(serialize()))).slice(-40); } catch { return serialize(); }
+    })();
+    if(hash === lastSyncHashRef.current) return; // no logical change
     const handle = setTimeout(()=>{
       const removalKeys = Array.from(pendingRemovalsRef.current);
       pendingRemovalsRef.current.clear();
       const payload = {
         userId,
         clientId: clientIdRef.current,
+        siteId: siteScope || null,
         items: items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty, price: i.price, lineUpdatedAt: i.lineUpdatedAt || Date.now() })),
         removedKeys: removalKeys,
-  discounts: appliedCodes.map(c => ({ code: c.code, type: c.type, amount: c.amount })),
+        discounts: appliedCodes.map(c => ({ code: c.code, type: c.type, amount: c.amount })),
         currency,
         baseVersion: lastServerVersionRef.current
       };
       suppressEchoRef.current = true;
       fetch('/api/cart/sync', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) })
         .then(r=>r.json())
-        .then(data => { if(data?.ok && data.cart?.version) { lastServerVersionRef.current = data.cart.version; emitEvent('cart_synced', { itemCount: items.length, version: data.cart.version }); } })
+        .then(data => { if(data?.ok && data.cart?.version) { lastServerVersionRef.current = data.cart.version; lastSyncHashRef.current = hash; emitEvent('cart_synced', { itemCount: items.length, version: data.cart.version, siteId: siteScope }); } })
         .catch(()=>{});
-    }, 700);
+    }, 900); // slightly longer debounce
     return ()=> clearTimeout(handle);
-  }, [items, appliedCodes, currency, userId, emitEvent]);
+  }, [items, appliedCodes, currency, userId, emitEvent, siteScope]);
 
   const value = {
     items, addItem, updateQty, removeItem, reAddLineItem, clearCart,
@@ -637,5 +709,5 @@ export function CartProvider({ children }) {
   sellerConnected
   };
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return <CartContext.Provider value={{ ...value, setSiteScope }}>{children}</CartContext.Provider>;
 }

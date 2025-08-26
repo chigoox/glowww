@@ -5,15 +5,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // POST /api/cart/sync
-// Body: { userId, clientId, items:[{productId, variantId, qty, price, lineUpdatedAt}], removedKeys:[key], discounts:[{code,type,amount}], currency, baseVersion }
+// Body: { userId, clientId, siteId?, items:[{productId, variantId, qty, price, lineUpdatedAt}], removedKeys:[key], discounts:[{code,type,amount}], currency, baseVersion }
 // Performs per-line timestamp merge & tombstone removal semantics in a transaction.
 export async function POST(req) {
   try {
-  const { userId, clientId, items = [], removedKeys = [], discounts = [], currency = 'USD', baseVersion } = await req.json();
+  const { userId, clientId, siteId, items = [], removedKeys = [], discounts = [], currency = 'USD', baseVersion } = await req.json();
     if(!userId || !clientId) return Response.json({ error:'Missing userId or clientId' }, { status:400 });
     if(!Array.isArray(items) || !Array.isArray(removedKeys)) return Response.json({ error:'Invalid payload' }, { status:400 });
 
-    const cartRef = doc(db, 'users', userId, 'commerce', 'activeCart');
+    const cartDocId = siteId ? `cart__${siteId}` : 'activeCart';
+    const cartRef = doc(db, 'users', userId, 'commerce', cartDocId);
 
     const result = await runTransaction(db, async (tx) => {
       const snap = await tx.get(cartRef).catch(()=>null);
@@ -61,7 +62,8 @@ export async function POST(req) {
         lastActivityAt: now,
         recoverable: true,
         version,
-        lastClientId: clientId
+  lastClientId: clientId,
+  siteId: siteId || null
       };
       tx.set(cartRef, merged, { merge: true });
       return merged;

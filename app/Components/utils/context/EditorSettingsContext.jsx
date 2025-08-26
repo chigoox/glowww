@@ -101,6 +101,18 @@ const DEFAULT_SETTINGS = {
       error: '#ff4d4f'
     }
   }
+  ,
+  // Breakpoint / viewport override settings for editor preview
+  breakpoints: {
+    current: 'auto', // 'auto'|'sm'|'regular'|'lg'|'xl'|'custom'
+    customWidth: null,
+    widths: {
+      sm: 375,
+      regular: 768,
+      lg: 1024,
+      xl: 1280
+    }
+  }
 };
 
 const EditorSettingsContext = createContext();

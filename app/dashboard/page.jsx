@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserSites, createSite, deleteSite, updateSite, canCreateSite } from '../../lib/sites';
+import { getUserSites, createSite, deleteSite, updateSite, canCreateSite, syncUserSiteCount } from '../../lib/sites';
 import { signOut } from '../../lib/auth';
 import { PRICING_PLANS, createCheckoutSession, createSetupIntent, setDefaultPaymentMethod, getSubscriptionStatus, cancelSubscriptionAtPeriodEnd, resumeSubscription, switchSubscriptionPlan, startStripeConnectOnboarding, getStripeConnectedAccount, disconnectStripeAccount } from '../../lib/stripe';
 import { startPaypalOnboarding } from '../../lib/paypal';
@@ -25,18 +25,16 @@ import {
   Form,
   Space,
   Typography,
-  Tag,
-  Tooltip,
   Divider,
   Row,
   Col,
-  Progress,
-  Alert,
-  Table
-  ,
+  Table,
   theme,
   Tabs,
-  ConfigProvider
+  ConfigProvider,
+  Progress,
+  Tag,
+  Alert
 } from 'antd';
 import {
   PlusOutlined,
@@ -90,6 +88,10 @@ export default function Dashboard() {
   const [accountForm] = Form.useForm();
   const [savingAccount, setSavingAccount] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  // Account settings UX enhancements
+  const [usernameStatus, setUsernameStatus] = useState({ checking: false, available: null }); // available: true|false|null
+  const [accountHasChanges, setAccountHasChanges] = useState(false);
+  const currentCanonicalUsername = (userData?.username || user?.username || '').toLowerCase();
   
   // Logout function
   const handleLogout = async () => {
@@ -183,6 +185,19 @@ export default function Dashboard() {
     loadAnalytics();
     return () => { aborted = true; };
   }, [isAnalyticsModalVisible, selectedAnalyticsSite, user?.username]);
+
+  // Passive site usage reconciliation (runs once when sites & subscription loaded) to prevent stale usage allowing extra sites
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (!subscription) return; // wait for subscription fetch
+    // Only reconcile for finite tiers and when we have sites loaded
+    if (subscription?.tier === 'admin') return;
+    // Defer slightly to avoid blocking initial paint
+    const handle = setTimeout(() => {
+      syncUserSiteCount(user.uid).catch(()=>{});
+    }, 1500);
+    return () => clearTimeout(handle);
+  }, [user?.uid, subscription?.tier]);
 
   // Sync with global theme classes set by ThemeInitializer (dark-theme / light-theme)
   useEffect(() => {
@@ -648,8 +663,11 @@ export default function Dashboard() {
   }
 
   const currentPlan = getCurrentPlan();
-  const siteUsage = subscription ? subscription.usage.sitesCount : sites.length;
+  // Derive usage with fallback to actual sites array length if usage missing or zero while sites exist
+  const rawUsage = subscription ? subscription.usage.sitesCount : undefined;
+  const siteUsage = (typeof rawUsage === 'number' && rawUsage >= 0) ? rawUsage : sites.length;
   const maxSites = subscription ? subscription.limits.maxSites : currentPlan.maxSites;
+  const needsSync = subscription && subscription.tier !== 'admin' && rawUsage !== undefined && rawUsage !== sites.length;
   const usagePercentage = maxSites === -1 ? 0 : (siteUsage / maxSites) * 100;
   const atSiteLimit = maxSites !== -1 && siteUsage >= maxSites;
 
@@ -662,6 +680,9 @@ export default function Dashboard() {
       subscriptionLimits: subscription.limits
     });
   }
+
+  // NOTE: Passive usage sync effect removed for now to avoid hook order mismatch.
+  // We'll reintroduce after moving all hooks above conditional early returns.
 
   return (
     <ConfigProvider
@@ -677,9 +698,9 @@ export default function Dashboard() {
         }
       }}
     >
-    <div style={{ padding: '24px 124px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 10px', maxWidth: '1200px', margin: '0 auto' }}>
       {/* Header */}
-    <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className='md:flex' style={{ marginBottom: '12px', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
       <Title level={2} style={{ margin: 0, letterSpacing: -0.2 }}>Welcome back, {user.displayName || user.email}!</Title>
       <Text type="secondary">Manage your sites, billing, and payouts</Text>
@@ -690,7 +711,8 @@ export default function Dashboard() {
             onClick={() => {
               accountForm.setFieldsValue({
                 fullName: user.fullName || user.displayName || '',
-                username: (user.username || '').toLowerCase(),
+                // Use Firestore userData.username; Firebase auth user object lacks this custom field
+                username: (userData?.username || user?.username || '').toLowerCase(),
                 email: user.email,
                 phone: userData?.phone || ''
               });
@@ -742,40 +764,57 @@ export default function Dashboard() {
 .dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn { width: 100%; text-align: center; }
 
 /* Pill base */
+/* Re-skin to match dark side menu */
+.dashboard-tabs .ant-tabs-nav-list { gap: 6px; }
 .dashboard-tabs .ant-tabs-tab {
-  margin: 0 4px;
-  padding: 8px 12px;
-  border-radius: 10px;
+  margin: 0;
+  padding: 0;
+  border: none;
   background: transparent;
-  border: 1px solid transparent;
-  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
-  position: relative;
 }
-
-/* Text */
+.dashboard-tabs .ant-tabs-nav-wrap,
+.dashboard-tabs .ant-tabs-nav-list,
+.dashboard-tabs .ant-tabs-tab,
+.dashboard-tabs .ant-tabs-nav,
+.dashboard-tabs .ant-tabs-nav::before { border: none !important; box-shadow: none !important; background: transparent !important; }
+.dashboard-tabs .ant-tabs-tab::before,
+.dashboard-tabs .ant-tabs-tab::after { display: none !important; }
+.dashboard-tabs .ant-tabs-nav { border: none !important; box-shadow: none !important; background: transparent !important; }
 .dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn {
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 22px;
+  background: #232323;
+  border: 1px solid #2f2f2f;
+  border-radius: 18px;
+  color: #d0d0d0;
   font-weight: 600;
   letter-spacing: .01em;
-  transition: color .2s ease;
+  position: relative;
+  transition: background .25s, color .25s, border-color .25s, box-shadow .25s;
 }
-
-/* Hover (subtle tint) */
-.dashboard-tabs .ant-tabs-tab:hover {
-  background: color-mix(in srgb, var(--accent-color, #1677ff) 7%, var(--panel-bg, #fff));
-}
-.dashboard-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn {
-  color: color-mix(in srgb, var(--accent-color, #1677ff) 60%, var(--text-primary, #111));
-}
-
-/* Active (clear but calm) */
-.dashboard-tabs .ant-tabs-tab-active {
-  background: color-mix(in srgb, var(--accent-color, #1677ff) 12%, var(--panel-bg, #fff));
-  box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 4px 10px rgba(0,0,0,.04);
-}
+.dark-theme .dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn { background: #1c1c1c; border-color: #2a2a2a; }
+.dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn:hover { background: #2d2d2d; color: #fff; border-color: #3a3a3a; }
 .dashboard-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: var(--accent-color, #1677ff) !important;
+  background: linear-gradient(145deg,#151515,#090909);
+  border-color: #303030;
+  color: #fff !important;
+  box-shadow: 0 0 0 1px #303030, 0 4px 14px -4px rgba(0,0,0,.6);
 }
+.dashboard-tabs .ant-tabs-tab-active .ant-tabs-tab-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.08), transparent 70%);
+  pointer-events: none;
+}
+.dashboard-tabs .ant-tabs-tab .ant-tabs-tab-btn:focus-visible,
+.dashboard-tabs .ant-tabs-tab:focus-visible { outline: none !important; box-shadow: 0 0 0 2px rgba(22,119,255,.55); }
+.dashboard-tabs .ant-tabs-tab:focus { outline: none !important; }
+.dashboard-tabs .ant-tabs-tab-disabled .ant-tabs-tab-btn { opacity: .45; }
 
 /* Remove noisy rings; keep accessible focus for keyboard */
 .dashboard-tabs .ant-tabs-tab:focus,
@@ -820,6 +859,29 @@ export default function Dashboard() {
   box-shadow: 0 1px 4px rgba(0,0,0,.06);
 }
 
+      `}</style>
+      {/* Global styles for Account Settings (moved out to avoid nested styled-jsx) */}
+      <style jsx global>{`
+        .as-grid { display: flex; flex-direction: column; gap: 20px; }
+        @media (min-width: 720px) { .as-grid { display: grid; grid-template-columns: 1fr 1fr; align-items: flex-start; gap: 28px; } }
+        .as-section { background: var(--panel-bg); border: 1px solid var(--border-color); padding: 16px 18px 18px; border-radius: 14px; position: relative; }
+        .as-section-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--text-secondary); }
+        .as-mini-card { background: linear-gradient(145deg, color-mix(in srgb,var(--accent-color,#1677ff) 10%, var(--panel-bg)), var(--panel-bg)); border: 1px solid color-mix(in srgb, var(--accent-color,#1677ff) 35%, var(--panel-bg)); padding: 12px 14px; border-radius: 10px; }
+        .as-savebar { position: sticky; bottom: -16px; margin-top: 24px; background: linear-gradient(180deg, rgba(255,255,255,0) 0%, var(--bg-primary) 38%); padding: 18px 4px 4px; backdrop-filter: blur(6px); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--border-color); }
+        .dark-theme .as-savebar { background: linear-gradient(180deg, rgba(0,0,0,0) 0%, var(--bg-primary) 40%); }
+        .as-savebar-status { font-size: 12px; color: var(--text-secondary); }
+  .as-savebar-actions { display: flex; gap: 8px; }
+  /* Account Settings modal refinements */
+  .account-settings-modal .ant-modal-content { background: transparent; box-shadow: none; }
+  .account-settings-modal .ant-modal-header { padding: 14px 20px 10px; border-bottom: 1px solid var(--border-color); background: transparent; }
+  .account-settings-modal .ant-modal-body { background: transparent; }
+  .account-settings-modal .ant-tabs-nav::before { display: none !important; }
+  .account-settings-modal .ant-tabs-nav { margin: 0 0 12px; border: 0; }
+  .account-settings-modal .ant-tabs-tab { border: 0 !important; background: transparent !important; padding: 6px 10px !important; }
+  .account-settings-modal .ant-tabs-tab + .ant-tabs-tab { margin-left: 4px; }
+  .account-settings-modal .ant-tabs-tab-active { background: color-mix(in srgb, var(--accent-color,#1677ff) 14%, transparent) !important; border-radius: 6px; }
+  .dark-theme .account-settings-modal .ant-tabs-tab-active { background: color-mix(in srgb, var(--accent-color,#1677ff) 26%, transparent) !important; }
+  .account-settings-modal .ant-tabs-tab:hover { background: color-mix(in srgb, var(--accent-color,#1677ff) 10%, transparent) !important; border-radius: 6px; }
       `}</style>
 
       {/* Overview */}
@@ -942,7 +1004,8 @@ export default function Dashboard() {
               <Button icon={<SettingOutlined />} size="large" onClick={() => {
                 accountForm.setFieldsValue({
                   fullName: user.fullName || user.displayName || '',
-                  username: (user.username || '').toLowerCase(),
+                      // Prefer Firestore userData for canonical username
+                      username: (userData?.username || user?.username || '').toLowerCase(),
                   email: user.email,
                   phone: userData?.phone || ''
                 });
@@ -1398,6 +1461,32 @@ export default function Dashboard() {
           </Form.Item>
 
           <Form.Item
+            name="subdomain"
+            label="Preferred subdomain (optional)"
+            extra="Your site will be available at sitename.gloweditor.com"
+          >
+            <Input
+              placeholder="sitename"
+              onChange={async (e) => {
+                const v = (e.target.value || '').toString().trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                createForm.setFieldsValue({ subdomain: v });
+                if (!v) return;
+                try {
+                  const res = await fetch(`/api/subdomain-available?subdomain=${encodeURIComponent(v)}`);
+                  const json = await res.json();
+                  if (res.ok && json.ok) {
+                    if (!json.available) {
+                      createForm.setFields([{ name: 'subdomain', errors: [json.reason === 'reserved' ? 'That subdomain is reserved' : 'Subdomain not available'] }]);
+                    } else {
+                      createForm.setFields([{ name: 'subdomain', errors: [] }]);
+                    }
+                  }
+                } catch (e) { /* ignore */ }
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
             name="description"
             label="Description (Optional)"
           >
@@ -1786,16 +1875,16 @@ export default function Dashboard() {
 
             return (
               <Col xs={24} md={12} key={plan.id}>
-        <Card
+                <Card
                   hoverable
                   onClick={() => setSelectedUpgradePlan(plan.id)}
-                  styles={{ body: { padding: 0 } }}
                   style={{
-                    overflow: 'hidden',
-          borderRadius: 12,
-          border: selected ? `2px solid ${token.colorPrimary}` : `1px solid ${token.colorBorder}`,
-          boxShadow: selected ? token.boxShadowSecondary : token.boxShadowTertiary
+                    borderRadius: 20,
+                    border: selected ? `2px solid ${token.colorPrimary}` : `1px solid ${token.colorBorderSecondary}`,
+                    boxShadow: selected ? token.boxShadowSecondary : token.boxShadowTertiary,
+                    transition: 'box-shadow .25s, border-color .25s'
                   }}
+                  styles={{ body: { padding: 0 } }}
                 >
                   <div style={{ background: headerGradient, padding: '16px 16px 12px 16px' }}>
                     <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -1870,11 +1959,16 @@ export default function Dashboard() {
             <span>Account Settings</span>
           </span>
         }
+        className="account-settings-modal"
         open={showAccountSettings}
         onCancel={() => setShowAccountSettings(false)}
         footer={null}
         width={'32rem'}
-        bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+        styles={{
+          body: { padding: '12px 20px 20px', maxHeight: '32rem', overflowY: 'auto' },
+          content: { borderRadius: 0, overflow: 'hidden', padding: 0, background: 'transparent', boxShadow: 'none' }
+        }}
+        destroyOnHidden
         destroyOnClose
       >
         <Tabs
@@ -1889,13 +1983,43 @@ export default function Dashboard() {
                 <Form
                   form={accountForm}
                   layout="vertical"
+                  onValuesChange={() => {
+                    // Detect diff vs current
+                    const v = accountForm.getFieldsValue();
+                    const nextFullName = (v.fullName || '').trim();
+                    const nextPhone = (v.phone || '').trim();
+                    const nextUsername = (v.username || '').trim().toLowerCase();
+                    const changed =
+                      nextFullName !== (userData?.fullName || user.fullName || user.displayName || '').trim() ||
+                      nextPhone !== (userData?.phone || '').trim() ||
+                      nextUsername !== currentCanonicalUsername;
+                    setAccountHasChanges(changed);
+                    // Trigger username availability debounce
+                    if (nextUsername && nextUsername !== currentCanonicalUsername) {
+                      setUsernameStatus(s => ({ ...s, checking: true, available: null }));
+                      clearTimeout(window.__usernameCheckTimer);
+                      window.__usernameCheckTimer = setTimeout(async () => {
+                        try {
+                          const exists = await checkUsernameExists(nextUsername);
+                          setUsernameStatus({ checking: false, available: !exists });
+                        } catch {
+                          setUsernameStatus({ checking: false, available: null });
+                        }
+                      }, 450);
+                    } else {
+                      // reset if unchanged or empty
+                      setUsernameStatus({ checking: false, available: null });
+                    }
+                  }}
                   onFinish={async (values) => {
                     try {
                       setSavingAccount(true);
                       const nextFullName = (values.fullName || '').trim();
                       const desiredUsernameRaw = (values.username || '').trim().toLowerCase();
                       const desiredUsername = desiredUsernameRaw.replace(/[^a-z0-9-_]/g, '-');
-                      const phone = (values.phone || '').trim();
+                      // Normalize phone: allow digits + plus + basic separators, collapse spaces
+                      const phoneRaw = (values.phone || '').trim();
+                      const phone = phoneRaw.replace(/[^0-9+()\-\s]/g, '').replace(/\s+/g, ' ');
 
                       const email = user.email; // read-only
 
@@ -1908,8 +2032,24 @@ export default function Dashboard() {
                         return;
                       }
 
-                      // Only check uniqueness if changed
-                      if (desiredUsername !== (user.username || '').toLowerCase()) {
+                      const currentUsername = (userData?.username || user?.username || '').toLowerCase();
+                      const currentFullName = (userData?.fullName || user.fullName || user.displayName || '').trim();
+                      const currentPhone = (userData?.phone || '').trim();
+
+                      // Detect if anything actually changed to avoid unnecessary writes
+                      const changed = desiredUsername !== currentUsername || nextFullName !== currentFullName || phone !== currentPhone;
+                      if (!changed) {
+                        message.info('No changes to save');
+                        return;
+                      }
+
+                      // Only check uniqueness if username changed
+                      if (desiredUsername !== currentUsername) {
+                        // If we already know it's taken from live check, short-circuit
+                        if (usernameStatus.available === false) {
+                          message.error('That username is already taken');
+                          return;
+                        }
                         const exists = await checkUsernameExists(desiredUsername);
                         if (exists) {
                           message.error('That username is already taken');
@@ -1917,16 +2057,18 @@ export default function Dashboard() {
                         }
                       }
 
-                      await updateUserData(user.uid, {
-                        fullName: nextFullName || user.fullName || user.displayName || '',
+                      const updatePayload = {
                         username: desiredUsername,
-                        email,
-                        phone
-                      });
+                        email
+                      };
+                      if (nextFullName || currentFullName) updatePayload.fullName = nextFullName || currentFullName;
+                      if (phone) updatePayload.phone = phone;
+
+                      await updateUserData(user.uid, updatePayload);
 
                       // Update Firebase Auth displayName for welcome header
                       try {
-                        if (auth.currentUser && nextFullName) {
+                        if (auth.currentUser && nextFullName && nextFullName !== auth.currentUser.displayName) {
                           await updateProfile(auth.currentUser, { displayName: nextFullName });
                         }
                       } catch {}
@@ -1943,54 +2085,110 @@ export default function Dashboard() {
                   }}
                   initialValues={{
                     fullName: user.fullName || user.displayName || '',
-                    username: (user.username || '').toLowerCase(),
+                    username: (userData?.username || user?.username || '').toLowerCase(),
                     email: user.email,
                     phone: userData?.phone || ''
                   }}
                 >
+                  <div style={{
+                    background: 'linear-gradient(135deg, var(--panel-bg) 0%, color-mix(in srgb, var(--accent-color, #1677ff) 18%, var(--panel-bg)) 100%)',
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16
+                  }}>
+                    <div aria-hidden="true" style={{
+                      width: 54,
+                      height: 54,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(145deg, var(--accent-color, #1677ff), color-mix(in srgb, var(--accent-color, #1677ff) 40%, black))',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 600,
+                      fontSize: 20,
+                      color: '#fff',
+                      boxShadow: '0 4px 10px rgba(0,0,0,.18)'
+                    }}>{(currentCanonicalUsername || 'U').slice(0,1).toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text strong style={{ fontSize: 16 }}>{user.fullName || user.displayName || 'Your profile'}</Text>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{user.email}</div>
+                    </div>
+                    <Tag color={accountHasChanges ? 'gold' : 'default'} style={{ alignSelf: 'flex-start' }}>
+                      {accountHasChanges ? 'Unsaved changes' : 'Up to date'}
+                    </Tag>
+                  </div>
                   <Form.Item label="Email" name="email">
                     <Input prefix={<MailOutlined />} disabled />
                   </Form.Item>
-                  <Form.Item
-                    label="Full name"
-                    name="fullName"
-                    rules={[{ max: 80, message: 'Name too long' }]}
-                  >
-                    <Input prefix={<UserOutlined />} placeholder="Your name" />
-                  </Form.Item>
-                  <Form.Item
-                    label="Username"
-                    name="username"
-                    rules={[
-                      { required: true, message: 'Please choose a username' },
-                      { pattern: /^[a-z0-9-_]+$/, message: 'Use lowercase letters, numbers, hyphens or underscores' },
-                      { min: 2, max: 30, message: '2 to 30 characters' }
-                    ]}
-                  >
-                    <Input placeholder="your-username" onChange={(e) => {
-                      const v = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-                      accountForm.setFieldsValue({ username: v });
-                    }} />
-                  </Form.Item>
-                  <Form.Item
-                    label="Phone"
-                    name="phone"
-                    rules={[
-                      { pattern: /^[0-9+()\-\s]{7,20}$/, message: 'Enter a valid phone number' }
-                    ]}
-                  >
-                    <Input prefix={<PhoneOutlined />} placeholder="e.g. +1 (555) 123-4567" />
-                  </Form.Item>
+                  <div className="as-grid">
+                    <div className="as-section">
+                      <h4 className="as-section-title">Identity</h4>
+                      <Form.Item
+                        label="Full name"
+                        name="fullName"
+                        tooltip="Optional. Shown in greetings and receipts"
+                        rules={[{ max: 80, message: 'Name too long' }]}
+                      >
+                        <Input prefix={<UserOutlined />} placeholder="Your name" />
+                      </Form.Item>
+                      <Form.Item
+                        label={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>Username {usernameStatus.checking && <Spin size="small" style={{ marginLeft: 4 }} />}{usernameStatus.available && usernameStatus.available === true && <Tag color="green" style={{ marginLeft: 4 }}>Available</Tag>}{usernameStatus.available === false && <Tag color="red" style={{ marginLeft: 4 }}>Taken</Tag>}</span>}
+                        name="username"
+                        extra={<span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Your public URLs: <code>/u/{(accountForm.getFieldValue('username') || currentCanonicalUsername) || 'username'}/[site]</code></span>}
+                        rules={[
+                          { required: true, message: 'Please choose a username' },
+                          { pattern: /^[a-z0-9-_]+$/, message: 'Use lowercase letters, numbers, hyphens or underscores' },
+                          { min: 2, max: 30, message: '2 to 30 characters' }
+                        ]}
+                      >
+                        <Input placeholder="your-username" maxLength={30} onChange={(e) => {
+                          const v = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+                          accountForm.setFieldsValue({ username: v });
+                        }} />
+                      </Form.Item>
+                      <div aria-live="polite" style={{ fontSize: 12, minHeight: 18, color: usernameStatus.available === false ? 'var(--error-color, #ff4d4f)' : 'var(--text-secondary)' }}>
+                        {usernameStatus.available === false && 'Username unavailable'}
+                        {usernameStatus.available === true && accountHasChanges && 'Username is available'}
+                      </div>
+                    </div>
+                    <div className="as-section">
+                      <h4 className="as-section-title">Contact</h4>
+                      <Form.Item
+                        label="Phone"
+                        name="phone"
+                        tooltip="Optional. For receipts & transactional messages"
+                        rules={[
+                          { pattern: /^[0-9+()\-\s]{7,20}$/, message: 'Enter a valid phone number' }
+                        ]}
+                      >
+                        <Input prefix={<PhoneOutlined />} placeholder="e.g. +1 (555) 123-4567" />
+                      </Form.Item>
+                      <div className="as-hint" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>We never share your phone number.</div>
+                      <Divider style={{ margin: '20px 0 12px' }} />
+                      <div className="as-mini-card">
+                        <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Profile Tips</strong>
+                        <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: 12, lineHeight: 1.5 }}>
+                          <li>Keep your username short & memorable.</li>
+                          <li>Avoid personal data (PII) in usernames.</li>
+                          <li>Use a consistent name across sites.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
 
-                  <Divider />
-                  <Row justify="end" gutter={8}>
-                    <Col>
-                      <Button onClick={() => setShowAccountSettings(false)}>Cancel</Button>
-                    </Col>
-                    <Col>
-                      <Button type="primary" htmlType="submit" loading={savingAccount}>Save</Button>
-                    </Col>
-                  </Row>
+                  <div className="as-savebar">
+                    <div className="as-savebar-status" aria-live="polite">
+                      {savingAccount ? 'Saving…' : accountHasChanges ? 'Unsaved changes' : 'All changes saved'}
+                    </div>
+                    <div className="as-savebar-actions">
+                      <Button onClick={() => setShowAccountSettings(false)}>Close</Button>
+                      <Button type="primary" htmlType="submit" loading={savingAccount} disabled={!accountHasChanges || usernameStatus.checking || usernameStatus.available === false}>Save changes</Button>
+                    </div>
+                  </div>
+
                 </Form>
               )
             },

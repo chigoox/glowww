@@ -684,6 +684,8 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     
     let finalX = Math.round(position.x);
     let finalY = Math.round(position.y);
+    let px = 0
+    let py = 0
     
     // Apply snap to grid if enabled
     if (settings.dropPosition.snapToGrid && settings.snap.enabled) {
@@ -725,6 +727,8 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
               // Translate coordinates from used container space into parent container space
               const deltaX = usedRect.left - parentRect.left;
               const deltaY = usedRect.top - parentRect.top;
+              px = parentRect.left
+              py = parentRect.top
               console.log(parentRect)
               finalX -= deltaX;
               finalY -= deltaY;
@@ -745,8 +749,8 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
         }
 
         // Always trust (possibly adjusted) coordinates
-        props.left = finalX;
-        props.top = finalY;
+        props.left =  parentId =='ROOT' ? finalX : 24;
+        props.top =   parentId =='ROOT' ? finalY : 24;
 
         // Percentage conversion only for newly dropped components and only once
         if (isNewComponent && !props._percentConverted) {

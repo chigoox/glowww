@@ -54,7 +54,7 @@ export const Admin = () => {
   }, [])
     return (
         <AuthWrapper>
-        <main className="flex" >
+        <main className="lg:flex" >
             <AdminMenu ownerData={ownerData}  selectedMenu={selectedMenu} setSelectedMenu={setSelectedMenu} />
             <AdminBody owner={owner} ownerData={ownerData} selectedMenu={selectedMenu} selectedProductId={selectedProductId} />
         </main>

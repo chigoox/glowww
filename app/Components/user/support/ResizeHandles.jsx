@@ -237,29 +237,80 @@ export const ResizeHandles = ({
       document.removeEventListener('mouseup', handleMouseUp);
       if (targetRef?.current) {
         const finalRect = targetRef.current.getBoundingClientRect();
-        // Optional: Preserve percentage units if original width/height were %
+        // NEW: Always convert resized dimensions (and position if changed) to percentages
         try {
-          const nodeWrapper = craftQuery?.node(nodeId);
-          const nodeData = nodeWrapper?.get?.();
-          const originalProps = nodeData?.data?.props || {};
-          const parentEl = targetRef.current.offsetParent;
-          let parentWidth = parentEl?.getBoundingClientRect().width;
-          let parentHeight = parentEl?.getBoundingClientRect().height;
-          if (parentWidth && parentHeight) {
-            const widthWasPercent = typeof originalProps.width === 'string' && originalProps.width.trim().endsWith('%');
-            const heightWasPercent = typeof originalProps.height === 'string' && originalProps.height.trim().endsWith('%');
-            if (widthWasPercent || heightWasPercent) {
+          // Prefer immediate parent element for relative % so layout containers without explicit positioning still work
+          const parentEl = targetRef.current.offsetParent || targetRef.current.parentElement;
+          if (parentEl) {
+            const parentRect = parentEl.getBoundingClientRect();
+            const parentWidth = parentRect.width || 0;
+            const parentHeight = parentRect.height || 0;
+            if (parentWidth > 0 && parentHeight > 0) {
+              const pct = (v) => (v / 1); // placeholder for clarity – we inline below
+              const widthPct = (finalRect.width / parentWidth) * 100;
+              const heightPct = (finalRect.height / parentHeight) * 100;
+              // Compute left/top relative to parent even if only width/height changed;
+              // keeps element responsive when container changes size later.
+              const relLeft = finalRect.left - parentRect.left;
+              const relTop = finalRect.top - parentRect.top;
+              const leftPct = (relLeft / parentWidth) * 100;
+              const topPct = (relTop / parentHeight) * 100;
+
               editorActions.setProp(nodeId, (p) => {
-                if (widthWasPercent) {
-                  p.width = parseFloat(((finalRect.width / parentWidth) * 100).toFixed(3)) + '%';
+                p.width = parseFloat(widthPct.toFixed(4)) + '%';
+                p.height = parseFloat(heightPct.toFixed(4)) + '%';
+                // Only set left/top if element is absolutely positioned OR we modified leading edges
+                if (p.position === 'absolute' || p.left !== undefined || p.top !== undefined) {
+                  // Preserve existing pixel intent if user never moved it (rare), else convert.
+                  p.left = parseFloat(leftPct.toFixed(4)) + '%';
+                  p.top = parseFloat(topPct.toFixed(4)) + '%';
+                  if (p.position !== 'absolute') p.position = 'absolute';
                 }
-                if (heightWasPercent) {
-                  p.height = parseFloat(((finalRect.height / parentHeight) * 100).toFixed(3)) + '%';
+                if (process.env.NODE_ENV !== 'production') {
+                  console.debug('[ResizeHandles] Converted to % on mouseup:', {
+                    nodeId,
+                    width: p.width,
+                    height: p.height,
+                    left: p.left,
+                    top: p.top
+                  });
+                }
+              });
+
+              // Fallback: next frame verify conversion; if still numeric convert again
+              requestAnimationFrame(() => {
+                try {
+                  const nodeWrapper = craftQuery?.node(nodeId);
+                  const props = nodeWrapper?.get?.().data?.props || {};
+                  const isPercent = (val) => typeof val === 'string' && val.trim().endsWith('%');
+                  if (!isPercent(props.width) || !isPercent(props.height)) {
+                    editorActions.setProp(nodeId, (p) => {
+                      p.width = parseFloat(widthPct.toFixed(4)) + '%';
+                      p.height = parseFloat(heightPct.toFixed(4)) + '%';
+                      if (p.position === 'absolute' || p.left !== undefined || p.top !== undefined) {
+                        p.left = parseFloat(leftPct.toFixed(4)) + '%';
+                        p.top = parseFloat(topPct.toFixed(4)) + '%';
+                        if (p.position !== 'absolute') p.position = 'absolute';
+                      }
+                    });
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.debug('[ResizeHandles] Post-frame enforced % conversion:', {
+                        nodeId,
+                        width: widthPct,
+                        height: heightPct
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.warn('[ResizeHandles] Post-frame conversion check failed', e);
                 }
               });
             }
           }
-        } catch (_) {}
+        } catch (err) {
+          // Swallow errors – fallback to previous pixel values already applied during drag
+          console.warn('Resize percentage conversion failed:', err);
+        }
         onResizeEnd?.({ width: finalRect.width, height: finalRect.height });
       }
     };

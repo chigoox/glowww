@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req, { params }) {
   try {
-    const { username, site } = params || {};
+    const { username, site } = (await params) || {};
     const { eventName, params: eventParams, clientId, userProps } = await req.json();
 
     const MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID;

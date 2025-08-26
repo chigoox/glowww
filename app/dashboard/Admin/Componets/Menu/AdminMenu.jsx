@@ -34,16 +34,16 @@ export const AdminMenu = ({ setSelectedMenu, selectedMenu, ownerData }) => {
 
   return (
     <aside
-      className={`Navigator ${showMenu ? "w-72 lg:w-64" : "w-16"} 
-                  fixed lg:relative top-0 left-0 h-[100dvh] z-50
+      className={`Navigator  ${showMenu ? "w-full lg:w-64" : "w-full  lg:w-16"} 
+                  lg:relative top-24 left-0 
                    border-neutral-800
-                  transition-[width] duration-300 ease-out px-2`}
+                  transition-[width] duration-300 ease-out px-2 z-50 lg:z-0`}
       aria-label="Primary"
     >
       {/* Header pill */}
-      <div className="mt-4 mb-4">
+      <div className=" bo">
         <div className="mx-1 h-12 rounded-2xl bg-black border border-neutral-700 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-70 pointer-events-none bg-gradient-to-r from-indigo-500/30 via-fuchsia-500/30 to-indigo-500/30" />
+          <div className=" inset-0 opacity-70 pointer-events-none bg-gradient-to-r from-indigo-500/30 via-fuchsia-500/30 to-indigo-500/30" />
           <div className="relative flex items-center gap-3 px-3 h-full">
             <div className="size-7 rounded-xl bg-gradient-to-tr from-indigo-500 to-fuchsia-500" />
             {showMenu && (
@@ -57,7 +57,7 @@ export const AdminMenu = ({ setSelectedMenu, selectedMenu, ownerData }) => {
       </div>
 
       {/* Menu */}
-      <nav className="overflow-y-auto overscroll-contain h-[calc(100dvh-10.5rem)] pr-1 pb-24 custom-scroll">
+      <nav className="overflow-y-auto overscroll-contain justify-center pb-4 flex lg:block lg:h-[calc(100dvh-10.5rem)] pr-1 lg:pb-24 ">
         {menu.map((item, i) => (
           <AdminMenuItem
             key={(typeof item === "string" ? item : item.name) + i}
@@ -72,8 +72,10 @@ export const AdminMenu = ({ setSelectedMenu, selectedMenu, ownerData }) => {
       </nav>
 
       {/* Footer actions */}
-      <div className="absolute bottom-3 left-0 right-0 px-2 space-y-2">
-        <button
+      <div className="lg:absolute lg:bottom-3 left-0 right-0 px-2 space-y-2">
+    {!useIsMobile() &&  (
+   <div className={`h-0 lg:h-auto`}>
+           <button
           type="button"
           onClick={() => setShowMenu((v) => !v)}
           title={showMenu ? "Collapse" : "Expand"}
@@ -90,6 +92,8 @@ export const AdminMenu = ({ setSelectedMenu, selectedMenu, ownerData }) => {
           <HomeIcon className="size-5" />
           {showMenu && <span className="text-sm font-semibold">{websiteName}</span>}
         </button>
+   </div>
+    )}
       </div>
     </aside>
   )

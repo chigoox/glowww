@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
-import { Switch, Button, Dropdown, Menu, Tooltip } from "antd";
+import { Switch, Button, Dropdown, Tooltip } from "antd";
 import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined, SettingOutlined } from "@ant-design/icons";
 import { useEditor } from "@craftjs/core";
 import LoadProject from "./LoadProject";
@@ -10,7 +10,7 @@ import PageManager from "./PageManager";
 import PreviewButton from "./PreviewButton";
 import SnapGridControls from "../utils/grid/SnapGridControls";
 import EditorSettingsModal from "../ui/EditorSettingsModal";
-import { EditorSettingsProvider } from "../utils/context/EditorSettingsContext";
+import { useEditorSettings } from "../utils/context/EditorSettingsContext";
 
 export const TopBar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
@@ -309,8 +309,15 @@ export const TopBar = () => {
     }]
   };
 
+  const { settings, updateSetting } = useEditorSettings();
+  const bp = settings?.breakpoints || { current: 'auto', widths: {} };
+
+  const setBreakpoint = (key) => {
+    updateSetting('breakpoints.current', key);
+  };
+
   return (
-    <EditorSettingsProvider>
+    <>
       <div className="w-full bg-gray-50 border-b border-slate-200 shadow-lg px-2 py-0.5">
         <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between px-3 py-1.5">
@@ -396,6 +403,23 @@ export const TopBar = () => {
               <SnapGridControls />
             </div>
 
+            {/* Breakpoint Selector */}
+            <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
+              <div className="text-xs font-medium text-slate-600 mr-2 hidden sm:inline">Viewport</div>
+              <div className="flex items-center space-x-1">
+                {['auto','sm','regular','lg','xl'].map(k => (
+                  <button
+                    key={k}
+                    onClick={() => setBreakpoint(k)}
+                    className={`px-2 py-0.5 text-xs rounded ${bp.current === k ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                    title={k === 'auto' ? 'Auto (no forced width)' : `${k} - ${bp.widths?.[k] || ''}px`}
+                  >
+                    {k === 'auto' ? 'Auto' : k.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Settings Button */}
             <div className="flex items-center space-x-2 bg-white rounded-lg px-2.5 py-1 shadow-sm border border-slate-200">
               <Tooltip title="Editor Settings & Preferences">
@@ -441,6 +465,6 @@ export const TopBar = () => {
         visible={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
       />
-    </EditorSettingsProvider>
+    </>
   );
 };

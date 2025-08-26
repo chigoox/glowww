@@ -234,6 +234,29 @@ const SnapPositionHandle = ({
     // Call external drag move handler
     onDragMove?.(e, { x: finalX, y: finalY, snapped: snapResult.snapped });
 
+    // Edge auto-scroll during POS drag (matches Root.jsx global behavior, but local fallback)
+    try {
+      const cfgSrc = (typeof window !== 'undefined' && window.__GLOW_EDITOR_SCROLL) || {};
+      const threshold = cfgSrc.threshold ?? 260;
+      const maxSpeed = cfgSrc.maxSpeed ?? 55;
+      const ease = cfgSrc.ease ?? 'cubic';
+      const y = e.clientY;
+      const vh = window.innerHeight;
+      let speed = 0;
+      if (y < threshold) {
+        const t = (threshold - y) / threshold; // 0..1
+        const f = ease === 'cubic' ? Math.pow(t, 3) : t;
+        speed = -f * maxSpeed;
+      } else if (y > vh - threshold) {
+        const t = (y - (vh - threshold)) / threshold;
+        const f = ease === 'cubic' ? Math.pow(t, 3) : t;
+        speed = f * maxSpeed;
+      }
+      if (speed !== 0) {
+        window.scrollBy(0, speed);
+      }
+    } catch (_) {}
+
   }, [dom, nodeId, setProp, onDragMove]);
 
   // Handle drag end: convert stored pixel offsets to % relative to parent container

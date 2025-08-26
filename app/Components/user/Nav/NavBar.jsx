@@ -2518,72 +2518,98 @@ export const NavBar = ({
     }
   }, [selected, isHovered]);
 
-  // Handle navigation with proper routing support
-  const handleNavigate = (path) => {
-    setCurrentPath(path);
-    setMobileMenuOpen(false);
-    
-    if (isPreviewMode) {
-      // In preview mode, navigate within preview
-      const previewPath = path === '/' ? '/Preview' : `/Preview${path}`;
-      window.location.href = previewPath;
-    } else if (hideEditorUI) {
-      // In production mode, navigate to actual routes
-      window.location.href = path;
-    } else {
-      // In editor mode, potentially switch pages in PageManager
-      // This could be enhanced to integrate with PageManager page switching
-      console.log('Editor mode navigation to:', path);
-      
-      // Try to find and switch to the page in PageManager if available
-      if (window.pageManagerSwitch) {
-        try {
-          // Helper function to decompress data (same as above)
-          const decompressData = (compressedString) => {
-            try {
-              const binaryString = atob(compressedString);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              const decompressed = pako.inflate(bytes, { to: 'string' });
-              return decompressed;
-            } catch (error) {
-              throw new Error('Failed to decompress data - invalid format');
-            }
-          };
+  // Derive site base path if we're inside a published site route: /u/{username}/{site}
+  const computeSiteBase = () => {
+    if (typeof window === 'undefined') return '';
+    const { pathname } = window.location;
+    // Preview mode handled separately below
+    // Match /u/:username/:site(/...)
+    const m = pathname.match(/^\/u\/([^/]+)\/([^/]+)(?:\/.*)?$/);
+    if (m) {
+      return `/u/${m[1]}/${m[2]}`; // stable base
+    }
+    return '';
+  };
 
-          // Look for a page with matching path
-          const projectName = localStorage.getItem('glow_active_project') || 'my-project-' + Math.floor(Math.random() * 9000 + 1000);
-          const projectDataKey = `glowproject_${projectName}_autosave`;
-          const projectDataString = localStorage.getItem(projectDataKey);
-          
-          if (projectDataString) {
-            let projectData;
-            try {
-              // First try to decompress (new format)
-              const decompressed = decompressData(projectDataString);
-              projectData = JSON.parse(decompressed);
-            } catch (decompressError) {
-              try {
-                // Fallback: try to parse directly as JSON (old format)
-                projectData = JSON.parse(projectDataString);
-              } catch (jsonError) {
-                console.warn('Failed to parse project data for page switching:', jsonError);
-                return;
-              }
-            }
-            
-            const targetPage = projectData.pages?.find(p => p.path === path);
-            
-            if (targetPage) {
-              window.pageManagerSwitch(targetPage.key);
-              return;
-            }
+  // Normalize stored nav item path (which may be like '/' or '/about') to a site-scoped URL
+  const resolveFullPath = (rawPath) => {
+    if (!rawPath) return '/';
+    // Accept special absolute http(s) links – open externally
+    if (/^https?:\/\//i.test(rawPath)) return rawPath;
+    // Ensure leading slash for consistency
+    let clean = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    // Home marker '/' becomes base itself
+    if (isPreviewMode) {
+      // Preview namespace already expects /Preview + site-relative path
+      // Existing logic used /Preview for home and /Preview/path for others
+      if (clean === '/') return '/Preview';
+      return `/Preview${clean}`.replace(/\/+/g, '/');
+    }
+    if (hideEditorUI) {
+      // Live published site or platform runtime
+      const base = computeSiteBase();
+      if (base) {
+        if (clean === '/') return base; // home inside site
+        return `${base}${clean}`.replace(/\/+/g, '/');
+      }
+      // Fallback to platform root if not in a site context
+      return clean;
+    }
+    // Editor (design time) – keep existing behavior for page switching, do not prefix
+    return clean;
+  };
+
+  // Handle navigation with proper routing + site scoping
+  const handleNavigate = (rawPath) => {
+    const fullPath = resolveFullPath(rawPath);
+    // Update local active path for highlighting (store raw path for editor, full path for live)
+    setCurrentPath(rawPath);
+    setMobileMenuOpen(false);
+
+    // External links: open new tab
+    if (/^https?:\/\//i.test(fullPath)) {
+      window.open(fullPath, '_blank', 'noopener');
+      return;
+    }
+
+    if (isPreviewMode || hideEditorUI) {
+      // Navigate browser to computed full path
+      window.location.href = fullPath;
+      return;
+    }
+
+    // Editor mode: attempt in-app page switch (rawPath used for project lookup)
+    console.log('Editor mode navigation to:', rawPath);
+    if (window.pageManagerSwitch) {
+      try {
+        const decompressData = (compressedString) => {
+          try {
+            const binaryString = atob(compressedString);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+            return pako.inflate(bytes, { to: 'string' });
+          } catch (error) {
+            throw new Error('Failed to decompress data - invalid format');
           }
-        } catch (error) {
-          console.warn('Failed to switch page in editor:', error);
+        };
+        const projectName = localStorage.getItem('glow_active_project') || 'my-project-' + Math.floor(Math.random() * 9000 + 1000);
+        const projectDataKey = `glowproject_${projectName}_autosave`;
+        const projectDataString = localStorage.getItem(projectDataKey);
+        if (projectDataString) {
+          let projectData;
+          try {
+            projectData = JSON.parse(decompressData(projectDataString));
+          } catch (e) {
+            try { projectData = JSON.parse(projectDataString); } catch { return; }
+          }
+          const targetPage = projectData.pages?.find(p => p.path === rawPath);
+          if (targetPage) {
+            window.pageManagerSwitch(targetPage.key);
+            return;
+          }
         }
+      } catch (error) {
+        console.warn('Failed to switch page in editor:', error);
       }
     }
   };
