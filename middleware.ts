@@ -37,25 +37,31 @@ export async function middleware(req: NextRequest) {
   if (hostNoPort === PLATFORM_HOST_NO_PORT) return NextResponse.next();
 
   try {
-  // Use a computed platform origin for internal API calls. Fetching the incoming host
-  // can result in Vercel returning DEPLOYMENT_NOT_FOUND if that host isn't aliased to this project yet.
-  const base = computePlatformOrigin(host);
-  // lightweight debug: write origin used to server console for diagnosis
-  try { console.debug('[middleware] platform origin:', base, 'incoming host:', host); } catch (e) {}
+  // Determine candidate API bases. If an explicit platform origin is set but
+  // the incoming host's registrable domain differs, also try the derived root.
+  const primaryBase = computePlatformOrigin(host);
+  const hostPartsArr = host.split(':')[0].split('.');
+  const derivedRoot = hostPartsArr.length > 1 ? `https://${hostPartsArr.slice(-2).join('.')}` : primaryBase;
+  const bases = primaryBase === derivedRoot ? [primaryBase] : [primaryBase, derivedRoot];
+  try { console.debug('[middleware] platform origin candidates:', bases.join(' , '), 'incoming host:', host); } catch {}
 
     // First, check for explicit custom domain mapping (top-level domains managed via /api/domain-lookup)
-    try {
-      const resp = await fetch(`${base}/api/domain-lookup?domain=${encodeURIComponent(host)}`, { cache: 'no-store' });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data?.ok && data?.mapping?.username && data?.mapping?.site) {
-          const url = req.nextUrl.clone();
-          url.pathname = `/u/${data.mapping.username}/${data.mapping.site}${req.nextUrl.pathname}`;
-          return NextResponse.rewrite(url);
+    let domainMappingFound = false;
+    for (const b of bases) {
+      try {
+        const resp = await fetch(`${b}/api/domain-lookup?domain=${encodeURIComponent(host)}`, { cache: 'no-store' });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data?.ok && data?.mapping?.username && data?.mapping?.site) {
+            const url = req.nextUrl.clone();
+            url.pathname = `/u/${data.mapping.username}/${data.mapping.site}${req.nextUrl.pathname}`;
+            try { console.debug('[middleware] domain mapping hit via', b); } catch {}
+            return NextResponse.rewrite(url);
+          }
         }
+      } catch (e) {
+        try { console.warn('[middleware] domain lookup failed via', b, e?.message); } catch {}
       }
-    } catch (e) {
-      // continue to subdomain lookup path on any error
     }
 
     // If the host is a subdomain of the platform (e.g., sitename.gloweditor.com), try subdomain lookup
@@ -66,22 +72,24 @@ export async function middleware(req: NextRequest) {
       // Skip common reserved subdomains
       const reserved = new Set(['www', 'api', 'admin', 'mail', 'ftp', 'dev']);
       if (!reserved.has(subdomain)) {
-        try {
-          const resp2 = await fetch(`${base}/api/subdomain-lookup?subdomain=${encodeURIComponent(subdomain)}`, { cache: 'no-store' });
-          if (resp2.ok) {
-            const d = await resp2.json();
-            if (d?.ok && d?.mapping?.username && d?.mapping?.site) {
-              const url = req.nextUrl.clone();
-              url.pathname = `/u/${d.mapping.username}/${d.mapping.site}${req.nextUrl.pathname}`;
-              const res = NextResponse.rewrite(url);
-              // Also expose mapping headers for downstream systems if desired
-              res.headers.set('x-glow-site-id', d.mapping.siteId || '');
-              res.headers.set('x-glow-user-id', d.mapping.userId || '');
-              return res;
+        for (const b of bases) {
+          try {
+            const resp2 = await fetch(`${b}/api/subdomain-lookup?subdomain=${encodeURIComponent(subdomain)}`, { cache: 'no-store' });
+            if (resp2.ok) {
+              const d = await resp2.json();
+              if (d?.ok && d?.mapping?.username && d?.mapping?.site) {
+                const url = req.nextUrl.clone();
+                url.pathname = `/u/${d.mapping.username}/${d.mapping.site}${req.nextUrl.pathname}`;
+                const res = NextResponse.rewrite(url);
+                res.headers.set('x-glow-site-id', d.mapping.siteId || '');
+                res.headers.set('x-glow-user-id', d.mapping.userId || '');
+                try { console.debug('[middleware] subdomain mapping hit via', b, 'sub:', subdomain); } catch {}
+                return res;
+              }
             }
+          } catch (e) {
+            try { console.warn('[middleware] subdomain lookup failed via', b, e?.message); } catch {}
           }
-        } catch (e) {
-          // ignore and let request continue
         }
       }
     }
