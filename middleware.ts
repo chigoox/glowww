@@ -4,8 +4,28 @@ import { NextRequest, NextResponse } from 'next/server';
 const PLATFORM_DOMAIN = process.env.PLATFORM_DOMAIN || 'localhost:3000';
 // Normalize a host without port for comparisons (e.g. 'localhost' from 'localhost:3000')
 const PLATFORM_HOST_NO_PORT = PLATFORM_DOMAIN.split(':')[0];
-// Build a canonical origin to call internal APIs on (use https by default in production)
-const PLATFORM_ORIGIN = process.env.PLATFORM_ORIGIN || `https://${PLATFORM_HOST_NO_PORT}`;
+// PLATFORM_ORIGIN selection is intentionally robust:
+// 1) use explicit PLATFORM_ORIGIN env if provided
+// 2) fall back to Vercel's VERCEL_URL when running on Vercel
+// 3) strip subdomains from the incoming host and use that as a fallback origin
+// This avoids using https://localhost in production when PLATFORM_ORIGIN is not set.
+const EXPLICIT_PLATFORM_ORIGIN = process.env.PLATFORM_ORIGIN || '';
+// Attempt to use Vercel's provided URL when available (server-side runtime)
+const VERCEL_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
+
+function computePlatformOrigin(reqHost) {
+  if (EXPLICIT_PLATFORM_ORIGIN) return EXPLICIT_PLATFORM_ORIGIN;
+  if (VERCEL_URL) return VERCEL_URL;
+  // Fallback: use the top-level domain of the incoming Host header (strip first label)
+  try {
+    const parts = (reqHost || '').split(':')[0].split('.');
+    if (parts.length <= 1) return `https://${reqHost}`;
+    const root = parts.slice(-2).join('.');
+    return `https://${root}`;
+  } catch (e) {
+    return `https://${PLATFORM_HOST_NO_PORT}`;
+  }
+}
 
 export async function middleware(req: NextRequest) {
   const host = req.headers.get('host')?.toLowerCase();
@@ -17,9 +37,11 @@ export async function middleware(req: NextRequest) {
   if (hostNoPort === PLATFORM_HOST_NO_PORT) return NextResponse.next();
 
   try {
-    // Use the canonical platform origin for internal API calls. Fetching the incoming host
-    // can result in Vercel returning DEPLOYMENT_NOT_FOUND if that host isn't aliased to this project yet.
-    const base = PLATFORM_ORIGIN;
+  // Use a computed platform origin for internal API calls. Fetching the incoming host
+  // can result in Vercel returning DEPLOYMENT_NOT_FOUND if that host isn't aliased to this project yet.
+  const base = computePlatformOrigin(host);
+  // lightweight debug: write origin used to server console for diagnosis
+  try { console.debug('[middleware] platform origin:', base, 'incoming host:', host); } catch (e) {}
 
     // First, check for explicit custom domain mapping (top-level domains managed via /api/domain-lookup)
     try {
