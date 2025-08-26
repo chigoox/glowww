@@ -9,6 +9,7 @@ export async function GET(req) {
     const sub = (searchParams.get('subdomain') || '').toString().toLowerCase();
     if (!sub) return NextResponse.json({ ok: false, error: 'Missing subdomain' }, { status: 400 });
     const mapping = await getPublicSiteBySubdomain(sub);
+  try { console.debug('[subdomain-lookup] sub:', sub, 'mapping:', mapping); } catch {}
     if (!mapping) return NextResponse.json({ ok: true, mapping: null });
     return NextResponse.json({ ok: true, mapping });
   } catch (e) {
