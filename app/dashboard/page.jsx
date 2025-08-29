@@ -437,9 +437,12 @@ export default function Dashboard() {
     if (!user?.uid) return;
     try {
       setProcessingCreate(true);
+      console.log('Starting site creation for admin user:', user.uid, 'with values:', values);
       
       const canCreate = await canCreateSite(user.uid);
+      console.log('canCreateSite result:', canCreate);
       if (!canCreate.allowed) {
+        console.log('Site creation not allowed:', canCreate.reason);
         message.error(canCreate.reason);
         if (canCreate.reason.includes('upgrade')) {
           setUpgradeReason('create_site');
@@ -450,18 +453,22 @@ export default function Dashboard() {
 
       const siteData = {
         name: values.siteName,
+        description: values.description || '',
+        subdomain: values.subdomain,
         url: values.siteUrl,
         isPublished: false
       };
 
-      await createSite(siteData, user.uid);
+      console.log('Creating site with data:', siteData);
+      await createSite(user.uid, siteData);
+      console.log('Site created successfully, reloading sites...');
       await loadUserSites();
       message.success('Site created successfully!');
       setIsCreateModalVisible(false);
       createForm.resetFields();
     } catch (error) {
       console.error('Error creating site:', error);
-      message.error('Failed to create site');
+      message.error('Failed to create site: ' + (error.message || 'Unknown error'));
     } finally {
       setProcessingCreate(false);
     }
@@ -471,6 +478,51 @@ export default function Dashboard() {
     const publicUrl = `${window.location.origin}/u/${user.username}/${site.name}`;
     navigator.clipboard.writeText(publicUrl);
     message.success('Public URL copied to clipboard');
+  };
+
+  const fixAdminTier = async () => {
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/fix-admin-tier', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId: user.uid })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        message.success('Admin tier fixed successfully!');
+        // Reload user data
+        await loadUserData();
+        await loadUserSites();
+      } else {
+        message.error(data.error || 'Failed to fix admin tier');
+      }
+    } catch (error) {
+      console.error('Error fixing admin tier:', error);
+      message.error('Failed to fix admin tier');
+    }
+  };
+
+  const handleSiteNameChange = (e) => {
+    const siteName = e.target.value;
+    const sanitized = siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    
+    // Auto-populate subdomain and URL if they're empty
+    const currentSubdomain = createForm.getFieldValue('subdomain');
+    const currentUrl = createForm.getFieldValue('siteUrl');
+    
+    if (!currentSubdomain) {
+      createForm.setFieldsValue({ subdomain: sanitized });
+    }
+    
+    if (!currentUrl) {
+      createForm.setFieldsValue({ siteUrl: sanitized });
+    }
   };
 
   // Get current plan info
@@ -566,7 +618,8 @@ export default function Dashboard() {
   const currentPlan = getCurrentPlan();
   const rawUsage = subscription ? subscription.usage?.sitesCount : undefined;
   const siteUsage = (typeof rawUsage === 'number' && rawUsage >= 0) ? rawUsage : sites.length;
-  const maxSites = subscription ? subscription.limits?.maxSites : currentPlan.maxSites;
+  // For admin users, always use -1 (unlimited) regardless of subscription limits
+  const maxSites = currentPlan.name === 'Admin' ? -1 : (subscription ? subscription.limits?.maxSites : currentPlan.maxSites);
   const usagePercentage = maxSites === -1 ? 0 : (siteUsage / maxSites) * 100;
   const atSiteLimit = currentPlan.name !== 'Admin' && maxSites !== -1 && siteUsage >= maxSites;
 
@@ -1197,11 +1250,9 @@ export default function Dashboard() {
                   }
                   extra={
                     <Space>
-                      {maxSites !== -1 && (
-                        <Text type="secondary">
-                          {siteUsage}/{maxSites} sites used
-                        </Text>
-                      )}
+                      <Text type="secondary">
+                        {siteUsage} / {maxSites === -1 ? '∞' : maxSites} sites used
+                      </Text>
                       <Button 
                         type="primary" 
                         icon={<PlusOutlined />} 
@@ -1698,6 +1749,18 @@ export default function Dashboard() {
                           <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>
                             {currentPlan.name} Plan
                           </Tag>
+                          {userData?.tier === 'admin' && currentPlan.name !== 'Admin' && (
+                            <div style={{ marginTop: 8 }}>
+                              <Button 
+                                size="small" 
+                                type="dashed" 
+                                onClick={fixAdminTier}
+                                style={{ fontSize: 11 }}
+                              >
+                                Fix Admin Tier
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                       
@@ -1767,7 +1830,40 @@ export default function Dashboard() {
               { max: 50, message: 'Site name must be less than 50 characters' }
             ]}
           >
-            <Input placeholder="My Awesome Site" />
+            <Input 
+              placeholder="My Awesome Site" 
+              onChange={handleSiteNameChange}
+            />
+          </Form.Item>
+          
+          <Form.Item
+            label="Description"
+            name="description"
+            rules={[
+              { max: 200, message: 'Description must be less than 200 characters' }
+            ]}
+          >
+            <Input.TextArea 
+              placeholder="Brief description of your site (optional)" 
+              rows={3}
+              showCount
+              maxLength={200}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Subdomain"
+            name="subdomain"
+            rules={[
+              { pattern: /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/, message: 'Subdomain can only contain lowercase letters, numbers, and hyphens (cannot start or end with hyphen)' },
+              { max: 63, message: 'Subdomain must be less than 63 characters' }
+            ]}
+            help="Leave empty to auto-generate from site name"
+          >
+            <Input 
+              placeholder="my-site" 
+              addonAfter={`.${window?.location?.hostname || 'glowbuildr.com'}`}
+            />
           </Form.Item>
           
           <Form.Item

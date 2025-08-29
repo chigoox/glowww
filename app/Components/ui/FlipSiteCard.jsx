@@ -434,8 +434,8 @@ const FlipSiteCard = ({
               bottom: 0,
               left: 0,
               right: 0,
-              background: 'linear-gradient(transparent, rgba(0,0,0,0.9))',
-              backdropFilter: 'blur(20px)',
+              background: 'linear-gradient(transparent, rgba(0,0,0,0.54))',
+              backdropFilter: 'blur(8px)',
               padding: '20px 16px 16px',
               color: 'white'
             }}>
@@ -455,7 +455,7 @@ const FlipSiteCard = ({
                   fontSize: '11px',
                   textShadow: '0 1px 2px rgba(0,0,0,0.5)'
                 }}>
-                  {siteName}.glow.as
+                  {siteName}.{origin ? new URL(origin).hostname : 'glowbuildr.com'}
                 </Text>
               </div>
 
@@ -590,7 +590,7 @@ const FlipSiteCard = ({
                 color: 'rgba(255,255,255,0.8)',
                 textShadow: '0 1px 2px rgba(0,0,0,0.3)'
               }}>
-                {siteName}.glow.as
+                {siteName}.{origin ? new URL(origin).hostname : 'glowbuildr.com'}
               </Text>
             </div>
           </div>
