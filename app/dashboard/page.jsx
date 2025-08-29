@@ -13,6 +13,8 @@ import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-
 import { loadStripe as loadStripeJs } from '@stripe/stripe-js';
 import { ensureUserSubscription, getUserSubscription } from '../../lib/subscriptions';
 import SiteCard from '../Components/ui/SiteCard';
+import dynamic from 'next/dynamic';
+const SiteEmailManager = dynamic(() => import('../Components/email/SiteEmailManager'), { ssr: false });
 import SiteSettingsModal from '../Components/ui/SiteSettingsModal';
 import {
   Button,
@@ -82,8 +84,11 @@ export default function Dashboard() {
   const [isAnalyticsModalVisible, setIsAnalyticsModalVisible] = useState(false);
   const [selectedAnalyticsSite, setSelectedAnalyticsSite] = useState(null);
   const [siteAnalytics, setSiteAnalytics] = useState(null);
+  const [emailAnalytics, setEmailAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(null);
+  const [isEmailManagerOpen, setIsEmailManagerOpen] = useState(false);
+  const [selectedEmailSite, setSelectedEmailSite] = useState(null);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [accountForm] = Form.useForm();
   const [savingAccount, setSavingAccount] = useState(false);
@@ -176,6 +181,12 @@ export default function Dashboard() {
           throw new Error(data?.error || `Failed to load analytics (${res.status})`);
         }
         setSiteAnalytics(data);
+        // Fetch email analytics
+        try {
+          const eaRes = await fetch(`/api/email/analytics/summary?siteId=${encodeURIComponent(selectedAnalyticsSite.id)}&compareToEnd=true&segments=template,device,location`);
+          const eaJson = await eaRes.json();
+          if (eaJson.ok) setEmailAnalytics(eaJson); else setEmailAnalytics(null);
+        } catch { setEmailAnalytics(null); }
       } catch (e) {
         if (!aborted) setAnalyticsError(e?.message || 'Failed to load analytics');
       } finally {
@@ -614,6 +625,11 @@ export default function Dashboard() {
     // Set the site and show the analytics modal
     setSelectedAnalyticsSite(site);
     setIsAnalyticsModalVisible(true);
+  };
+
+  const handleManageEmails = (site) => {
+    setSelectedEmailSite(site);
+    setIsEmailManagerOpen(true);
   };
 
   // Get user's current plan info from subscription data
@@ -1058,6 +1074,7 @@ export default function Dashboard() {
                     onPublish={handleTogglePublish}
                     onViewAnalytics={handleViewAnalytics}
                     onSettings={handleSiteSettings}
+                    onManageEmails={handleManageEmails}
                     loading={loading}
                   />
                 </Col>
@@ -1528,6 +1545,14 @@ export default function Dashboard() {
           )}
         </Form>
       </Modal>
+      {/* Site Email Manager */}
+      {selectedEmailSite && (
+        <SiteEmailManager
+          site={selectedEmailSite}
+          open={isEmailManagerOpen}
+          onClose={() => { setIsEmailManagerOpen(false); setSelectedEmailSite(null); }}
+        />
+      )}
 
       {/* Delete Site Confirmation Modal */}
       <Modal
@@ -1571,14 +1596,12 @@ export default function Dashboard() {
 
   {/* Analytics Modal */}
       <Modal
-        title={
-          selectedAnalyticsSite ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <RocketOutlined style={{ color: '#52c41a' }} />
-              <span>Analytics for "{selectedAnalyticsSite.name}"</span>
-            </div>
-          ) : 'Analytics'
-        }
+        title={selectedAnalyticsSite ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <RocketOutlined style={{ color: '#52c41a' }} />
+            <span>Analytics for "{selectedAnalyticsSite.name}"</span>
+          </div>
+        ) : 'Analytics'}
         open={isAnalyticsModalVisible}
         onCancel={() => {
           setIsAnalyticsModalVisible(false);
@@ -1596,7 +1619,7 @@ export default function Dashboard() {
             Close
           </Button>
         ]}
-  width={840}
+        width={840}
         centered
       >
         {selectedAnalyticsSite && (
@@ -1843,6 +1866,289 @@ export default function Dashboard() {
                     </Card>
                   </Col>
                 </Row>
+                {/* Advanced Email Analytics (last 30 days) */}
+                <Divider plain style={{ margin:'8px 0 4px' }}>Email Analytics (last 30d)</Divider>
+                {emailAnalytics ? (
+                  <Row gutter={[12,12]}>
+                    {/* Main Metrics Overview */}
+                    <Col span={24}>
+                      <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                          <Text type="secondary" style={{ fontSize:12 }}>Performance Overview</Text>
+                          {emailAnalytics.comparison && (
+                            <Text type="secondary" style={{ fontSize:11 }}>vs. previous period</Text>
+                          )}
+                        </div>
+                        <Row gutter={[16,8]}>
+                          <Col xs={12} sm={6}>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:20 }}>{emailAnalytics.current.totalSent}</div>
+                              <Text type="secondary" style={{ fontSize:11 }}>Sent</Text>
+                              {emailAnalytics.comparison && (
+                                <div style={{ fontSize:10, color: emailAnalytics.current.totalSent > emailAnalytics.comparison.totalSent ? token.colorSuccess : token.colorError }}>
+                                  {emailAnalytics.current.totalSent > emailAnalytics.comparison.totalSent ? '↗' : '↘'} 
+                                  {Math.abs(emailAnalytics.current.totalSent - emailAnalytics.comparison.totalSent)}
+                                </div>
+                              )}
+                            </div>
+                          </Col>
+                          <Col xs={12} sm={6}>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:20, color: token.colorSuccess }}>{emailAnalytics.current.openRate}%</div>
+                              <Text type="secondary" style={{ fontSize:11 }}>Open Rate</Text>
+                              {emailAnalytics.comparison && (
+                                <div style={{ fontSize:10, color: emailAnalytics.current.openRate > emailAnalytics.comparison.openRate ? token.colorSuccess : token.colorError }}>
+                                  {emailAnalytics.current.openRate > emailAnalytics.comparison.openRate ? '↗' : '↘'} 
+                                  {Math.abs(emailAnalytics.current.openRate - emailAnalytics.comparison.openRate).toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                          </Col>
+                          <Col xs={12} sm={6}>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:20, color: token.colorWarning }}>{emailAnalytics.current.clickRate}%</div>
+                              <Text type="secondary" style={{ fontSize:11 }}>Click Rate</Text>
+                              {emailAnalytics.comparison && (
+                                <div style={{ fontSize:10, color: emailAnalytics.current.clickRate > emailAnalytics.comparison.clickRate ? token.colorSuccess : token.colorError }}>
+                                  {emailAnalytics.current.clickRate > emailAnalytics.comparison.clickRate ? '↗' : '↘'} 
+                                  {Math.abs(emailAnalytics.current.clickRate - emailAnalytics.comparison.clickRate).toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                          </Col>
+                          <Col xs={12} sm={6}>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:20, color: emailAnalytics.current.bounceRate > 5 ? token.colorError : token.colorText }}>{emailAnalytics.current.bounceRate}%</div>
+                              <Text type="secondary" style={{ fontSize:11 }}>Bounce Rate</Text>
+                              {emailAnalytics.comparison && (
+                                <div style={{ fontSize:10, color: emailAnalytics.current.bounceRate < emailAnalytics.comparison.bounceRate ? token.colorSuccess : token.colorError }}>
+                                  {emailAnalytics.current.bounceRate < emailAnalytics.comparison.bounceRate ? '↘' : '↗'} 
+                                  {Math.abs(emailAnalytics.current.bounceRate - emailAnalytics.comparison.bounceRate).toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                          </Col>
+                        </Row>
+                      </Card>
+                    </Col>
+
+                    {/* Enhanced Time Series Chart */}
+                    <Col xs={24} lg={16}>
+                      <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <Text type="secondary" style={{ fontSize:12 }}>Email Performance Trends</Text>
+                          {emailAnalytics.predictions && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <Text style={{ fontSize: 10, color: token.colorTextSecondary }}>
+                                Trend: {emailAnalytics.predictions.trend}
+                              </Text>
+                              <Tag size="small" color={emailAnalytics.predictions.confidence === 'high' ? 'green' : emailAnalytics.predictions.confidence === 'medium' ? 'orange' : 'default'}>
+                                {emailAnalytics.predictions.confidence} confidence
+                              </Tag>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ width:'100%', height:200, marginTop:8 }}>
+                          <ResponsiveContainer>
+                            <RechartsLineChart data={emailAnalytics.current.series} margin={{ top:4, right:8, left:0, bottom:0 }}>
+                              <RechartsCartesianGrid strokeDasharray="3 3" stroke={token.colorBorder} />
+                              <RechartsXAxis dataKey="date" stroke={token.colorTextSecondary} tick={{ fontSize:11 }} hide />
+                              <RechartsYAxis stroke={token.colorTextSecondary} tick={{ fontSize:11 }} width={34} />
+                              <RechartsTooltip 
+                                contentStyle={{ borderRadius:8 }}
+                                formatter={(value, name) => [value, name === 'sent' ? 'Sent' : name === 'uniqueOpens' ? 'Unique Opens' : name === 'uniqueClicks' ? 'Unique Clicks' : name]}
+                              />
+                              <RechartsLegend wrapperStyle={{ fontSize:10 }} />
+                              <RechartsLine type="monotone" dataKey="sent" stroke={token.colorPrimary} strokeWidth={2} dot={false} name="Sent" />
+                              <RechartsLine type="monotone" dataKey="uniqueOpens" stroke={token.colorSuccess} strokeWidth={2} dot={false} name="Unique Opens" />
+                              <RechartsLine type="monotone" dataKey="uniqueClicks" stroke={token.colorWarning} strokeWidth={2} dot={false} name="Unique Clicks" />
+                              <RechartsLine type="monotone" dataKey="delivered" stroke={token.colorInfo} strokeWidth={1} dot={false} name="Delivered" />
+                              <RechartsLine type="monotone" dataKey="bounced" stroke={token.colorError} strokeWidth={1} dot={false} name="Bounced" />
+                            </RechartsLineChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {emailAnalytics.predictions && (
+                          <div style={{ marginTop: 8, padding: 8, backgroundColor: token.colorBgLayout, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                              Predicted next 7 days: ~{emailAnalytics.predictions.predictedDailySent} emails/day • 
+                              ~{emailAnalytics.predictions.predictedOpenRate}% open rate
+                            </Text>
+                          </div>
+                        )}
+                      </Card>
+                    </Col>
+
+                    {/* Insights & Alerts */}
+                    <Col xs={24} lg={8}>
+                      <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                        <Text type="secondary" style={{ fontSize:12 }}>Insights & Alerts</Text>
+                        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:8, maxHeight: 180, overflow: 'auto' }}>
+                          {(emailAnalytics.insights||[]).length === 0 && <Text type="secondary" style={{ fontSize: 11 }}>No insights yet</Text>}
+                          {(emailAnalytics.insights||[]).map((insight, idx) => (
+                            <div key={idx} style={{ 
+                              padding: 6, 
+                              borderRadius: 4, 
+                              border: `1px solid ${insight.type === 'positive' ? token.colorSuccess : insight.type === 'negative' ? token.colorError : token.colorWarning}`,
+                              backgroundColor: insight.type === 'positive' ? token.colorSuccessBg : insight.type === 'negative' ? token.colorErrorBg : token.colorWarningBg
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                                <span style={{ 
+                                  fontSize: 10,
+                                  color: insight.type === 'positive' ? token.colorSuccess : insight.type === 'negative' ? token.colorError : token.colorWarning
+                                }}>
+                                  {insight.type === 'positive' ? '✓' : insight.type === 'negative' ? '✗' : '⚠'}
+                                </span>
+                                <Text style={{ fontSize: 10, fontWeight: 600 }}>{insight.metric}</Text>
+                                {insight.change && (
+                                  <Tag size="small" color={insight.change > 0 ? 'green' : 'red'}>
+                                    {insight.change > 0 ? '+' : ''}{insight.change.toFixed(1)}%
+                                  </Tag>
+                                )}
+                              </div>
+                              <Text style={{ fontSize: 10 }}>{insight.message}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    </Col>
+
+                    {/* Enhanced Template Performance */}
+                    <Col xs={24} lg={12}>
+                      <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                        <Text type="secondary" style={{ fontSize:12 }}>Template Performance</Text>
+                        <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8, maxHeight: 160, overflow: 'auto' }}>
+                          {(emailAnalytics.current.templates||[]).slice(0,8).map(t => {
+                            const openRate = t.sent > 0 ? (t.uniqueOpens / t.sent) * 100 : 0;
+                            const clickRate = t.sent > 0 ? (t.uniqueClicks / t.sent) * 100 : 0;
+                            const avgOpenTime = t.avgTimeToOpen ? `${Math.round(t.avgTimeToOpen)}m` : null;
+                            
+                            return (
+                              <div key={t.templateKey} style={{ 
+                                display:'grid', 
+                                gridTemplateColumns:'1fr auto', 
+                                gap:8, 
+                                alignItems:'center',
+                                padding: 6,
+                                borderRadius: 4,
+                                backgroundColor: openRate > emailAnalytics.current.openRate ? token.colorSuccessBg : openRate < emailAnalytics.current.openRate * 0.7 ? token.colorErrorBg : 'transparent'
+                              }}>
+                                <div>
+                                  <Text code style={{ fontSize: 11 }}>{t.templateKey}</Text>
+                                  <div style={{ fontSize:10, color:token.colorTextSecondary, marginTop: 2 }}>
+                                    <span style={{ color: openRate > emailAnalytics.current.openRate ? token.colorSuccess : openRate < emailAnalytics.current.openRate * 0.7 ? token.colorError : 'inherit' }}>
+                                      {openRate.toFixed(1)}% open
+                                    </span>
+                                    {clickRate > 0 && <span> • {clickRate.toFixed(1)}% click</span>}
+                                    {avgOpenTime && <span> • avg {avgOpenTime}</span>}
+                                    {t.bounced > 0 && <span> • {((t.bounced/t.sent)*100).toFixed(1)}% bounce</span>}
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <Tag>{t.sent}</Tag>
+                                  {openRate > emailAnalytics.current.openRate * 1.2 && (
+                                    <div style={{ fontSize: 10, color: token.colorSuccess }}>★ Top</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {(emailAnalytics.current.templates||[]).length===0 && <Text type="secondary" style={{ fontSize: 11 }}>No emails yet</Text>}
+                        </div>
+                      </Card>
+                    </Col>
+
+                    {/* Recommendations */}
+                    <Col xs={24} lg={12}>
+                      <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                        <Text type="secondary" style={{ fontSize:12 }}>Recommendations</Text>
+                        <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8, maxHeight: 160, overflow: 'auto' }}>
+                          {(emailAnalytics.recommendations||[]).length === 0 && <Text type="secondary" style={{ fontSize: 11 }}>All good! No recommendations.</Text>}
+                          {(emailAnalytics.recommendations||[]).slice(0,5).map((rec, idx) => (
+                            <div key={idx} style={{ 
+                              padding: 6, 
+                              borderRadius: 4, 
+                              border: `1px solid ${rec.priority === 'high' ? token.colorError : rec.priority === 'medium' ? token.colorWarning : token.colorInfo}`,
+                              backgroundColor: rec.priority === 'high' ? token.colorErrorBg : rec.priority === 'medium' ? token.colorWarningBg : token.colorInfoBg
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                                <Tag 
+                                  size="small" 
+                                  color={rec.priority === 'high' ? 'red' : rec.priority === 'medium' ? 'orange' : 'blue'}
+                                >
+                                  {rec.priority}
+                                </Tag>
+                                <Text style={{ fontSize: 10, fontWeight: 600 }}>{rec.title}</Text>
+                              </div>
+                              <Text style={{ fontSize: 10, marginBottom: 2 }}>{rec.description}</Text>
+                              <Text style={{ fontSize: 9, color: token.colorTextSecondary, fontStyle: 'italic' }}>
+                                Action: {rec.action}
+                              </Text>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    </Col>
+
+                    {/* Send Time Heatmap */}
+                    {emailAnalytics.heatmap && (
+                      <Col span={24}>
+                        <Card size="small" styles={{ body: { padding: 12 } }} style={{ borderRadius: 10, border: `1px solid ${token.colorBorderSecondary}` }}>
+                          <Text type="secondary" style={{ fontSize:12 }}>Send Time Analysis</Text>
+                          <Row gutter={[16, 8]} style={{ marginTop: 8 }}>
+                            <Col xs={24} sm={12}>
+                              <div style={{ marginBottom: 4 }}>
+                                <Text style={{ fontSize: 11 }}>By Hour (24h)</Text>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                                {emailAnalytics.heatmap.byHour.map(h => {
+                                  const maxCount = Math.max(...emailAnalytics.heatmap.byHour.map(x => x.count));
+                                  const intensity = maxCount > 0 ? h.count / maxCount : 0;
+                                  return (
+                                    <div key={h.hour} style={{
+                                      width: 16, height: 16, borderRadius: 2,
+                                      backgroundColor: intensity > 0 ? `rgba(22, 119, 255, ${intensity})` : token.colorBgLayout,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      fontSize: 8, color: intensity > 0.5 ? 'white' : token.colorText,
+                                      cursor: 'help',
+                                      title: `${h.hour}:00 - ${h.count} emails`
+                                    }}>
+                                      {h.hour}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </Col>
+                            <Col xs={24} sm={12}>
+                              <div style={{ marginBottom: 4 }}>
+                                <Text style={{ fontSize: 11 }}>By Day of Week</Text>
+                              </div>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                {emailAnalytics.heatmap.byDay.map(d => {
+                                  const maxCount = Math.max(...emailAnalytics.heatmap.byDay.map(x => x.count));
+                                  const intensity = maxCount > 0 ? d.count / maxCount : 0;
+                                  return (
+                                    <div key={d.day} style={{
+                                      flex: 1, height: 20, borderRadius: 4,
+                                      backgroundColor: intensity > 0 ? `rgba(22, 119, 255, ${intensity})` : token.colorBgLayout,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      fontSize: 9, color: intensity > 0.5 ? 'white' : token.colorText,
+                                      cursor: 'help',
+                                      title: `${d.day} - ${d.count} emails`
+                                    }}>
+                                      {d.day}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Col>
+                    )}
+                  </Row>
+                ) : (
+                  <Text type="secondary">No email activity</Text>
+                )}
               </div>
             ) : (
               <Alert type="info" showIcon message="No analytics yet" description="Once your site gets traffic, you'll see metrics here." />

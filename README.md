@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Email System (Overview)
+Multi-tenant email layer with:
+- Template + custom sends (preview, idempotency, retry/backoff)
+- Suppressions & warm-up caps
+- Message detail re-render
+- Analytics (30d series + template breakdown) in dashboard modal
+- CSV export & inbound capture
+
+Endpoints quick list: `/api/email/send`, `/custom-send`, `/templates`, `/templates/preview`, `/messages`, `/messages/[id]`, `/messages/export`, `/suppressions`, `/warmup/stats`, `/analytics/summary`, `/inbound`.
+
+See detailed documentation in `docs/EMAIL_SYSTEM.md`.

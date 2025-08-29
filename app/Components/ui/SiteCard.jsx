@@ -10,7 +10,8 @@ import {
   CopyOutlined,
   RocketOutlined,
   PlayCircleOutlined,
-  LinkOutlined
+  LinkOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import { getCachedOrGenerateThumbnail, getThumbnailPlaceholder, clearThumbnailCache } from '../../../lib/thumbnails';
 
@@ -33,6 +34,7 @@ const SiteCard = ({
   onPublish,
   onViewAnalytics,
   onSettings,
+  onManageEmails,
   loading = false
 }) => {
   const [thumbnail, setThumbnail] = useState(null);
@@ -254,6 +256,12 @@ const SiteCard = ({
           <RocketOutlined 
             onClick={() => onViewAnalytics && onViewAnalytics(site)}
             style={{ color: '#52c41a' }}
+          />
+        </Tooltip>,
+        <Tooltip title="Emails" key="emails">
+          <MailOutlined
+            onClick={() => onManageEmails && onManageEmails(site)}
+            style={{ color: '#1677ff' }}
           />
         </Tooltip>,
         <Tooltip title="Delete Site" key="delete">
