@@ -76,7 +76,7 @@ export async function GET(req, { params }) {
       },
     };
 
-  // 1) Total page_views (using event name page_view) - Start with a simple query first
+  // 1) Total page_views for this specific site using custom parameters
     let totalViews = 0;
     try {
       const [eventsAgg] = await client.runReport({
@@ -84,18 +84,45 @@ export async function GET(req, { params }) {
         dateRanges: [{ startDate, endDate }],
         dimensions: [{ name: 'eventName' }],
         metrics: [{ name: 'eventCount' }],
-        // Remove filters initially to test basic connectivity
+        // Filter for this specific site using custom user properties
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              { filter: { fieldName: 'eventName', stringFilter: { value: 'page_view' } } },
+              { filter: { fieldName: 'customUser:username', stringFilter: { value: String(username) } } },
+              { filter: { fieldName: 'customUser:site_name', stringFilter: { value: String(site) } } },
+            ],
+          },
+        },
       });
 
       totalViews = (eventsAgg.rows || [])
-        .filter((r) => r.dimensionValues?.[0]?.value === 'page_view')
         .reduce((sum, r) => sum + Number(r.metricValues?.[0]?.value || 0), 0);
+        
+      console.log(`GA Total views for ${username}/${site}:`, totalViews);
     } catch (error) {
       console.error('Error fetching total views:', error);
-      totalViews = 0;
+      // Fallback to basic query without site filtering if custom properties fail
+      try {
+        const [fallbackEventsAgg] = await client.runReport({
+          property: propertyId,
+          dateRanges: [{ startDate, endDate }],
+          dimensions: [{ name: 'eventName' }],
+          metrics: [{ name: 'eventCount' }],
+          dimensionFilter: {
+            filter: { fieldName: 'eventName', stringFilter: { value: 'page_view' } }
+          },
+        });
+        totalViews = (fallbackEventsAgg.rows || [])
+          .reduce((sum, r) => sum + Number(r.metricValues?.[0]?.value || 0), 0);
+        console.log('Using fallback GA query, total views:', totalViews);
+      } catch (fallbackError) {
+        console.error('Fallback GA query also failed:', fallbackError);
+        totalViews = 0;
+      }
     }
 
-  // 2) 30-day time series of page_view by date - Basic query without filters
+  // 2) 30-day time series of page_view by date for this specific site
     let series = [];
     try {
       const [timeseries] = await client.runReport({
@@ -104,7 +131,13 @@ export async function GET(req, { params }) {
         dimensions: [{ name: 'date' }],
         metrics: [{ name: 'eventCount' }],
         dimensionFilter: {
-          filter: { fieldName: 'eventName', stringFilter: { value: 'page_view' } }
+          andGroup: {
+            expressions: [
+              { filter: { fieldName: 'eventName', stringFilter: { value: 'page_view' } } },
+              { filter: { fieldName: 'customUser:username', stringFilter: { value: String(username) } } },
+              { filter: { fieldName: 'customUser:site_name', stringFilter: { value: String(site) } } },
+            ],
+          },
         },
         orderBys: [{ dimension: { dimensionName: 'date' } }],
       });
@@ -113,12 +146,33 @@ export async function GET(req, { params }) {
         date: r.dimensionValues?.[0]?.value,
         views: Number(r.metricValues?.[0]?.value || 0),
       }));
+      console.log(`GA Time series for ${username}/${site}:`, series.length, 'data points');
     } catch (error) {
       console.error('Error fetching time series:', error);
-      series = [];
+      // Fallback to basic query without site filtering
+      try {
+        const [fallbackTimeseries] = await client.runReport({
+          property: propertyId,
+          dateRanges: [{ startDate, endDate }],
+          dimensions: [{ name: 'date' }],
+          metrics: [{ name: 'eventCount' }],
+          dimensionFilter: {
+            filter: { fieldName: 'eventName', stringFilter: { value: 'page_view' } }
+          },
+          orderBys: [{ dimension: { dimensionName: 'date' } }],
+        });
+        series = (fallbackTimeseries.rows || []).map((r) => ({
+          date: r.dimensionValues?.[0]?.value,
+          views: Number(r.metricValues?.[0]?.value || 0),
+        }));
+        console.log('Using fallback GA time series query');
+      } catch (fallbackError) {
+        console.error('Fallback GA time series query failed:', fallbackError);
+        series = [];
+      }
     }
 
-    // 3) KPIs: users, sessions, engagement - Basic metrics without filters
+    // 3) KPIs for this specific site: users, sessions, engagement
     let kpis = { totalUsers: 0, newUsers: 0, sessions: 0, engagedSessions: 0, engagementRate: 0, averageSessionDuration: 0, bounceRate: 0 };
     try {
       const [kpiRes] = await client.runReport({
@@ -134,7 +188,15 @@ export async function GET(req, { params }) {
           { name: 'averageSessionDuration' },
           { name: 'bounceRate' }
         ],
-        // Remove filter initially to test basic connectivity
+        // Filter for this specific site
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              { filter: { fieldName: 'customUser:username', stringFilter: { value: String(username) } } },
+              { filter: { fieldName: 'customUser:site_name', stringFilter: { value: String(site) } } },
+            ],
+          },
+        },
       });
       const mv = (kpiRes.rows?.[0]?.metricValues) || [];
       kpis = {
@@ -146,8 +208,38 @@ export async function GET(req, { params }) {
         averageSessionDuration: Number(mv?.[5]?.value || 0),
         bounceRate: Number(mv?.[6]?.value || 0),
       };
+      console.log(`GA KPIs for ${username}/${site}:`, kpis);
     } catch (error) {
       console.error('Error fetching KPIs:', error);
+      // Fallback to basic query without site filtering
+      try {
+        const [fallbackKpiRes] = await client.runReport({
+          property: propertyId,
+          dateRanges: [{ startDate, endDate }],
+          metrics: [
+            { name: 'totalUsers' },
+            { name: 'newUsers' },
+            { name: 'sessions' },
+            { name: 'engagedSessions' },
+            { name: 'engagementRate' },
+            { name: 'averageSessionDuration' },
+            { name: 'bounceRate' }
+          ],
+        });
+        const mv = (fallbackKpiRes.rows?.[0]?.metricValues) || [];
+        kpis = {
+          totalUsers: Number(mv?.[0]?.value || 0),
+          newUsers: Number(mv?.[1]?.value || 0),
+          sessions: Number(mv?.[2]?.value || 0),
+          engagedSessions: Number(mv?.[3]?.value || 0),
+          engagementRate: Number(mv?.[4]?.value || 0),
+          averageSessionDuration: Number(mv?.[5]?.value || 0),
+          bounceRate: Number(mv?.[6]?.value || 0),
+        };
+        console.log('Using fallback GA KPIs query');
+      } catch (fallbackError) {
+        console.error('Fallback GA KPIs query failed:', fallbackError);
+      }
     }
 
     // 4) Top pages (by title) for page_view - Basic query

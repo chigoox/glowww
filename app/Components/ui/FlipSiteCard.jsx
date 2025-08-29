@@ -61,10 +61,10 @@ const FlipSiteCard = ({
 
   // Use real analytics data when available, fallback to mock for unpublished sites or loading states
   const statsData = analyticsData || {
-    totalViews: Math.floor(Math.random() * 60000) + 1000, // Mock data for unpublished sites
-    uniqueVisitors: Math.floor(Math.random() * 25000) + 500,
-    bounceRate: Math.floor(Math.random() * 40) + 30,
-    avgSession: '2:34'
+    totalViews: site.isPublished ? (analyticsLoading ? '...' : 'No data') : Math.floor(Math.random() * 5000) + 100, // Mock data for unpublished sites
+    uniqueVisitors: site.isPublished ? (analyticsLoading ? '...' : 'No data') : Math.floor(Math.random() * 2000) + 50,
+    bounceRate: site.isPublished ? (analyticsLoading ? '...' : 'No data') : Math.floor(Math.random() * 40) + 30,
+    avgSession: site.isPublished ? (analyticsLoading ? '...' : 'No data') : '1:23'
   };
 
   // RPG-style tier system based on views
@@ -154,7 +154,21 @@ const FlipSiteCard = ({
     try {
       setAnalyticsLoading(true);
       const siteName = site.subdomain || site.name;
-      const response = await fetch(`/api/sites/${encodeURIComponent(user.username)}/${encodeURIComponent(siteName)}/analytics/summary`);
+      
+      // Add authentication headers for GA API access
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Add user token if available for authenticated requests
+      if (user?.accessToken) {
+        headers['Authorization'] = `Bearer ${user.accessToken}`;
+      }
+      
+      const response = await fetch(`/api/sites/${encodeURIComponent(user.username)}/${encodeURIComponent(siteName)}/analytics/summary`, {
+        headers,
+        cache: 'no-store' // Ensure fresh data
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -165,10 +179,17 @@ const FlipSiteCard = ({
             bounceRate: Math.round(data.kpis?.bounceRate || 0),
             avgSession: formatSessionDuration(data.kpis?.averageSessionDuration || 0)
           });
+        } else {
+          console.warn('Analytics API returned error:', data.error);
+          setAnalyticsData(null);
         }
+      } else {
+        console.warn('Analytics API request failed:', response.status, response.statusText);
+        setAnalyticsData(null);
       }
     } catch (error) {
       console.error('Error loading analytics data:', error);
+      setAnalyticsData(null);
     } finally {
       setAnalyticsLoading(false);
     }

@@ -20,6 +20,7 @@ const UserAnalyticsDashboard = dynamic(() => import('../Components/UserAnalytics
 const EmailManager = dynamic(() => import('../Components/EmailManager'), { ssr: false });
 import SiteSettingsModal from '../Components/ui/SiteSettingsModal';
 import { Admin } from './Admin/Admin';
+import useIsMobile from '../Hooks/useIsMobile';
 import {
   Button,
   Card,
@@ -47,7 +48,8 @@ import {
   Avatar,
   Tooltip,
   Dropdown,
-  Popconfirm
+  Popconfirm,
+  Drawer
 } from 'antd';
 import {
   PlusOutlined,
@@ -86,9 +88,11 @@ const { Header, Content, Sider } = Layout;
 export default function Dashboard() {
   const { token } = theme.useToken();
   const { user, userData, loading: authLoading } = useAuth();
+  const isMobile = useIsMobile();
   
   // Layout state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Core dashboard state
   const [activeTab, setActiveTab] = useState('overview');
@@ -97,6 +101,8 @@ export default function Dashboard() {
   const [subscription, setSubscription] = useState(null);
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const [isDark, setIsDark] = useState(false);
+  const [totalSiteVisits, setTotalSiteVisits] = useState(0);
+  const [totalSiteVisitsLoading, setTotalSiteVisitsLoading] = useState(false);
   
   // Seller orders state (multi-tenant ecommerce)
   const [sellerOrders, setSellerOrders] = useState([]);
@@ -306,12 +312,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user?.uid) return;
     if (!subscription) return;
-    if (subscription?.tier === 'admin') return;
+    // Skip for admin users
+    const isAdmin = userData?.tier === 'admin' || 
+                   userData?.subscriptionTier === 'admin' || 
+                   subscription?.tier === 'admin';
+    if (isAdmin) return;
+    
     const handle = setTimeout(() => {
       syncUserSiteCount(user.uid).catch(()=>{});
     }, 1500);
     return () => clearTimeout(handle);
-  }, [user?.uid, subscription?.tier]);
+  }, [user?.uid, userData?.tier, userData?.subscriptionTier, subscription?.tier]);
 
   const onTabChange = (key) => {
     setActiveTab(key);
@@ -464,15 +475,27 @@ export default function Dashboard() {
 
   // Get current plan info
   const getCurrentPlan = () => {
-    if (!subscription) {
+    // Check for admin tier first - check both userData and subscription
+    const isAdmin = userData?.tier === 'admin' || 
+                   userData?.subscriptionTier === 'admin' || 
+                   subscription?.tier === 'admin';
+    
+    if (isAdmin) {
+      return { name: 'Admin', maxSites: -1, sitesIncluded: -1 };
+    }
+    
+    // Check subscription tier if available
+    const tier = subscription?.tier || userData?.subscriptionTier || userData?.tier;
+    
+    if (!tier) {
       return PRICING_PLANS.find(p => p.id === 'free') || { name: 'Free', sitesIncluded: 1, maxSites: 1 };
     }
     
-    switch (subscription.tier) {
+    switch (tier) {
       case 'pro':
-        return PRICING_PLANS.find(p => p.id === 'pro') || { name: 'Pro', maxSites: 10 };
+        return PRICING_PLANS.find(p => p.id === 'pro') || { name: 'Pro', maxSites: 5 };
       case 'business':
-        return PRICING_PLANS.find(p => p.id === 'business') || { name: 'Business', maxSites: 50 };
+        return PRICING_PLANS.find(p => p.id === 'business') || { name: 'Business', maxSites: 25 };
       case 'admin':
         return { name: 'Admin', maxSites: -1, sitesIncluded: -1 };
       case 'free':
@@ -481,12 +504,270 @@ export default function Dashboard() {
     }
   };
 
+  const loadTotalSiteVisits = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setTotalSiteVisitsLoading(true);
+      
+      // Get overview analytics for all user sites
+      const params = new URLSearchParams({
+        userId: user.uid,
+        range: '30d',
+        type: 'overview'
+      });
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (user?.accessToken) {
+        headers['Authorization'] = `Bearer ${user.accessToken}`;
+      }
+
+      const response = await fetch(`/api/user/analytics?${params}`, {
+        headers,
+        cache: 'no-store'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.analytics?.totalViews) {
+          setTotalSiteVisits(data.analytics.totalViews);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading total site visits:', error);
+    } finally {
+      setTotalSiteVisitsLoading(false);
+    }
+  };
+
+  // Load total site visits data
+  useEffect(() => {
+    if (user?.uid && activeTab === 'overview') {
+      loadTotalSiteVisits();
+    }
+  }, [user?.uid, activeTab, sites.length]); // Refresh when sites change
+
+  const getTotalSiteVisits = () => {
+    if (totalSiteVisitsLoading) return '...';
+    
+    // Format the number nicely
+    if (totalSiteVisits >= 1000000) {
+      return `${(totalSiteVisits / 1000000).toFixed(1)}M`;
+    } else if (totalSiteVisits >= 1000) {
+      return `${(totalSiteVisits / 1000).toFixed(1)}K`;
+    } else {
+      return totalSiteVisits.toString() || '0';
+    }
+  };
+
   const currentPlan = getCurrentPlan();
   const rawUsage = subscription ? subscription.usage?.sitesCount : undefined;
   const siteUsage = (typeof rawUsage === 'number' && rawUsage >= 0) ? rawUsage : sites.length;
   const maxSites = subscription ? subscription.limits?.maxSites : currentPlan.maxSites;
   const usagePercentage = maxSites === -1 ? 0 : (siteUsage / maxSites) * 100;
-  const atSiteLimit = maxSites !== -1 && siteUsage >= maxSites;
+  const atSiteLimit = currentPlan.name !== 'Admin' && maxSites !== -1 && siteUsage >= maxSites;
+
+  // Responsive Menu Component
+  const ResponsiveDashboardMenu = () => {
+    const menuContent = (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ 
+          padding: isMobile ? '24px 24px 16px' : '16px', 
+          textAlign: 'center', 
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white'
+        }}>
+          <Title level={4} style={{ color: 'white', margin: 0, fontWeight: 600 }}>
+            Dashboard
+          </Title>
+        </div>
+        
+        {/* Menu Items */}
+        <div style={{ flex: 1, padding: '16px 0' }}>
+          <Menu
+            theme="light"
+            mode="inline"
+            selectedKeys={[activeTab]}
+            onClick={({ key }) => {
+              onTabChange(key);
+              if (isMobile) setMobileMenuOpen(false);
+            }}
+            items={menuItems}
+            style={{ 
+              border: 'none',
+              background: 'transparent'
+            }}
+          />
+        </div>
+
+        {/* User Profile Section */}
+        <div style={{ 
+          padding: sidebarCollapsed && !isMobile ? '12px 8px' : '16px',
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
+          background: 'rgba(0,0,0,0.02)'
+        }}>
+          {sidebarCollapsed && !isMobile ? (
+            // Collapsed sidebar - just avatar and icon buttons
+            <Space direction="vertical" style={{ width: '100%' }} size={8} align="center">
+              <Avatar 
+                size={32} 
+                src={user?.photoURL} 
+                icon={<UserOutlined />}
+                style={{ backgroundColor: token.colorPrimary }}
+              />
+              
+              <Tooltip title="Account Settings" placement="right">
+                <Button 
+                  icon={<SettingOutlined />} 
+                  onClick={() => {
+                    accountForm.setFieldsValue({
+                      fullName: user.fullName || user.displayName || '',
+                      username: currentCanonicalUsername,
+                      email: user.email,
+                      phone: userData?.phone || ''
+                    });
+                    setShowAccountSettings(true);
+                  }}
+                  type="text"
+                  size="small"
+                  style={{ width: 32, height: 32 }}
+                />
+              </Tooltip>
+              
+              <Tooltip title="Logout" placement="right">
+                <Button 
+                  icon={<LogoutOutlined />}
+                  onClick={handleLogout}
+                  type="text"
+                  danger
+                  size="small"
+                  style={{ width: 32, height: 32 }}
+                />
+              </Tooltip>
+            </Space>
+          ) : (
+            // Expanded sidebar - full profile section
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                padding: '12px',
+                borderRadius: '8px',
+                background: 'white',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.06)'
+              }}>
+                <Avatar 
+                  size={isMobile ? 48 : 40} 
+                  src={user?.photoURL} 
+                  icon={<UserOutlined />}
+                  style={{ backgroundColor: token.colorPrimary }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ 
+                    fontWeight: 600, 
+                    fontSize: isMobile ? 16 : 14, 
+                    color: token.colorText,
+                    marginBottom: 2
+                  }}>
+                    {userData?.displayName || user?.displayName || 'User'}
+                  </div>
+                  <div style={{ 
+                    color: token.colorTextSecondary, 
+                    fontSize: isMobile ? 13 : 12 
+                  }}>
+                    {user?.email}
+                  </div>
+                  <div style={{ 
+                    color: token.colorPrimary, 
+                    fontSize: isMobile ? 12 : 11,
+                    fontWeight: 500
+                  }}>
+                    {currentPlan.name} Plan
+                  </div>
+                </div>
+              </div>
+              
+              <Button 
+                icon={<SettingOutlined />} 
+                onClick={() => {
+                  accountForm.setFieldsValue({
+                    fullName: user.fullName || user.displayName || '',
+                    username: currentCanonicalUsername,
+                    email: user.email,
+                    phone: userData?.phone || ''
+                  });
+                  setShowAccountSettings(true);
+                  if (isMobile) setMobileMenuOpen(false);
+                }}
+                size={isMobile ? 'large' : 'default'}
+                style={{
+                  height: isMobile ? 48 : 36,
+                  fontSize: isMobile ? 16 : 14
+                }}
+                block
+              >
+                Account Settings
+              </Button>
+              
+              <Button 
+                icon={<LogoutOutlined />}
+                onClick={handleLogout}
+                type="text"
+                danger
+                size={isMobile ? 'large' : 'default'}
+                style={{
+                  height: isMobile ? 48 : 36,
+                  fontSize: isMobile ? 16 : 14
+                }}
+                block
+              >
+                Logout
+              </Button>
+            </Space>
+          )}
+        </div>
+      </div>
+    );
+
+    if (isMobile) {
+      return (
+        <Drawer
+          placement="bottom"
+          closable={true}
+          onClose={() => setMobileMenuOpen(false)}
+          open={mobileMenuOpen}
+          height="80vh"
+          styles={{
+            body: { padding: 0 }
+          }}
+        >
+          {menuContent}
+        </Drawer>
+      );
+    } else {
+      return (
+        <Sider 
+          collapsible 
+          collapsed={sidebarCollapsed} 
+          onCollapse={setSidebarCollapsed}
+          theme="light"
+          width={280}
+          style={{
+            boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
+            background: 'white'
+          }}
+        >
+          {menuContent}
+        </Sider>
+      );
+    }
+  };
 
   if (authLoading || loading || subscriptionLoading) {
     return (
@@ -523,172 +804,8 @@ export default function Dashboard() {
       }}
     >
       <Layout style={{ minHeight: '100vh' }}>
-        {/* Sidebar */}
-        <Sider 
-          collapsible 
-          collapsed={sidebarCollapsed} 
-          onCollapse={setSidebarCollapsed}
-          theme="dark"
-          width={250}
-          style={{
-            boxShadow: '2px 0 8px rgba(0,0,0,0.15)'
-          }}
-        >
-          <div style={{ 
-            padding: '16px', 
-            textAlign: 'center', 
-            borderBottom: '1px solid #434343',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-          }}>
-            {!sidebarCollapsed ? (
-              <Title level={4} style={{ color: 'white', margin: 0, fontWeight: 600 }}>
-                Dashboard
-              </Title>
-            ) : (
-              <DashboardOutlined style={{ color: 'white', fontSize: '24px' }} />
-            )}
-          </div>
-          
-          <Menu
-            theme="dark"
-            mode="inline"
-            selectedKeys={[activeTab]}
-            onClick={({ key }) => onTabChange(key)}
-            items={menuItems}
-            style={{ 
-              marginTop: '16px',
-              borderRight: 'none'
-            }}
-          />
-
-          {/* User info at bottom */}
-          <div style={{ 
-            position: 'absolute', 
-            bottom: 0, 
-            width: '100%', 
-            padding: '16px',
-            borderTop: '1px solid #434343',
-            background: 'rgba(0,0,0,0.2)'
-          }}>
-            {!sidebarCollapsed ? (
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Dropdown
-                  trigger={['click']}
-                  placement="topRight"
-                  menu={{
-                    items: [
-                      {
-                        key: 'settings',
-                        label: 'Account Settings',
-                        icon: <SettingOutlined />,
-                        onClick: () => {
-                          accountForm.setFieldsValue({
-                            fullName: user.fullName || user.displayName || '',
-                            username: currentCanonicalUsername,
-                            email: user.email,
-                            phone: userData?.phone || ''
-                          });
-                          setShowAccountSettings(true);
-                        }
-                      },
-                      {
-                        key: 'upgrade',
-                        label: 'Upgrade Plan',
-                        icon: <CrownOutlined />,
-                        onClick: () => setShowUpgradeModal(true),
-                        disabled: currentPlan.name === 'Admin'
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'logout',
-                        label: 'Logout',
-                        icon: <LogoutOutlined />,
-                        onClick: handleLogout
-                      }
-                    ]
-                  }}
-                >
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: 8, 
-                    cursor: 'pointer',
-                    padding: '8px',
-                    borderRadius: '6px',
-                    transition: 'background 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
-                  onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                  >
-                    <Avatar 
-                      size={32} 
-                      src={user?.photoURL} 
-                      icon={<UserOutlined />}
-                      style={{ backgroundColor: token.colorPrimary }}
-                    />
-                    <div>
-                      <div style={{ color: 'white', fontWeight: 500, fontSize: 14 }}>
-                        {userData?.displayName || user?.displayName || 'User'}
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>
-                        {currentPlan.name} Plan
-                      </div>
-                    </div>
-                  </div>
-                </Dropdown>
-              </Space>
-            ) : (
-              <Space direction="vertical" style={{ width: '100%' }} align="center">
-                <Dropdown
-                  trigger={['click']}
-                  placement="topRight"
-                  menu={{
-                    items: [
-                      {
-                        key: 'settings',
-                        label: 'Account Settings',
-                        icon: <SettingOutlined />,
-                        onClick: () => {
-                          accountForm.setFieldsValue({
-                            fullName: user.fullName || user.displayName || '',
-                            username: currentCanonicalUsername,
-                            email: user.email,
-                            phone: userData?.phone || ''
-                          });
-                          setShowAccountSettings(true);
-                        }
-                      },
-                      {
-                        key: 'upgrade',
-                        label: 'Upgrade Plan',
-                        icon: <CrownOutlined />,
-                        onClick: () => setShowUpgradeModal(true),
-                        disabled: currentPlan.name === 'Admin'
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'logout',
-                        label: 'Logout',
-                        icon: <LogoutOutlined />,
-                        onClick: handleLogout
-                      }
-                    ]
-                  }}
-                >
-                  <Avatar 
-                    size={32} 
-                    src={user?.photoURL} 
-                    icon={<UserOutlined />}
-                    style={{ 
-                      backgroundColor: token.colorPrimary,
-                      cursor: 'pointer'
-                    }}
-                  />
-                </Dropdown>
-              </Space>
-            )}
-          </div>
-        </Sider>
+        {/* Desktop Sidebar / Mobile Drawer */}
+        <ResponsiveDashboardMenu />
 
         <Layout>
           {/* Header */}
@@ -701,7 +818,17 @@ export default function Dashboard() {
             borderBottom: '1px solid #f0f0f0',
             boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
           }}>
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {/* Mobile Menu Toggle */}
+              {isMobile && (
+                <Button 
+                  icon={<MenuOutlined />} 
+                  onClick={() => setMobileMenuOpen(true)}
+                  type="text"
+                  size="large"
+                />
+              )}
+              
               <Title level={3} style={{ margin: 0, color: token.colorText }}>
                 {activeTab === 'overview' && 'Dashboard Overview'}
                 {activeTab === 'sites' && 'Site Management'}
@@ -712,28 +839,82 @@ export default function Dashboard() {
               </Title>
             </div>
             
-            <Space>
-              <Button 
-                icon={<SettingOutlined />} 
-                onClick={() => {
-                  accountForm.setFieldsValue({
-                    fullName: user.fullName || user.displayName || '',
-                    username: currentCanonicalUsername,
-                    email: user.email,
-                    phone: userData?.phone || ''
-                  });
-                  setShowAccountSettings(true);
-                }}
-                type="text"
-              >
-                Settings
-              </Button>
-            </Space>
+            {/* Desktop Header Actions */}
+            {!isMobile && (
+              <Space size={16}>
+                <Dropdown
+                  trigger={['click']}
+                  placement="bottomRight"
+                  menu={{
+                    items: [
+                      {
+                        key: 'profile',
+                        label: (
+                          <div style={{ padding: '8px 4px' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                              {userData?.displayName || user?.displayName || 'User'}
+                            </div>
+                            <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                              {currentPlan.name} Plan
+                            </div>
+                          </div>
+                        ),
+                        disabled: true
+                      },
+                      {
+                        type: 'divider'
+                      },
+                      {
+                        key: 'settings',
+                        icon: <SettingOutlined />,
+                        label: 'Account Settings',
+                        onClick: () => {
+                          accountForm.setFieldsValue({
+                            fullName: user.fullName || user.displayName || '',
+                            username: currentCanonicalUsername,
+                            email: user.email,
+                            phone: userData?.phone || ''
+                          });
+                          setShowAccountSettings(true);
+                        }
+                      },
+                      {
+                        type: 'divider'
+                      },
+                      {
+                        key: 'logout',
+                        icon: <LogoutOutlined />,
+                        label: 'Logout',
+                        danger: true,
+                        onClick: handleLogout
+                      }
+                    ]
+                  }}
+                >
+                  <Space style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: 8 }}>
+                    <Avatar 
+                      size={32} 
+                      src={user?.photoURL} 
+                      icon={<UserOutlined />}
+                      style={{ backgroundColor: token.colorPrimary }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <Text style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>
+                        {userData?.displayName?.split(' ')[0] || user?.displayName?.split(' ')[0] || 'User'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: token.colorTextSecondary, lineHeight: 1 }}>
+                        {currentPlan.name}
+                      </Text>
+                    </div>
+                  </Space>
+                </Dropdown>
+              </Space>
+            )}
           </Header>
 
           {/* Main Content */}
           <Content style={{ 
-            padding: '24px', 
+            padding: '2px 4px', 
             background: token.colorBgLayout,
             minHeight: 'calc(100vh - 64px)',
             overflow: 'auto'
@@ -788,9 +969,13 @@ export default function Dashboard() {
                       style={{ 
                         borderRadius: 12, 
                         border: `1px solid ${token.colorBorderSecondary}`,
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        overflow: 'hidden'
                       }}
-                      styles={{ body: { padding: 20 } }}
+                      styles={{ 
+                        body: { padding: 20 },
+                        header: { borderRadius: '12px 12px 0 0' }
+                      }}
                     >
                       <Statistic
                         title={<span style={{ color: 'rgba(255,255,255,0.9)' }}>Total Sites</span>}
@@ -815,7 +1000,17 @@ export default function Dashboard() {
                     </Card>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                    <Card 
+                      style={{ 
+                        borderRadius: 12, 
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                        overflow: 'hidden'
+                      }}
+                      styles={{ 
+                        body: { padding: 20 },
+                        header: { borderRadius: '12px 12px 0 0' }
+                      }}
+                    >
                       <Statistic
                         title="Published Sites"
                         value={sites.filter(site => site.isPublished).length}
@@ -824,7 +1019,17 @@ export default function Dashboard() {
                     </Card>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                    <Card 
+                      style={{ 
+                        borderRadius: 12, 
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                        overflow: 'hidden'
+                      }}
+                      styles={{ 
+                        body: { padding: 20 },
+                        header: { borderRadius: '12px 12px 0 0' }
+                      }}
+                    >
                       <Statistic
                         title="Current Plan"
                         value={currentPlan.name}
@@ -833,10 +1038,20 @@ export default function Dashboard() {
                     </Card>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                    <Card 
+                      style={{ 
+                        borderRadius: 12, 
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                        overflow: 'hidden'
+                      }}
+                      styles={{ 
+                        body: { padding: 20 },
+                        header: { borderRadius: '12px 12px 0 0' }
+                      }}
+                    >
                       <Statistic
                         title="Total Visits"
-                        value="12.4K"
+                        value={getTotalSiteVisits()}
                         suffix="this month"
                         prefix={<BarChartOutlined style={{ color: token.colorInfo }} />}
                       />
@@ -859,7 +1074,15 @@ export default function Dashboard() {
                           View All
                         </Button>
                       }
-                      style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}
+                      style={{ 
+                        borderRadius: 12, 
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                        overflow: 'hidden'
+                      }}
+                      styles={{ 
+                        body: { padding: 20 },
+                        header: { borderRadius: '12px 12px 0 0' }
+                      }}
                     >
                       {sites.length === 0 ? (
                         <Empty
@@ -908,7 +1131,15 @@ export default function Dashboard() {
                           <span>Recent Orders</span>
                         </Space>
                       }
-                      style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}
+                      style={{ 
+                        borderRadius: 12, 
+                        border: `1px solid ${token.colorBorderSecondary}`,
+                        overflow: 'hidden'
+                      }}
+                      styles={{ 
+                        body: { padding: 20 },
+                        header: { borderRadius: '12px 12px 0 0' }
+                      }}
                     >
                       {sellerOrdersLoading ? (
                         <Spin />
@@ -1057,7 +1288,7 @@ export default function Dashboard() {
                       ),
                       children: (
                         <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
-                          <UserAnalyticsDashboard />
+                          <UserAnalyticsDashboard user={user} userData={userData} />
                         </Card>
                       )
                     },
@@ -1099,7 +1330,18 @@ export default function Dashboard() {
                             ) : stripeMetrics ? (
                               <Row gutter={[16, 16]}>
                                 <Col xs={24} md={12}>
-                                  <Card size="small" title="Total Revenue">
+                                  <Card 
+                                    size="small" 
+                                    title="Total Revenue"
+                                    style={{ 
+                                      borderRadius: 8,
+                                      overflow: 'hidden'
+                                    }}
+                                    styles={{ 
+                                      body: { padding: 16 },
+                                      header: { borderRadius: '8px 8px 0 0' }
+                                    }}
+                                  >
                                     <Statistic 
                                       value={stripeMetrics.net || 0} 
                                       precision={2} 
@@ -1109,7 +1351,18 @@ export default function Dashboard() {
                                   </Card>
                                 </Col>
                                 <Col xs={24} md={12}>
-                                  <Card size="small" title="Total Payouts">
+                                  <Card 
+                                    size="small" 
+                                    title="Total Payouts"
+                                    style={{ 
+                                      borderRadius: 8,
+                                      overflow: 'hidden'
+                                    }}
+                                    styles={{ 
+                                      body: { padding: 16 },
+                                      header: { borderRadius: '8px 8px 0 0' }
+                                    }}
+                                  >
                                     <Statistic 
                                       value={stripeMetrics.payouts || 0} 
                                       precision={2} 
@@ -1262,24 +1515,28 @@ export default function Dashboard() {
 
       {/* Modals */}
       
-      {/* Account Settings Modal */}
-      <Modal
+      {/* Account Settings Responsive Drawer */}
+      <Drawer
         title={
           <Space>
             <SettingOutlined />
             <span>Account Settings</span>
           </Space>
         }
+        placement={isMobile ? 'bottom' : 'right'}
+        closable={true}
+        onClose={() => setShowAccountSettings(false)}
         open={showAccountSettings}
-        onCancel={() => setShowAccountSettings(false)}
-        footer={null}
-        width={600}
+        width={isMobile ? undefined : 600}
+        height={isMobile ? '80vh' : undefined}
         styles={{
-          body: { padding: '24px' }
+          body: { padding: isMobile ? '16px' : '24px' }
         }}
       >
         <Tabs
           defaultActiveKey="profile"
+          size={isMobile ? 'large' : 'default'}
+          tabPosition={isMobile ? 'top' : 'top'}
           items={[
             {
               key: 'profile',
@@ -1335,7 +1592,7 @@ export default function Dashboard() {
                     name="fullName"
                     rules={[{ required: true, message: 'Please enter your full name' }]}
                   >
-                    <Input placeholder="Your full name" />
+                    <Input placeholder="Your full name" size={isMobile ? 'large' : 'default'} />
                   </Form.Item>
                   
                   <Form.Item 
@@ -1346,28 +1603,34 @@ export default function Dashboard() {
                       { pattern: /^[a-z0-9_-]+$/, message: 'Username can only contain lowercase letters, numbers, hyphens, and underscores' }
                     ]}
                   >
-                    <Input placeholder="your-username" />
+                    <Input placeholder="your-username" size={isMobile ? 'large' : 'default'} />
                   </Form.Item>
                   
                   <Form.Item label="Email" name="email">
-                    <Input disabled />
+                    <Input disabled size={isMobile ? 'large' : 'default'} />
                   </Form.Item>
                   
                   <Form.Item label="Phone" name="phone">
-                    <Input placeholder="+1 (555) 123-4567" />
+                    <Input placeholder="+1 (555) 123-4567" size={isMobile ? 'large' : 'default'} />
                   </Form.Item>
                   
                   <Form.Item>
-                    <Space>
+                    <Space direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: '100%' }}>
                       <Button 
                         type="primary" 
                         htmlType="submit" 
                         loading={savingAccount}
                         disabled={!accountHasChanges}
+                        size={isMobile ? 'large' : 'default'}
+                        block={isMobile}
                       >
                         Save Changes
                       </Button>
-                      <Button onClick={() => setShowAccountSettings(false)}>
+                      <Button 
+                        onClick={() => setShowAccountSettings(false)}
+                        size={isMobile ? 'large' : 'default'}
+                        block={isMobile}
+                      >
                         Cancel
                       </Button>
                     </Space>
@@ -1396,6 +1659,8 @@ export default function Dashboard() {
                   <Button 
                     type="default" 
                     loading={changingPassword}
+                    size={isMobile ? 'large' : 'default'}
+                    block={isMobile}
                     onClick={async () => {
                       try {
                         setChangingPassword(true);
@@ -1414,10 +1679,64 @@ export default function Dashboard() {
                   </Button>
                 </Space>
               )
+            },
+            {
+              key: 'plan',
+              label: (
+                <Space>
+                  <CrownOutlined />
+                  <span>Plan & Billing</span>
+                </Space>
+              ),
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }} size="large">
+                  <Card size="small">
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <div>
+                        <Text strong>Current Plan</Text>
+                        <div style={{ marginTop: 8 }}>
+                          <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>
+                            {currentPlan.name} Plan
+                          </Tag>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Text strong>Site Usage</Text>
+                        <div style={{ marginTop: 8 }}>
+                          <Text>{siteUsage} of {maxSites === -1 ? '∞' : maxSites} sites used</Text>
+                          {maxSites !== -1 && (
+                            <Progress 
+                              percent={usagePercentage} 
+                              status={atSiteLimit ? 'exception' : 'normal'}
+                              style={{ marginTop: 4 }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {currentPlan.name !== 'Admin' && (
+                        <Button 
+                          type="primary"
+                          icon={<CrownOutlined />}
+                          onClick={() => {
+                            setShowAccountSettings(false);
+                            setShowUpgradeModal(true);
+                          }}
+                          size={isMobile ? 'large' : 'default'}
+                          block={isMobile}
+                        >
+                          Upgrade Plan
+                        </Button>
+                      )}
+                    </Space>
+                  </Card>
+                </Space>
+              )
             }
           ]}
         />
-      </Modal>
+      </Drawer>
 
       {/* Create Site Modal */}
       <Modal
