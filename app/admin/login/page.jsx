@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, Form, Input, Button, Alert, Space, Typography, Spin } from 'antd';
-import { LockOutlined, UserOutlined } from '@ant-design/icons';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { Card, Form, Input, Button, Alert, Space, Typography, Spin, Divider } from 'antd';
+import { LockOutlined, UserOutlined, GoogleOutlined } from '@ant-design/icons';
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 
 const { Title, Text } = Typography;
@@ -21,6 +21,8 @@ export default function AdminLoginPage() {
   useEffect(() => {
     if (!loading && user) {
       const isAdmin = userData?.tier === 'admin' || 
+                     userData?.subscriptionTier === 'admin' ||
+                     userData?.subscription?.plan === 'admin' ||
                      user?.customClaims?.admin || 
                      user?.customClaims?.platformAdmin ||
                      // Development fallback - allow any user in development
@@ -32,23 +34,42 @@ export default function AdminLoginPage() {
     }
   }, [user, userData, loading, router]);
 
+  // Helper function to check if user has admin access
+  const checkAdminAccess = async (user) => {
+    const tokenResult = await user.getIdTokenResult(true);
+    
+    // Check token claims first
+    const hasTokenAdmin = tokenResult.claims.admin || 
+                         tokenResult.claims.platformAdmin || 
+                         tokenResult.claims.tier === 'admin' ||
+                         tokenResult.claims.subscriptionTier === 'admin';
+    
+    if (hasTokenAdmin) {
+      return true;
+    }
+    
+    // Fallback: check if user data will be loaded with admin tier
+    // (This covers cases where custom claims haven't been set yet)
+    if (userData) {
+      return userData.tier === 'admin' || 
+             userData.subscriptionTier === 'admin' || 
+             userData.subscription?.plan === 'admin';
+    }
+    
+    // Development fallback
+    return process.env.NODE_ENV === 'development';
+  };
+
   const handleLogin = async (values) => {
     try {
       setLoginLoading(true);
       setError('');
       
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
-      const token = await userCredential.user.getIdToken();
-      
-      // Get fresh token claims
-      const tokenResult = await userCredential.user.getIdTokenResult(true);
+      const user = userCredential.user;
       
       // Check if user has admin privileges
-      const isAdmin = tokenResult.claims.admin || 
-                     tokenResult.claims.platformAdmin || 
-                     tokenResult.claims.tier === 'admin' ||
-                     // Development fallback
-                     process.env.NODE_ENV === 'development';
+      const isAdmin = await checkAdminAccess(user);
       
       if (isAdmin) {
         router.push('/admin');
@@ -66,6 +87,39 @@ export default function AdminLoginPage() {
         setError('This account has been disabled.');
       } else {
         setError('Login failed. Please try again.');
+      }
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setLoginLoading(true);
+      setError('');
+      
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Check if user has admin privileges
+      const isAdmin = await checkAdminAccess(user);
+      
+      if (isAdmin) {
+        router.push('/admin');
+      } else {
+        setError('Access denied. Admin privileges required for this Google account.');
+        await auth.signOut();
+      }
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      if (error.code === 'auth/popup-blocked') {
+        setError('Popup was blocked. Please allow popups and try again.');
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in was cancelled.');
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
+        setError('An account already exists with this email address.');
+      } else {
+        setError('Google sign-in failed. Please try again.');
       }
     } finally {
       setLoginLoading(false);
@@ -170,6 +224,25 @@ export default function AdminLoginPage() {
             </Button>
           </Form.Item>
         </Form>
+
+        <Divider style={{ margin: '24px 0 16px 0' }}>
+          <Text type="secondary" style={{ fontSize: '12px' }}>OR</Text>
+        </Divider>
+
+        <Button
+          icon={<GoogleOutlined />}
+          onClick={handleGoogleSignIn}
+          loading={loginLoading}
+          size="large"
+          style={{ 
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {loginLoading ? 'Signing in with Google...' : 'Sign in with Google'}
+        </Button>
 
         <div style={{ textAlign: 'center', marginTop: '24px' }}>
           <Text type="secondary" style={{ fontSize: '12px' }}>

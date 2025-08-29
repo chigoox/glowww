@@ -7,17 +7,21 @@ import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore';
 import { AUTH, DATABASE } from '@/Firebase'
+import useIsMobile from '@/app/Hooks/useIsMobile'
+
 export const Admin = () => {
     const {push} = useRouter()
     const [selectedMenu, setSelectedMenu] = useState('Home')
     const [owner, setOwner] = useState(null);
     const [ownerData, setOwnerData] = useState(null);
     const [loading, setLoading] = useState(false)
-  const [selectedProductId, setSelectedProductId] = useState(null)
+    const [selectedProductId, setSelectedProductId] = useState(null)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
+    const onMobile = useIsMobile()
   
-   const router = useRouter()
+    const router = useRouter()
   
-  useEffect(() => {
+    useEffect(() => {
       const unsubscribe = onAuthStateChanged(AUTH, async (currentUser) => {
         setOwner(currentUser);
         console.log(currentUser)
@@ -41,23 +45,38 @@ export const Admin = () => {
       return () => unsubscribe();
     }, [router, selectedMenu]);
 
-  // Initialize admin menu and deep link from URL (?adminMenu=Products&productId=xyz)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const sp = new URLSearchParams(window.location.search);
-      const menu = sp.get('adminMenu');
-      const pid = sp.get('productId');
-      if (menu) setSelectedMenu(menu);
-      if (pid) setSelectedProductId(pid);
-    } catch {}
-  }, [])
+    // Initialize admin menu and deep link from URL (?adminMenu=Products&productId=xyz)
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const menu = sp.get('adminMenu');
+        const pid = sp.get('productId');
+        if (menu) setSelectedMenu(menu);
+        if (pid) setSelectedProductId(pid);
+      } catch {}
+    }, [])
+
     return (
         <AuthWrapper>
-        <main className="lg:flex" >
-            <AdminMenu ownerData={ownerData}  selectedMenu={selectedMenu} setSelectedMenu={setSelectedMenu} />
-            <AdminBody owner={owner} ownerData={ownerData} selectedMenu={selectedMenu} selectedProductId={selectedProductId} />
-        </main>
+        <div className="flex h-full bg-transparent">
+            <AdminMenu 
+              ownerData={ownerData} 
+              selectedMenu={selectedMenu} 
+              setSelectedMenu={setSelectedMenu}
+              showMobileMenu={showMobileMenu}
+              setShowMobileMenu={setShowMobileMenu}
+            />
+            <div className="flex-1 overflow-hidden">
+                <AdminBody 
+                  owner={owner} 
+                  ownerData={ownerData} 
+                  selectedMenu={selectedMenu} 
+                  selectedProductId={selectedProductId}
+                  onMenuToggle={() => setShowMobileMenu(!showMobileMenu)}
+                />
+            </div>
+        </div>
     </AuthWrapper>
 
     )

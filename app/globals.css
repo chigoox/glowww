@@ -2028,3 +2028,264 @@ body.dark .ant-color-picker *[class*="alpha"] {
   background-size: 8px 8px !important;
 }
 
+/* Flip Site Card Animations */
+.site-flip-card {
+  perspective: 1000px;
+}
+
+.site-flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+.site-flip-card-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.site-flip-card-front,
+.site-flip-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+.site-flip-card-back {
+  transform: rotateY(180deg);
+}
+
+.site-flip-card-inner:hover {
+  transform: scale(1.02);
+}
+
+.site-flip-card-inner.flipped:hover {
+  transform: rotateY(180deg) scale(1.02);
+}
+
+/* Subtle glow effect on hover */
+.site-flip-card:hover .site-flip-card-front,
+.site-flip-card:hover .site-flip-card-back {
+  box-shadow: 0 12px 48px rgba(0,0,0,0.15);
+}
+
+/* RPG Tier Glow Effects - Subtle */
+@keyframes legendary-glow {
+  0% { box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3), 0 0 16px rgba(255, 107, 53, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4), 0 0 20px rgba(255, 107, 53, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  100% { box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3), 0 0 16px rgba(255, 107, 53, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+}
+
+@keyframes epic-glow {
+  0% { box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3), 0 0 16px rgba(156, 39, 176, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: 0 4px 12px rgba(156, 39, 176, 0.4), 0 0 20px rgba(156, 39, 176, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  100% { box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3), 0 0 16px rgba(156, 39, 176, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+}
+
+@keyframes rare-glow {
+  0% { box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3), 0 0 16px rgba(33, 150, 243, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4), 0 0 20px rgba(33, 150, 243, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  100% { box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3), 0 0 16px rgba(33, 150, 243, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+}
+
+@keyframes uncommon-glow {
+  0% { box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3), 0 0 16px rgba(76, 175, 80, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  50% { box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4), 0 0 20px rgba(76, 175, 80, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+  100% { box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3), 0 0 16px rgba(76, 175, 80, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+}
+
+/* Apply glow animations based on tier - More subtle */
+.site-flip-card-front[data-tier="legendary"],
+.site-flip-card-back[data-tier="legendary"] {
+  animation: legendary-glow 4s ease-in-out infinite;
+}
+
+.site-flip-card-front[data-tier="epic"],
+.site-flip-card-back[data-tier="epic"] {
+  animation: epic-glow 4s ease-in-out infinite;
+}
+
+.site-flip-card-front[data-tier="rare"],
+.site-flip-card-back[data-tier="rare"] {
+  animation: rare-glow 4s ease-in-out infinite;
+}
+
+.site-flip-card-front[data-tier="uncommon"],
+.site-flip-card-back[data-tier="uncommon"] {
+  animation: uncommon-glow 4s ease-in-out infinite;
+}
+
+/* Floating stats animation */
+.floating-stats {
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+
+/* Tier badge pulse */
+.tier-badge {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Admin Settings Drawer Styling */
+.admin-settings-drawer .ant-drawer-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-bottom: none;
+}
+
+.admin-settings-drawer .ant-drawer-header .ant-drawer-title {
+  color: white;
+}
+
+.admin-settings-drawer .ant-drawer-close {
+  color: white;
+}
+
+.admin-settings-drawer .ant-drawer-close:hover {
+  color: rgba(255,255,255,0.8);
+}
+
+/* Flip Site Card - Theme Immunity Rules */
+/* These rules ensure the FlipSiteCard text is not affected by theme system overrides */
+/* ONLY protect text colors, not backgrounds or other styling */
+
+/* Reset theme text overrides specifically */
+[data-theme-immune="true"] .ant-typography,
+[data-theme-immune="true"] .ant-btn span {
+  color: inherit !important;
+}
+
+/* Allow inline text colors to work */
+[data-theme-immune="true"] [style*="color: white"],
+[data-theme-immune="true"] [style*="color:#ffffff"],
+[data-theme-immune="true"] [style*="color: #ffffff"] {
+  color: white !important;
+}
+
+[data-theme-immune="true"] [style*="color: rgba(255,255,255,0.9)"] {
+  color: rgba(255,255,255,0.9) !important;
+}
+
+[data-theme-immune="true"] [style*="color: rgba(255,255,255,0.8)"] {
+  color: rgba(255,255,255,0.8) !important;
+}
+
+[data-theme-immune="true"] [style*="color: rgba(255,255,255,0.6)"] {
+  color: rgba(255,255,255,0.6) !important;
+}
+
+/* Preserve tier colors */
+[data-theme-immune="true"] [style*="color: #ff6b35"] {
+  color: #ff6b35 !important;
+}
+
+[data-theme-immune="true"] [style*="color: #52c41a"] {
+  color: #52c41a !important;
+}
+
+[data-theme-immune="true"] [style*="color: #1890ff"] {
+  color: #1890ff !important;
+}
+
+[data-theme-immune="true"] [style*="color: #fa8c16"] {
+  color: #fa8c16 !important;
+}
+
+[data-theme-immune="true"] [style*="color: #ff4d4f"] {
+  color: #ff4d4f !important;
+}
+
+/* Flip Site Card Scrollbar Styles */
+.scrollable-card-back::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollable-card-back::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+.scrollable-card-back::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 2px;
+}
+
+.scrollable-card-back::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.5);
+}
+
+/* Firefox scrollbar */
+.scrollable-card-back {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) rgba(255,255,255,0.1);
+}
+
+/* FlipCard Button Styles */
+.flip-card-button {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  color: #000000 !important;
+}
+
+.flip-card-button .anticon {
+  color: #000000 !important;
+  transition: color 0.2s ease;
+}
+
+.flip-card-button:hover {
+  color: #ffffff !important;
+  background: #525252 !important;
+  border-color: #666666 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important;
+}
+
+.flip-card-button:hover .anticon {
+  color: #ffffff !important;
+}
+
+.flip-card-button:focus {
+  color: #ffffff !important;
+}
+
+.flip-card-button:focus .anticon {
+  color: #ffffff !important;
+}
+
+.flip-card-button-danger:hover {
+  background: #e74c3c !important;
+  border-color: #c0392b !important;
+}
+
+/* Override Ant Design button styles specifically for flip cards */
+.flip-card-button.ant-btn {
+  color: #000000 !important;
+}
+
+.flip-card-button.ant-btn:hover {
+  color: #ffffff !important;
+}
+
+.flip-card-button.ant-btn:focus {
+  color: #ffffff !important;
+}
+

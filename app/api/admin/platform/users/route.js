@@ -18,9 +18,28 @@ export async function GET(request) {
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const user = await adminAuth.getUser(decodedToken.uid);
     
-    // Check if user is admin
-    if (!user.customClaims?.admin && !user.customClaims?.tier === 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Check if user is admin - check multiple fields
+    const hasAdminAccess = user.customClaims?.admin || 
+                          user.customClaims?.tier === 'admin' || 
+                          user.customClaims?.subscriptionTier === 'admin';
+    
+    if (!hasAdminAccess) {
+      // Also check Firestore user data as fallback
+      const userDocRef = collection(db, 'users');
+      const userQuery = query(userDocRef, where('uid', '==', decodedToken.uid));
+      const userSnapshot = await getDocs(userQuery);
+      
+      if (!userSnapshot.empty) {
+        const userData = userSnapshot.docs[0].data();
+        const hasFirestoreAdmin = userData.tier === 'admin' || 
+                                 userData.subscriptionTier === 'admin' || 
+                                 userData.subscription?.plan === 'admin';
+        if (!hasFirestoreAdmin) {
+          return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+        }
+      } else {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+      }
     }
 
     // Get all users with enhanced data
@@ -79,7 +98,9 @@ async function getAllUsers() {
         displayName: data.displayName,
         email: data.email,
         photoURL: data.photoURL,
-        tier: data.tier || 'free',
+        tier: data.tier || data.subscriptionTier || data.subscription?.plan || 'free',
+        subscriptionTier: data.subscriptionTier, // Include for compatibility
+        subscription: data.subscription, // Include full subscription object
         siteCount,
         totalViews,
         createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),

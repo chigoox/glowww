@@ -11,7 +11,12 @@ export default function AdminAuthWrapper({ children }) {
 
   useEffect(() => {
     // Redirect non-admin users after loading completes
-    if (!loading && (!userData?.tier === 'admin' && !user?.customClaims?.admin)) {
+    if (!loading && (
+      userData?.tier !== 'admin' && 
+      userData?.subscriptionTier !== 'admin' && 
+      userData?.subscription?.plan !== 'admin' && 
+      !user?.customClaims?.admin
+    )) {
       router.push('/dashboard');
     }
   }, [user, userData, loading, router]);
@@ -34,7 +39,12 @@ export default function AdminAuthWrapper({ children }) {
   }
 
   // Show access denied if not admin
-  if (!userData?.tier === 'admin' && !user?.customClaims?.admin) {
+  if (
+    userData?.tier !== 'admin' && 
+    userData?.subscriptionTier !== 'admin' && 
+    userData?.subscription?.plan !== 'admin' && 
+    !user?.customClaims?.admin
+  ) {
     return (
       <div style={{ padding: '50px', textAlign: 'center' }}>
         <Alert

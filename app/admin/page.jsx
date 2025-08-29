@@ -49,11 +49,13 @@ import {
   RiseOutlined,
   FallOutlined,
   LogoutOutlined,
-  MenuOutlined
+  MenuOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { theme } from 'antd';
 import { signOut } from '@/lib/auth';
+import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 
 const { Title, Text } = Typography;
@@ -69,6 +71,8 @@ export default function AdminDashboard() {
   // Check if user is platform admin - more permissive for development
   const isPlatformAdmin = user && (
     userData?.tier === 'admin' || 
+    userData?.subscriptionTier === 'admin' ||
+    userData?.subscription?.plan === 'admin' ||
     user?.customClaims?.admin || 
     user?.customClaims?.platformAdmin ||
     // Fallback for development - if user has any admin-like properties
@@ -115,6 +119,7 @@ export default function AdminDashboard() {
   
   const [sitesData, setSitesData] = useState([]);
   const [usersData, setUsersData] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState(null);
   const [emailMetrics, setEmailMetrics] = useState({
     totalSent: 0,
     deliveryRate: 0,
@@ -141,12 +146,17 @@ export default function AdminDashboard() {
 
   // Get auth headers for API calls
   const getAuthHeaders = async () => {
-    if (user) {
-      const token = await user.getIdToken();
-      return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+    if (user && auth.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        return {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+      } catch (error) {
+        console.error('Error getting ID token:', error);
+        return {};
+      }
     }
     return {};
   };
@@ -174,40 +184,63 @@ export default function AdminDashboard() {
     }
   }, [isPlatformAdmin, user, dateRange]);
 
+  // Load sites data when Sites tab is selected
+  useEffect(() => {
+    if (isPlatformAdmin && user && activeTab === 'sites') {
+      console.log('🌐 Sites tab selected, loading sites data...');
+      loadSitesData();
+    }
+  }, [activeTab, isPlatformAdmin, user]);
+
   const loadPlatformMetrics = async () => {
     try {
       setDataLoading(true);
+      console.log('🔄 Loading platform metrics...');
+      
       const headers = await getAuthHeaders();
+      console.log('📝 Headers:', Object.keys(headers));
+      
       const response = await fetch(`/api/admin/platform/metrics?range=${dateRange}`, {
         headers
       });
+      
+      console.log('📊 Metrics API response status:', response.status);
+      
       const data = await response.json();
+      console.log('📊 Metrics API response data:', data);
+      
       if (data.ok) {
         setPlatformMetrics(data.metrics);
         setTopSites(data.topSites);
         setRecentActivity(data.recentActivity);
+        console.log('✅ Platform metrics loaded successfully');
       } else {
+        console.error('❌ Metrics API error:', data.error);
         message.error(data.error || 'Failed to load platform metrics');
+        // Set fallback data
+        setPlatformMetrics({
+          totalSites: 0,
+          totalUsers: 0,
+          totalVisitors: 0,
+          totalPageViews: 0,
+          activeUsers: 0,
+          growth: { sites: 0, users: 0, visitors: 0 }
+        });
       }
     } catch (error) {
       console.error('Error loading platform metrics:', error);
-      message.error('Failed to load platform metrics - using mock data');
+      message.error('Failed to load platform metrics - using fallback data');
       // Set mock data for development
       setPlatformMetrics({
-        totalSites: 150,
-        totalUsers: 1250,
-        totalVisitors: 8750,
-        totalPageViews: 45000,
-        activeUsers: 425,
-        growth: { sites: 12, users: 8, visitors: 15 }
+        totalSites: 0,
+        totalUsers: 4, // We know there are 4 users from your description
+        totalVisitors: 0,
+        totalPageViews: 0,
+        activeUsers: 0,
+        growth: { sites: 0, users: 0, visitors: 0 }
       });
-      setTopSites([
-        { id: 1, name: 'Sample Site 1', username: 'user1', totalViews: 1250 },
-        { id: 2, name: 'Sample Site 2', username: 'user2', totalViews: 980 }
-      ]);
-      setRecentActivity([
-        { type: 'site_created', description: 'New site created by user1', timestamp: new Date() }
-      ]);
+      setTopSites([]);
+      setRecentActivity([]);
     } finally {
       setDataLoading(false);
     }
@@ -215,19 +248,53 @@ export default function AdminDashboard() {
 
   const loadSitesData = async () => {
     try {
+      console.log('🌐 Loading sites data...');
+      
       const headers = await getAuthHeaders();
+      console.log('🌐 Auth headers obtained:', !!headers.Authorization);
+      
       const response = await fetch(`/api/admin/platform/sites?range=${dateRange}`, {
         headers
       });
+      
+      console.log('🌐 Sites API response status:', response.status);
+      console.log('🌐 Sites API response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        console.error('🌐 Sites API HTTP error:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('🌐 Sites API error body:', errorText);
+        message.error(`Failed to load sites data: ${response.status}`);
+        setSitesData([]);
+        return;
+      }
+      
       const data = await response.json();
+      console.log('🌐 Sites API response data:', data);
+      console.log('🌐 Sites data structure:', {
+        ok: data.ok,
+        sitesCount: data.sites?.length || 0,
+        firstSite: data.sites?.[0] || null,
+        debug: data.debug || null
+      });
+      
       if (data.ok) {
-        setSitesData(data.sites);
+        setSitesData(data.sites || []);
+        console.log(`✅ Loaded ${data.sites?.length || 0} sites for display`);
+        if (data.sites?.length > 0) {
+          console.log('🌐 Sample site data:', data.sites[0]);
+        } else {
+          console.warn('🌐 No sites returned from API');
+        }
       } else {
+        console.error('❌ Sites API error:', data.error);
         message.error(data.error || 'Failed to load sites data');
+        setSitesData([]);
       }
     } catch (error) {
       console.error('Error loading sites data:', error);
       message.error('Failed to load sites data');
+      setSitesData([]);
     }
   };
 
@@ -240,6 +307,7 @@ export default function AdminDashboard() {
       const data = await response.json();
       if (data.ok) {
         setUsersData(data.users);
+        setFilteredUsers(null); // Reset filter when data reloads
       } else {
         message.error(data.error || 'Failed to load users data');
       }
@@ -347,6 +415,55 @@ export default function AdminDashboard() {
     window.open(`/Editor/site?site=${site.id}&adminOverride=true`, '_blank');
   };
 
+  const handleChangeTier = async (userToUpdate, newTier) => {
+    // Prevent changing your own tier to non-admin
+    if (userToUpdate.uid === user?.uid && newTier !== 'admin') {
+      Modal.confirm({
+        title: 'Warning: Changing Your Own Admin Status',
+        content: `You are about to change your own tier from admin to ${newTier}. This will revoke your admin access. Are you sure you want to continue?`,
+        okText: 'Yes, Change My Tier',
+        okType: 'danger',
+        cancelText: 'Cancel',
+        onOk: () => performTierChange(userToUpdate, newTier)
+      });
+    } else {
+      performTierChange(userToUpdate, newTier);
+    }
+  };
+
+  const performTierChange = async (userToUpdate, newTier) => {
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/admin/platform/users/update-tier', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          userId: userToUpdate.uid,
+          newTier: newTier
+        })
+      });
+      
+      const data = await response.json();
+      if (data.ok) {
+        message.success(`Successfully changed ${userToUpdate.displayName || userToUpdate.email}'s tier to ${newTier}`);
+        loadUsersData(); // Refresh the users list
+        
+        // If user changed their own tier away from admin, redirect after a delay
+        if (userToUpdate.uid === user?.uid && newTier !== 'admin') {
+          setTimeout(() => {
+            message.info('Redirecting you to the main dashboard...');
+            router.push('/dashboard');
+          }, 2000);
+        }
+      } else {
+        message.error(data.error || 'Failed to update user tier');
+      }
+    } catch (error) {
+      console.error('Error updating user tier:', error);
+      message.error('Failed to update user tier');
+    }
+  };
+
   const exportData = async (type) => {
     try {
       const headers = await getAuthHeaders();
@@ -409,6 +526,105 @@ export default function AdminDashboard() {
       }
     ]
   });
+
+  // User actions dropdown
+  const getUserActions = (userRecord) => {
+    const currentTier = userRecord.tier || userRecord.subscriptionTier || userRecord.subscription?.plan || 'free';
+    const isCurrentUser = userRecord.uid === user?.uid;
+    
+    return {
+      items: [
+        {
+          key: 'change-tier',
+          icon: <EditOutlined />,
+          label: 'Change Tier',
+          children: [
+            {
+              key: 'tier-free',
+              label: (
+                <span>
+                  Free {currentTier === 'free' && '✓'}
+                  {isCurrentUser && currentTier !== 'free' && ' (Will lose admin access)'}
+                </span>
+              ),
+              onClick: () => handleChangeTier(userRecord, 'free'),
+              disabled: currentTier === 'free'
+            },
+            {
+              key: 'tier-pro',
+              label: (
+                <span>
+                  Pro {currentTier === 'pro' && '✓'}
+                  {isCurrentUser && currentTier !== 'pro' && ' (Will lose admin access)'}
+                </span>
+              ),
+              onClick: () => handleChangeTier(userRecord, 'pro'),
+              disabled: currentTier === 'pro'
+            },
+            {
+              key: 'tier-business',
+              label: (
+                <span>
+                  Business {currentTier === 'business' && '✓'}
+                  {isCurrentUser && currentTier !== 'business' && ' (Will lose admin access)'}
+                </span>
+              ),
+              onClick: () => handleChangeTier(userRecord, 'business'),
+              disabled: currentTier === 'business'
+            },
+            {
+              key: 'tier-admin',
+              label: (
+                <span style={{ color: '#dc3545', fontWeight: 'bold' }}>
+                  Admin {currentTier === 'admin' && '✓'}
+                </span>
+              ),
+              onClick: () => handleChangeTier(userRecord, 'admin'),
+              disabled: currentTier === 'admin'
+            }
+          ]
+        },
+        {
+          type: 'divider'
+        },
+        {
+          key: 'view-sites',
+          icon: <GlobalOutlined />,
+          label: 'View User\'s Sites',
+          onClick: () => {
+            // Filter sites table to show only this user's sites
+            setActiveTab('sites');
+            // You could add a filter here if needed
+          }
+        },
+        ...(isCurrentUser ? [] : [
+          {
+            type: 'divider'
+          },
+          {
+            key: 'view-profile',
+            icon: <UserOutlined />,
+            label: 'View Profile',
+            onClick: () => Modal.info({
+              title: `User Profile: ${userRecord.displayName || userRecord.email}`,
+              content: (
+                <div>
+                  <p><strong>Email:</strong> {userRecord.email}</p>
+                  <p><strong>Username:</strong> {userRecord.username || 'N/A'}</p>
+                  <p><strong>Tier:</strong> {currentTier}</p>
+                  <p><strong>Sites:</strong> {userRecord.siteCount || 0}</p>
+                  <p><strong>Total Views:</strong> {userRecord.totalViews?.toLocaleString() || '0'}</p>
+                  <p><strong>Joined:</strong> {userRecord.createdAt ? new Date(userRecord.createdAt).toLocaleDateString() : 'N/A'}</p>
+                  <p><strong>Last Active:</strong> {userRecord.lastActiveAt ? new Date(userRecord.lastActiveAt).toLocaleDateString() : 'Never'}</p>
+                </div>
+              ),
+              width: 500
+            })
+          }
+        ])
+      ]
+    };
+  };
 
   // Sites table columns
   const sitesColumns = [
@@ -493,15 +709,19 @@ export default function AdminDashboard() {
       title: 'Tier',
       dataIndex: 'tier',
       key: 'tier',
-      render: (tier) => (
-        <Tag color={
-          tier === 'admin' ? 'red' : 
-          tier === 'business' ? 'blue' : 
-          tier === 'pro' ? 'green' : 'default'
-        }>
-          {tier || 'free'}
-        </Tag>
-      )
+      render: (tier, record) => {
+        // Check multiple tier fields
+        const actualTier = record.tier || record.subscriptionTier || record.subscription?.plan || 'free';
+        return (
+          <Tag color={
+            actualTier === 'admin' ? 'red' : 
+            actualTier === 'business' ? 'blue' : 
+            actualTier === 'pro' ? 'green' : 'default'
+          }>
+            {actualTier}
+          </Tag>
+        );
+      }
     },
     {
       title: 'Sites',
@@ -527,6 +747,16 @@ export default function AdminDashboard() {
       dataIndex: 'lastActiveAt',
       key: 'lastActiveAt',
       render: (date) => date ? new Date(date).toLocaleDateString() : 'Never'
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 100,
+      render: (_, record) => (
+        <Dropdown menu={getUserActions(record)} trigger={['click']}>
+          <Button type="text" icon={<MoreOutlined />} />
+        </Dropdown>
+      )
     }
   ];
 
@@ -740,7 +970,7 @@ export default function AdminDashboard() {
                 <Col xs={24} sm={12} lg={6}>
                   <Card>
                     <Statistic
-                      title="Total Visitors"
+                      title={platformMetrics.analyticsSource?.includes('google-analytics') ? 'Total Visitors' : 'Total Visitors (Estimated)'}
                       value={platformMetrics.totalVisitors}
                       prefix={<EyeOutlined />}
                       suffix={
@@ -750,15 +980,29 @@ export default function AdminDashboard() {
                         </Tag>
                       }
                     />
+                    <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                      {platformMetrics.analyticsSource === 'google-analytics' 
+                        ? 'From Google Analytics (Individual Sites)' 
+                        : platformMetrics.analyticsSource === 'google-analytics-platform'
+                        ? 'From Google Analytics (Platform Property)'
+                        : 'Configure GA4 property IDs for real data'}
+                    </Text>
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                   <Card>
                     <Statistic
-                      title="Page Views"
+                      title={platformMetrics.analyticsSource?.includes('google-analytics') ? 'Page Views' : 'Page Views (Estimated)'}
                       value={platformMetrics.totalPageViews}
                       prefix={<BarChartOutlined />}
                     />
+                    <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                      {platformMetrics.analyticsSource === 'google-analytics' 
+                        ? 'From Google Analytics (Individual Sites)' 
+                        : platformMetrics.analyticsSource === 'google-analytics-platform'
+                        ? 'From Google Analytics (Platform Property)'
+                        : 'Configure GA4 property IDs for real data'}
+                    </Text>
                   </Card>
                 </Col>
               </Row>
@@ -933,7 +1177,45 @@ export default function AdminDashboard() {
               title="Platform Users"
               extra={
                 <Space>
-                  <Button icon={<FilterOutlined />}>Filter</Button>
+                  <Input.Search
+                    placeholder="Search users by email or username"
+                    allowClear
+                    style={{ width: 250 }}
+                    onChange={(e) => {
+                      const searchValue = e.target.value.toLowerCase();
+                      if (searchValue) {
+                        const filtered = usersData.filter(user => 
+                          user.email?.toLowerCase().includes(searchValue) ||
+                          user.username?.toLowerCase().includes(searchValue) ||
+                          user.displayName?.toLowerCase().includes(searchValue)
+                        );
+                        setFilteredUsers(filtered);
+                      } else {
+                        setFilteredUsers(usersData);
+                      }
+                    }}
+                  />
+                  <Select
+                    placeholder="Filter by tier"
+                    allowClear
+                    style={{ width: 120 }}
+                    onChange={(value) => {
+                      if (value) {
+                        const filtered = usersData.filter(user => {
+                          const userTier = user.tier || user.subscriptionTier || user.subscription?.plan || 'free';
+                          return userTier === value;
+                        });
+                        setFilteredUsers(filtered);
+                      } else {
+                        setFilteredUsers(usersData);
+                      }
+                    }}
+                  >
+                    <Select.Option value="free">Free</Select.Option>
+                    <Select.Option value="pro">Pro</Select.Option>
+                    <Select.Option value="business">Business</Select.Option>
+                    <Select.Option value="admin">Admin</Select.Option>
+                  </Select>
                   <Button icon={<ExportOutlined />} onClick={() => exportData('users')}>
                     Export
                   </Button>
@@ -942,11 +1224,11 @@ export default function AdminDashboard() {
             >
               <Table
                 columns={usersColumns}
-                dataSource={usersData}
+                dataSource={filteredUsers || usersData}
                 rowKey="uid"
                 loading={dataLoading}
                 pagination={{
-                  total: usersData.length,
+                  total: (filteredUsers || usersData).length,
                   pageSize: 50,
                   showSizeChanger: true,
                   showQuickJumper: true,

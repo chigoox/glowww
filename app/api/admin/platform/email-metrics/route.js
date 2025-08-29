@@ -19,7 +19,7 @@ export async function GET(request) {
     const user = await adminAuth.getUser(decodedToken.uid);
     
     // Check if user is admin
-    if (!user.customClaims?.admin && !user.customClaims?.tier === 'admin') {
+    if (!user.customClaims?.admin && user.customClaims?.tier !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
