@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../contexts/AuthContext';
+import MotionSection, { itemVariant } from '../../components/ui/MotionSection';
+import { motion } from 'framer-motion';
 import { signOut } from '../../lib/auth';
 
 function HomePage() {
@@ -38,25 +40,25 @@ function HomePage() {
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-8">
                 <a
-                  href="#features"
+                  href="/#features"
                   className="text-gray-700 hover:text-purple-600 px-3 py-2 text-sm font-medium"
                 >
                   Features
                 </a>
                 <a
-                  href="#pricing"
+                  href="/#pricing"
                   className="text-gray-700 hover:text-purple-600 px-3 py-2 text-sm font-medium"
                 >
                   Pricing
                 </a>
                 <a
-                  href="#templates"
+                  href="/marketplace"
                   className="text-gray-700 hover:text-purple-600 px-3 py-2 text-sm font-medium"
                 >
                   Templates
                 </a>
                 <a
-                  href="#about"
+                  href="/about"
                   className="text-gray-700 hover:text-purple-600 px-3 py-2 text-sm font-medium"
                 >
                   About
@@ -140,27 +142,27 @@ function HomePage() {
         {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-100">
+              <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-100">
               <a
-                href="#features"
+                href="/#features"
                 className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium"
               >
                 Features
               </a>
               <a
-                href="#pricing"
+                href="/#pricing"
                 className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium"
               >
                 Pricing
               </a>
               <a
-                href="#templates"
+                href="/marketplace"
                 className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium"
               >
                 Templates
               </a>
               <a
-                href="#about"
+                href="/about"
                 className="block text-gray-700 hover:text-purple-600 px-3 py-2 text-base font-medium"
               >
                 About
@@ -273,10 +275,10 @@ function HomePage() {
           </div>
 
           {/* Editor Interface */}
-          <div className="flex bg-gray-50 rounded-2xl overflow-hidden min-h-[600px] border border-gray-200">
-            {/* Left Sidebar - Toolbox */}
-            <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-              <div className="p-4 border-b border-gray-200">
+          <div className="flex flex-col md:flex-row bg-gray-50 rounded-2xl overflow-hidden min-h-[400px] md:min-h-[600px] border border-gray-200">
+            {/* Left Sidebar - Toolbox (stacks above canvas on small screens) */}
+            <div className="w-full md:w-64 bg-white md:border-r border-gray-200 flex flex-col">
+              <div className="p-3 md:p-4 border-b border-gray-200">
                 <h3 className="font-semibold text-gray-900 text-sm mb-3">
                   Components
                 </h3>
@@ -389,17 +391,17 @@ function HomePage() {
             </div>
 
             {/* Main Canvas Area */}
-            <div className="flex-1 bg-white relative overflow-hidden">
+            <div className="flex-1 bg-white relative overflow-hidden min-h-[400px] md:min-h-[600px]">
               {/* Canvas Background */}
               <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-white"></div>
 
               {/* Sample Website Being Built */}
-              <div className="relative h-full p-8">
-                <div className="max-w-4xl mx-auto">
+              <div className="relative h-full p-4 md:p-8 overflow-x-hidden">
+                <div className="max-w-full md:max-w-4xl mx-auto">
                   {/* Sample Content with drag handles and animations */}
                   <div className="space-y-8">
                     {/* Header Section */}
-                    <div className="group relative p-6 bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 transition-all duration-300 hover:shadow-lg cursor-pointer">
+                    <div className="group relative p-4 md:p-6 bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 transition-all duration-300 hover:shadow-lg cursor-pointer">
                       <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                         <div className="bg-purple-600 text-white px-2 py-1 rounded text-xs font-medium">
                           Edit Header
@@ -415,7 +417,7 @@ function HomePage() {
 
                     {/* Content Grid */}
                     <div className="grid md:grid-cols-2 gap-6">
-                      <div className="group relative p-6 bg-gradient-to-br from-blue-50 to-white rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 transition-all duration-300 hover:shadow-lg cursor-pointer">
+                      <div className="group relative p-4 md:p-6 bg-gradient-to-br from-blue-50 to-white rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 transition-all duration-300 hover:shadow-lg cursor-pointer">
                         <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                           <div className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
                             Edit Box
@@ -430,7 +432,7 @@ function HomePage() {
                         </p>
                       </div>
 
-                      <div className="group relative p-6 bg-gradient-to-br from-green-50 to-white rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 transition-all duration-300 hover:shadow-lg cursor-pointer">
+                      <div className="group relative p-4 md:p-6 bg-gradient-to-br from-green-50 to-white rounded-xl border-2 border-dashed border-gray-200 hover:border-green-300 transition-all duration-300 hover:shadow-lg cursor-pointer">
                         <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                           <div className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
                             Edit Image
@@ -528,9 +530,9 @@ function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <MotionSection className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Feature 1 */}
-            <div className="bg-gradient-to-br from-purple-50 to-white p-8 rounded-2xl border border-purple-100 hover:shadow-lg transition-all duration-200">
+            <motion.div variants={itemVariant} className="bg-gradient-to-br from-purple-50 to-white p-8 rounded-2xl border border-purple-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center mb-6">
                 <svg
                   className="w-6 h-6 text-white"
@@ -553,10 +555,10 @@ function HomePage() {
                 Intuitive visual editor that lets you build websites by simply
                 dragging and dropping elements exactly where you want them.
               </p>
-            </div>
+            </motion.div>
 
             {/* Feature 2 */}
-            <div className="bg-gradient-to-br from-blue-50 to-white p-8 rounded-2xl border border-blue-100 hover:shadow-lg transition-all duration-200">
+            <motion.div variants={itemVariant} className="bg-gradient-to-br from-blue-50 to-white p-8 rounded-2xl border border-blue-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-6">
                 <svg
                   className="w-6 h-6 text-white"
@@ -579,10 +581,10 @@ function HomePage() {
                 Every website you create automatically works perfectly on all
                 devices. Mobile-first design that scales beautifully.
               </p>
-            </div>
+            </motion.div>
 
             {/* Feature 3 */}
-            <div className="bg-gradient-to-br from-green-50 to-white p-8 rounded-2xl border border-green-100 hover:shadow-lg transition-all duration-200">
+            <motion.div variants={itemVariant} className="bg-gradient-to-br from-green-50 to-white p-8 rounded-2xl border border-green-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center mb-6">
                 <svg
                   className="w-6 h-6 text-white"
@@ -605,10 +607,10 @@ function HomePage() {
                 Optimized performance and clean code generation ensures your
                 websites load quickly and rank well in search engines.
               </p>
-            </div>
+            </motion.div>
 
             {/* Feature 4 */}
-            <div className="bg-gradient-to-br from-orange-50 to-white p-8 rounded-2xl border border-orange-100 hover:shadow-lg transition-all duration-200">
+            <motion.div variants={itemVariant} className="bg-gradient-to-br from-orange-50 to-white p-8 rounded-2xl border border-orange-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center mb-6">
                 <svg
                   className="w-6 h-6 text-white"
@@ -631,10 +633,10 @@ function HomePage() {
                 Start with beautiful templates for any industry - portfolios,
                 blogs, business sites, landing pages, and online stores.
               </p>
-            </div>
+            </motion.div>
 
             {/* Feature 5 */}
-            <div className="bg-gradient-to-br from-pink-50 to-white p-8 rounded-2xl border border-pink-100 hover:shadow-lg transition-all duration-200">
+            <motion.div variants={itemVariant} className="bg-gradient-to-br from-pink-50 to-white p-8 rounded-2xl border border-pink-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-pink-600 rounded-xl flex items-center justify-center mb-6">
                 <svg
                   className="w-6 h-6 text-white"
@@ -657,10 +659,10 @@ function HomePage() {
                 Built with enterprise-grade security and reliability. Your
                 websites are hosted on fast, secure infrastructure.
               </p>
-            </div>
+            </motion.div>
 
             {/* Feature 6 */}
-            <div className="bg-gradient-to-br from-indigo-50 to-white p-8 rounded-2xl border border-indigo-100 hover:shadow-lg transition-all duration-200">
+            <motion.div variants={itemVariant} className="bg-gradient-to-br from-indigo-50 to-white p-8 rounded-2xl border border-indigo-100 hover:shadow-lg transition-all duration-200">
               <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-6">
                 <svg
                   className="w-6 h-6 text-white"
@@ -683,8 +685,8 @@ function HomePage() {
                 Need to sell online? Built-in shopping cart, payment processing,
                 and inventory management make e-commerce simple.
               </p>
-            </div>
-          </div>
+            </motion.div>
+          </MotionSection>
 
           {/* Website Types Grid */}
           <div className="mt-20">
@@ -698,8 +700,8 @@ function HomePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100">
+            <MotionSection className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100">
                 <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -719,9 +721,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Showcase your work with stunning galleries and layouts
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-green-50 to-white rounded-xl border border-green-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-green-50 to-white rounded-xl border border-green-100">
                 <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -741,9 +743,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Create engaging content sites with rich text and media
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-100">
                 <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -765,9 +767,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Professional websites for companies and services
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-white rounded-xl border border-orange-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-orange-50 to-white rounded-xl border border-orange-100">
                 <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -789,9 +791,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Full e-commerce with payments and inventory management
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-pink-50 to-white rounded-xl border border-pink-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-pink-50 to-white rounded-xl border border-pink-100">
                 <div className="w-10 h-10 bg-pink-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -813,9 +815,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   High-converting pages for marketing campaigns
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-cyan-50 to-white rounded-xl border border-cyan-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-cyan-50 to-white rounded-xl border border-cyan-100">
                 <div className="w-10 h-10 bg-cyan-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -837,9 +839,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Knowledge bases and help centers
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-yellow-50 to-white rounded-xl border border-yellow-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-yellow-50 to-white rounded-xl border border-yellow-100">
                 <div className="w-10 h-10 bg-yellow-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -861,9 +863,9 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Conferences, weddings, and event management
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="text-center p-6 bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100">
+              <motion.div variants={itemVariant} className="text-center p-6 bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100">
                 <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <svg
                     className="w-5 h-5 text-white"
@@ -883,8 +885,8 @@ function HomePage() {
                 <p className="text-sm text-gray-600">
                   Fundraising and community organization sites
                 </p>
-              </div>
-            </div>
+              </motion.div>
+            </MotionSection>
           </div>
         </div>
       </section>
@@ -1311,9 +1313,9 @@ function HomePage() {
                 )}
               </>
             )}
-            <button className="border-2 border-white text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-white hover:text-purple-600 transition-all duration-200">
+              <a href="/examples" className="border-2 border-white text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-white hover:text-purple-600 transition-all duration-200 inline-block">
               View Website Examples
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -1335,22 +1337,22 @@ function HomePage() {
               <h3 className="text-lg font-semibold mb-4">Product</h3>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/#features" className="hover:text-white">
                     Features
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/marketplace" className="hover:text-white">
                     Templates
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/#pricing" className="hover:text-white">
                     Pricing
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/examples" className="hover:text-white">
                     Examples
                   </a>
                 </li>
@@ -1360,22 +1362,22 @@ function HomePage() {
               <h3 className="text-lg font-semibold mb-4">Support</h3>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/support" className="hover:text-white">
                     Help Center
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/documentation" className="hover:text-white">
                     Documentation
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/support" className="hover:text-white">
                     Contact Us
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/support" className="hover:text-white">
                     Community
                   </a>
                 </li>
@@ -1385,22 +1387,22 @@ function HomePage() {
               <h3 className="text-lg font-semibold mb-4">Company</h3>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/about" className="hover:text-white">
                     About
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/blog" className="hover:text-white">
                     Blog
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/careers" className="hover:text-white">
                     Careers
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white">
+                  <a href="/privacy" className="hover:text-white">
                     Privacy
                   </a>
                 </li>

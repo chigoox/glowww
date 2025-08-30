@@ -5,6 +5,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { CartProvider } from "../contexts/CartContext";
 import { EditorSettingsProvider } from "./Components/utils/context/EditorSettingsContext";
 import ThemeInitializer from "./Components/utils/ThemeInitializer";
+import PageTransition from "../components/ui/PageTransition";
 
 const geistSans = Oswald({
   variable: "--font-geist-sans",
@@ -42,7 +43,7 @@ export default function RootLayout({ children }) {
             <EditorSettingsProvider>
               <PagesProvider>
                 <ThemeInitializer />
-                {children}
+                <PageTransition>{children}</PageTransition>
               </PagesProvider>
             </EditorSettingsProvider>
           </CartProvider>
