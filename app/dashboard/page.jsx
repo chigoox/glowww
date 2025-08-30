@@ -227,7 +227,7 @@ export default function Dashboard() {
   // Auth redirect
   useEffect(() => {
     if (!authLoading && !user) {
-      window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = '/Login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search);
     }
   }, [user, authLoading]);
 
@@ -522,6 +522,18 @@ export default function Dashboard() {
     
     if (!currentUrl) {
       createForm.setFieldsValue({ siteUrl: sanitized });
+    }
+  };
+
+  // Extract main domain without www subdomain for display
+  const getMainDomain = () => {
+    if (typeof window === 'undefined') return 'glowbuildr.com';
+    try {
+      const hostname = window.location.hostname;
+      // Remove www. prefix if present
+      return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+    } catch {
+      return 'glowbuildr.com';
     }
   };
 
@@ -1862,7 +1874,7 @@ export default function Dashboard() {
           >
             <Input 
               placeholder="my-site" 
-              addonAfter={`.${window?.location?.hostname || 'glowbuildr.com'}`}
+              addonAfter={`.${getMainDomain()}`}
             />
           </Form.Item>
           

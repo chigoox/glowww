@@ -52,8 +52,39 @@ const FlipSiteCard = ({
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const username = user?.username || user?.displayName || 'user';
-  const siteName = site.subdomain || site.name;
+  const rawSiteName = site.subdomain || site.name;
+  
+  // Clean siteName to remove any www prefix and ensure it's lowercase
+  const siteName = rawSiteName ? rawSiteName.toLowerCase().replace(/^www\./, '') : 'site';
+  
   const origin = (typeof window !== 'undefined') ? window.location.origin : '';
+  
+  // Extract main domain without www subdomain
+  const getMainDomain = () => {
+    if (!origin) return 'glowbuildr.com';
+    try {
+      const hostname = new URL(origin).hostname;
+      // Remove www. prefix if present and any subdomain
+      let cleanDomain = hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+      
+      // If we're on localhost, return localhost:port
+      if (cleanDomain.includes('localhost')) {
+        return new URL(origin).host; // includes port
+      }
+      
+      // For production domains, ensure we get the root domain
+      const parts = cleanDomain.split('.');
+      if (parts.length >= 2) {
+        // Take the last two parts to get root domain (e.g., glowbuildr.com)
+        cleanDomain = parts.slice(-2).join('.');
+      }
+      
+      return cleanDomain;
+    } catch {
+      return 'glowbuildr.com';
+    }
+  };
+  
   const basePath = `${origin}/u/${username}/${siteName}`;
   const homePath = `${basePath}/home`;
   const [publicUrl, setPublicUrl] = useState(basePath);
@@ -453,9 +484,11 @@ const FlipSiteCard = ({
                 <Text style={{ 
                   color: 'rgba(255,255,255,0.8)', 
                   fontSize: '11px',
-                  textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                  textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.3px'
                 }}>
-                  {siteName}.{origin ? new URL(origin).hostname : 'glowbuildr.com'}
+                  {siteName}.{getMainDomain()}
                 </Text>
               </div>
 
@@ -590,7 +623,7 @@ const FlipSiteCard = ({
                 color: 'rgba(255,255,255,0.8)',
                 textShadow: '0 1px 2px rgba(0,0,0,0.3)'
               }}>
-                {siteName}.{origin ? new URL(origin).hostname : 'glowbuildr.com'}
+                {siteName}.{getMainDomain()}
               </Text>
             </div>
           </div>
