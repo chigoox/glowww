@@ -38,6 +38,7 @@ import {
 } from 'antd';
 import { FormInput } from '../Input';
 import ResizeHandles from '../support/ResizeHandles';
+import PortalControls from '../support/PortalControls';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
@@ -214,7 +215,7 @@ export const Form = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formPosition, setFormPosition] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [formPosition, setFormPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [isPositionTracked, setIsPositionTracked] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -380,8 +381,8 @@ useEffect(() => {
       const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
       
       setFormPosition({
-        x: rect.left + scrollLeft,
-        y: rect.top + scrollTop,
+        left: rect.left + scrollLeft,
+        top: rect.top + scrollTop,
         width: rect.width,
         height: rect.height
       });
@@ -719,38 +720,28 @@ useEffect(() => {
         )}
       </form>
 
-      {/* Portal Controls */}
-      {(isSelected || isHovered) && isPositionTracked && typeof document !== 'undefined' && 
-        createPortal(
-          <FormPortalControls
-            formPosition={formPosition}
+          <PortalControls
+            boxPosition={formPosition}
             isSelected={isSelected}
             isHovered={isHovered}
-            onEdit={handleEditClick}
             setProp={setProp}
-            updateFormPosition={updateFormPosition}
             nodeId={nodeId}
             dragRef={dragRef}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
+            updateBoxPosition={updateFormPosition}
+            
+            onEditClick={handleEditClick}
+            targetRef={formRef}
             editorActions={editorActions}
-            formRef={formRef}
-          />,
-          document.body
-        )
-      }
+            craftQuery={query}
+            minWidth={typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50}
+            minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
+            onResize={updateFormPosition}
+            onResizeEnd={updateFormPosition}
+          />
 
-      <ResizeHandles 
-          boxPosition={formPosition} 
-          nodeId={nodeId}
-          targetRef={formRef}
-          editorActions={editorActions}
-          craftQuery={query}
-          minWidth={typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50}
-          minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
-          onResize={updateFormPosition}
-          onResizeEnd={updateFormPosition}
-        />
+      
 
       {/* Configuration Modal */}
       <Modal
@@ -872,137 +863,7 @@ useEffect(() => {
   );
 };
 
-// Portal Controls Component
-const FormPortalControls = ({ 
-  formPosition, 
-  isSelected, 
-  isHovered, 
-  onEdit, 
-  setProp, 
-  updateFormPosition, 
-  nodeId, 
-  dragRef, 
-  isDragging, 
-  setIsDragging,
-  editorActions,
-  formRef
-}) => {
-  const [isResizing, setIsResizing] = useState(false);
 
-  if (typeof window === 'undefined') return null; // SSR check
-
-
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 999999
-      }}
-    >
-      {/* Combined pill-shaped drag controls */}
-      <div
-        style={{
-          position: 'absolute',
-          top: formPosition.y - 28,
-          left: formPosition.x + formPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left - MOVE (Craft.js drag) */}
-        <div
-          ref={dragRef}
-          data-cy="move-handle"
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '2px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        {/* Center - EDIT (Configuration) */}
-        <div
-          style={{
-            background: '#722ed1',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onClick={onEdit}
-          onMouseDown={(e) => e.stopPropagation()}
-          title="Edit form settings"
-        >
-          ⚙️ EDIT
-        </div>
-
-        {/* Right - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            console.log(`Form moved to ${x}, ${y}, snapped: ${snapped}`);
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
-
-      
-      
-    </div>,
-    document.body
-  );
-};
 
 // Drop area component
 export const FormInputDropArea = ({ children }) => {

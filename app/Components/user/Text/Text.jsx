@@ -1,16 +1,12 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { useNode, useEditor } from "@craftjs/core";
+import { useEditor, useNode } from "@craftjs/core";
+import { useEffect, useRef, useState } from "react";
 import ContextMenu from "../../utils/context/ContextMenu";
-import { useContextMenu } from "../../utils/hooks/useContextMenu";
+import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import useEditorDisplay from "../../utils/context/useEditorDisplay";
 import { useCraftSnap } from "../../utils/craft/useCraftSnap";
-import SnapPositionHandle from "../../editor/SnapPositionHandle";
-import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
-import { useMultiSelect } from '../../utils/context/MultiSelectContext';
-import ResizeHandles from "../support/ResizeHandles";
+import PortalControls from "../support/PortalControls";
 
 export const Text = ({
   // Content
@@ -57,12 +53,10 @@ export const Text = ({
   paddingLeft,
   paddingX,
   paddingY,
-  
-  // Border
+  // Border defaults and individual sides
   border = "none",
-  borderWidth = 0,
+  borderWidth,
   borderStyle = "solid",
-  borderColor = "#000000",
   borderTopWidth,
   borderRightWidth,
   borderBottomWidth,
@@ -100,6 +94,10 @@ export const Text = ({
   textTransform = "none",
   textIndent = 0,
   textShadow = "",
+  // Glyph stroke (text border)
+  textStrokeEnabled = false,
+  textStrokeWidth = 0,
+  textStrokeColor = '#000000',
   verticalAlign = "baseline",
   whiteSpace = "normal",
   wordBreak = "normal",
@@ -261,13 +259,28 @@ export const Text = ({
 
   const textRef = useRef(null);
   const dragRef = useRef(null);
+  const contentRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  // removed border panel state (text-stroke is kept)
   const [localText, setLocalText] = useState(text);
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [textShadowPreset, setTextShadowPreset] = useState('none');
+  const [textShadowBlur, setTextShadowBlur] = useState(2);
+  const [textShadowColor, setTextShadowColor] = useState(textShadow || '#000000');
+  const [boxShadowPreset, setBoxShadowPreset] = useState('none');
+  const [boxShadowBlur, setBoxShadowBlur] = useState(8);
+  // Offsets and colors for shadows
+  const [textShadowOffsetX, setTextShadowOffsetX] = useState(0);
+  const [textShadowOffsetY, setTextShadowOffsetY] = useState(0);
+  const [boxShadowOffsetX, setBoxShadowOffsetX] = useState(0);
+  const [boxShadowOffsetY, setBoxShadowOffsetY] = useState(0);
+  const [boxShadowColor, setBoxShadowColor] = useState('#000000');
+  // Which dropdown is currently open ('textShadow' | 'boxShadow' | null)
+  const [openDropdown, setOpenDropdown] = useState(null);
   // Safe numeric min constraints (respect explicit 0 instead of falsy fallback)
   const safeMinWidth = (() => {
     if (typeof minWidth === 'number') return minWidth;
@@ -342,15 +355,100 @@ export const Text = ({
     }
   };
 
+  // Helper to apply live style updates to the actual text element (span/p)
+  const applyToContent = (fn) => {
+    try {
+      const el = contentRef.current || (textRef.current && textRef.current.querySelector && textRef.current.querySelector('p')) || textRef.current;
+      if (el) fn(el);
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  // Generate a multi-layer text-shadow to approximate a stroke for non-webkit browsers
+  const generateStrokeTextShadow = (width = 1, color = '#000000') => {
+    // Limit width for performance
+    const w = Math.min(6, Math.max(0, Math.round(width)));
+    if (w === 0) return '';
+    const steps = [];
+    // create offsets around the glyph (8 directions) for each radius step
+    for (let r = 1; r <= w; r++) {
+      const offsets = [
+        `${-r}px ${-r}px 0 ${color}`,
+        `${-r}px 0px 0 ${color}`,
+        `${-r}px ${r}px 0 ${color}`,
+        `0px ${-r}px 0 ${color}`,
+        `0px ${r}px 0 ${color}`,
+        `${r}px ${-r}px 0 ${color}`,
+        `${r}px 0px 0 ${color}`,
+        `${r}px ${r}px 0 ${color}`
+      ];
+      steps.push(...offsets);
+    }
+    return steps.join(', ');
+  };
+
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // initialize shadow presets from props
+  useEffect(() => {
+    if (textShadow && textShadow !== '') {
+      setTextShadowPreset('soft');
+      // try to parse a blur value
+      const m = textShadow.match(/\s(\d+)px\s(\d+)px/);
+      if (m) setTextShadowBlur(Number(m[2]));
+    }
+    if (boxShadow && boxShadow !== 'none') {
+      setBoxShadowPreset('soft');
+      const m = boxShadow.match(/\s(\d+)px\s(\d+)px/);
+      if (m) setBoxShadowBlur(Number(m[2]));
+    }
+  }, []);
+
+  // Apply stroke and derived styles to content on mount / prop change
+  useEffect(() => {
+    if (!contentRef.current) return;
+    applyToContent((el) => {
+      try {
+        if (textStrokeEnabled) {
+          // apply webkit stroke when available
+          el.style.webkitTextStroke = `${textStrokeWidth}px ${textStrokeColor}`;
+          // also apply a text-shadow fallback for browsers without -webkit-text-stroke
+          const fallback = generateStrokeTextShadow(textStrokeWidth, textStrokeColor);
+          // merge with any existing textShadow property (preserve drop shadow)
+          const originalShadow = textShadow || '';
+          el.style.textShadow = [fallback, originalShadow].filter(Boolean).join(', ');
+        } else {
+          el.style.webkitTextStroke = '';
+          el.style.textShadow = textShadow || '';
+        }
+      } catch (err) {}
+    });
+  }, [textStrokeEnabled, textStrokeWidth, textStrokeColor, textShadow]);
 
   useEffect(() => {
     if (!isEditing) {
       setLocalText(text);
     }
   }, [text, isEditing]);
+
+  // Close any open dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isEditing || !openDropdown) return;
+    const handleClick = (e) => {
+      const inside = e.target.closest && e.target.closest('[data-font-controls]');
+      if (!inside) setOpenDropdown(null);
+    };
+    const handleKey = (e) => { if (e.key === 'Escape') setOpenDropdown(null); };
+    document.addEventListener('click', handleClick, true);
+    document.addEventListener('keydown', handleKey, true);
+    return () => {
+      document.removeEventListener('click', handleClick, true);
+      document.removeEventListener('keydown', handleKey, true);
+    };
+  }, [isEditing, openDropdown]);
 
   useEffect(() => {
     const connectElements = () => {
@@ -532,64 +630,62 @@ export const Text = ({
   };
 
   const handleBlur = (e) => {
-    // Don't exit edit mode if clicking on font controls or related elements
-    const relatedTarget = e.relatedTarget;
-    if (relatedTarget) {
-      // Check if the related target is a font control element
-      const isControlElement = relatedTarget.tagName === 'BUTTON' || 
-                              relatedTarget.tagName === 'SELECT' || 
-                              relatedTarget.tagName === 'INPUT' ||
-                              relatedTarget.type === 'color' ||
-                              relatedTarget.closest('[data-font-controls]');
-      
-      if (isControlElement) {
-        // Keep focus on the text element
-        setTimeout(() => {
-          if (textRef.current) {
-            textRef.current.focus();
-          }
-        }, 0);
+    // Delay exit to let the clicked control receive focus first.
+    // If the newly focused element is inside our font controls, keep editing open.
+    setTimeout(() => {
+      const active = document.activeElement;
+      const isControlElement = active && (active.tagName === 'BUTTON' || active.tagName === 'SELECT' || active.tagName === 'INPUT' || (active.type === 'color'));
+      const isInsideControls = active && active.closest && active.closest('[data-font-controls]');
+      if (isControlElement || isInsideControls) {
+        // keep editing open
         return;
       }
-    }
-    
-    // Exit editing mode
-    setIsEditing(false);
-    setProp(props => {
-      props.text = localText;
-    });
+
+      // Otherwise commit and exit edit mode
+      setIsEditing(false);
+      setProp(props => {
+        props.text = localText;
+      });
+    }, 0);
   };
 
   // Add global click handler to exit edit mode when clicking outside
   useEffect(() => {
     if (!isEditing) return;
 
-    const handleGlobalClick = (e) => {
-      // Check if click is inside the text element or font controls
-      if (!textRef.current) return;
-      
-      const isInsideText = textRef.current.contains(e.target);
-      const isInsideControls = e.target.closest('[data-font-controls]') || 
-                              e.target.tagName === 'BUTTON' ||
-                              e.target.tagName === 'SELECT' ||
-                              e.target.tagName === 'INPUT';
-      
-      if (!isInsideText && !isInsideControls) {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
         setIsEditing(false);
-        setProp(props => {
-          props.text = localText;
-        });
+        setProp(props => { props.text = localText; });
       }
     };
 
-    // Add listener with a slight delay to avoid immediate closing
+    const handleGlobalClick = (e) => {
+      // Check if click is inside the text element or font controls
+      if (!textRef.current) return;
+
+      const isInsideText = textRef.current.contains(e.target);
+      const isInsideControls = e.target.closest && (e.target.closest('[data-font-controls]') ||
+                              e.target.tagName === 'BUTTON' ||
+                              e.target.tagName === 'SELECT' ||
+                              e.target.tagName === 'INPUT');
+
+      if (!isInsideText && !isInsideControls) {
+        setIsEditing(false);
+        setProp(props => { props.text = localText; });
+      }
+    };
+
+    // Add listeners with a slight delay to avoid immediate closing when opening controls
     const timer = setTimeout(() => {
       document.addEventListener('click', handleGlobalClick, true);
+      document.addEventListener('keydown', handleEsc, true);
     }, 100);
-    
+
     return () => {
       clearTimeout(timer);
       document.removeEventListener('click', handleGlobalClick, true);
+      document.removeEventListener('keydown', handleEsc, true);
     };
   }, [isEditing, localText, setProp]);
 
@@ -661,29 +757,23 @@ export const Text = ({
       ? `${processValue(borderTopLeftRadius || borderRadius, 'borderRadius')} ${processValue(borderTopRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomLeftRadius || borderRadius, 'borderRadius')}`
       : processValue(borderRadius, 'borderRadius'),
     
-    // Typography
-    fontFamily,
-    fontSize: processValue(fontSize, 'fontSize'),
-    fontWeight,
-    fontStyle,
-    fontVariant,
-    fontStretch,
-    lineHeight,
-    letterSpacing: processValue(letterSpacing, 'letterSpacing'),
-    wordSpacing: processValue(wordSpacing, 'wordSpacing'),
-    textAlign,
-    textDecoration,
-    textTransform,
-    textIndent: processValue(textIndent, 'textIndent'),
-    textShadow: textShadow || undefined,
-    verticalAlign,
-    whiteSpace,
-    wordBreak,
-    wordWrap,
+  // Typography (moved to inner content span to avoid leaking into editor UI)
+  fontVariant,
+  fontStretch,
+  lineHeight,
+  letterSpacing: processValue(letterSpacing, 'letterSpacing'),
+  wordSpacing: processValue(wordSpacing, 'wordSpacing'),
+  textAlign,
+  textDecoration,
+  textTransform,
+  textIndent: processValue(textIndent, 'textIndent'),
+  verticalAlign,
+  whiteSpace,
+  wordBreak,
+  wordWrap,
     
-    // Colors & Backgrounds
-    color,
-    backgroundColor: backgroundColor !== "transparent" ? backgroundColor : (background ? background : undefined),
+  // Colors & Backgrounds (color moved to inner content to avoid UI leakage)
+  backgroundColor: backgroundColor !== "transparent" ? backgroundColor : (background ? background : undefined),
     backgroundImage: backgroundImage || undefined,
     backgroundSize,
     backgroundRepeat,
@@ -748,11 +838,10 @@ export const Text = ({
     transition: transition || undefined,
     animation: animation || undefined,
     
-    // Effects & Filters
-    opacity,
-    filter: filter || undefined,
-    backdropFilter: backdropFilter || undefined,
-    boxShadow: boxShadow !== "none" ? boxShadow : undefined,
+  // Effects & Filters (boxShadow moved to content to avoid affecting toolbar)
+  opacity,
+  filter: filter || undefined,
+  backdropFilter: backdropFilter || undefined,
     clipPath: clipPath || undefined,
     mask: mask || undefined,
     mixBlendMode,
@@ -785,6 +874,17 @@ export const Text = ({
       delete computedStyles[key];
     }
   });
+
+  // Styles to apply specifically to the inner text element so toolbar won't inherit them
+  const contentStyles = {
+    fontFamily,
+    fontSize: processValue(fontSize, 'fontSize'),
+    fontWeight,
+    fontStyle,
+    color,
+    textShadow: textShadow || undefined,
+    WebkitTextStroke: textStrokeEnabled ? `${textStrokeWidth}px ${textStrokeColor}` : undefined
+  };
 
   return (
     <div
@@ -847,14 +947,12 @@ export const Text = ({
           <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
-          handleEditClick={handleEditClick}
           nodeId={nodeId}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
-        />
-        <ResizeHandles 
-          boxPosition={boxPosition} 
-          nodeId={nodeId}
+          updateBoxPosition={updateBoxPosition}
+
+          onEditClick={handleEditClick}
           targetRef={textRef}
           editorActions={editorActions}
           craftQuery={query}
@@ -863,12 +961,13 @@ export const Text = ({
           onResize={updateBoxPosition}
           onResizeEnd={updateBoxPosition}
         />
+      
         </div>
       )}
       
       {/* Text content - editable span */}
-      {isEditing ? (
-        <span
+          {isEditing ? (
+        <p
           ref={textRef}
           contentEditable={true}
           onBlur={handleBlur}
@@ -886,85 +985,42 @@ export const Text = ({
           }}
           suppressContentEditableWarning={true}
         >
-          {localText}
-        </span>
+          <span ref={contentRef} style={contentStyles}>{localText}</span>
+        </p>
       ) : (
-        <span
+        <p
           style={{
             display: 'block',
             width: '100%',
             minHeight: '1em'
           }}
         >
-          {text}
-        </span>
+          <span ref={contentRef} style={contentStyles}>{text}</span>
+        </p>
       )}
       {/* Enhanced editing controls */}
-      {isEditing && (
+          {isEditing && (
         <div style={{
           position: 'absolute',
           top: -120,
-          left: '50%',
+          left: '25%',
           transform: 'translateX(-50%)',
           zIndex: 2147483647,
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-          width: '500px',
-          minWidth: '500px'
+          width: 'min(780px, 100%)',
+          minWidth: 240,
+          padding: '8px'
         }}>
-          {/* Top row - Exit button and status */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            width: '100%',
-            minWidth: '480px'
-          }}>
-            <div style={{
-              fontSize: '11px',
-              background: 'linear-gradient(135deg, #722ed1, #9254de)',
-              color: 'white',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(114, 46, 209, 0.3)',
-              border: '1px solid rgba(255,255,255,0.2)'
-            }}>
-              ✏️ EDITING MODE
-            </div>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsEditing(false);
-                setProp(props => {
-                  props.text = localText;
-                });
-              }}
-              onMouseDown={(e) => e.preventDefault()}
-              style={{
-                fontSize: '11px',
-                background: 'linear-gradient(135deg, #ff4d4f, #ff7875)',
-                color: 'white',
-                border: 'none',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(255, 77, 79, 0.3)',
-                transition: 'transform 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-            >
-              EXIT
-            </button>
-          </div>
+          {/* Top status row removed to keep the editor popup to a single compact row */}
 
           {/* Font controls row */}
-          <div 
+            <div 
             data-font-controls="true"
             style={{
               display: 'flex',
+      
               gap: '8px',
               background: 'rgba(255, 255, 255, 0.98)',
               padding: '12px',
@@ -973,20 +1029,32 @@ export const Text = ({
               border: '1px solid rgba(255, 255, 255, 0.2)',
               backdropFilter: 'blur(16px)',
               alignItems: 'center',
-              width: '100%',
-              minWidth: '480px'
+              width: '34rem',
+              flexWrap: 'nowrap',
+              WebkitOverflowScrolling: 'touch',
+              whiteSpace: 'nowrap',
+              // Prevent the component-level text styles from leaking into the controls
+              color: 'initial',
+              fontFamily: 'initial',
+              fontSize: '13px'
             }}
-            onMouseDown={(e) => e.preventDefault()} // Prevent blur on mouse down
             onClick={(e) => e.stopPropagation()} // Prevent event bubbling
           >
             {/* Font Family */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>FONT</label>
-              <select
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: '0 0 auto' }}>
+              <label style={{ display: 'none' }}>FONT</label>
+                <select
                 value={fontFamily}
-                onChange={(e) => setProp(props => props.fontFamily = e.target.value)}
-                onMouseDown={(e) => e.preventDefault()}
-                onFocus={(e) => e.preventDefault()}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  // persist to props
+                  setProp(props => props.fontFamily = v);
+                  // apply live while editing so user sees immediate change
+                  if (isEditing) {
+                    try { applyToContent(el => el.style.fontFamily = v); } catch (e) {}
+                  }
+                }}
+                
                 style={{
                   fontSize: '11px',
                   padding: '6px 10px',
@@ -994,7 +1062,7 @@ export const Text = ({
                   border: '1px solid #e0e0e0',
                   background: 'white',
                   cursor: 'pointer',
-                  minWidth: '110px',
+                  minWidth: '80px',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                   transition: 'all 0.2s ease'
                 }}
@@ -1009,26 +1077,32 @@ export const Text = ({
                 <option value="Courier New, monospace">Courier</option>
                 <option value="Impact, sans-serif">Impact</option>
                 <option value="Comic Sans MS, cursive">Comic Sans</option>
-              </select>
+                </select>
             </div>
 
             {/* Font Size */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>SIZE</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: '0 0 auto' }}>
+              <label style={{ display: 'none' }}>SIZE</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <input
                   type="number"
                   value={parseInt(fontSize) || 16}
-                  onChange={(e) => setProp(props => props.fontSize = `${e.target.value}px`)}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onFocus={(e) => e.preventDefault()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const px = `${v}px`;
+                    setProp(props => props.fontSize = px);
+                    if (isEditing) {
+                      try { applyToContent(el => el.style.fontSize = px); } catch (e) {}
+                    }
+                  }}
+                  
                   style={{
                     fontSize: '11px',
                     padding: '6px 8px',
                     borderRadius: '8px',
                     border: '1px solid #e0e0e0',
                     background: 'white',
-                    width: '50px',
+                    width: '44px',
                     textAlign: 'center',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
                     transition: 'all 0.2s ease'
@@ -1038,13 +1112,13 @@ export const Text = ({
                   onMouseEnter={(e) => e.target.style.borderColor = '#722ed1'}
                   onMouseLeave={(e) => e.target.style.borderColor = '#e0e0e0'}
                 />
-                <span style={{ fontSize: '10px', color: '#999' }}>px</span>
+                <span style={{ display: 'none' }}>px</span>
               </div>
             </div>
 
             {/* Font Color */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>COLOR</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: '0 0 auto' }}>
+              <label style={{ display: 'none' }}>COLOR</label>
               <div style={{ 
                 position: 'relative',
                 borderRadius: '8px',
@@ -1054,12 +1128,17 @@ export const Text = ({
                 <input
                   type="color"
                   value={color}
-                  onChange={(e) => setProp(props => props.color = e.target.value)}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onFocus={(e) => e.preventDefault()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setProp(props => props.color = v);
+                    if (isEditing) {
+                      try { applyToContent(el => el.style.color = v); } catch (e) {}
+                    }
+                  }}
+                  
                   style={{
-                    width: '40px',
-                    height: '32px',
+                    width: '28px',
+                    height: '24px',
                     border: 'none',
                     cursor: 'pointer',
                     background: 'none'
@@ -1069,18 +1148,17 @@ export const Text = ({
             </div>
 
             {/* Style buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '9px', color: '#666', fontWeight: '500' }}>STYLE</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: '0 0 auto' }}>
+              <label style={{ display: 'none' }}>STYLE</label>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setProp(props => 
-                      props.fontWeight = props.fontWeight === 'bold' ? 'normal' : 'bold'
-                    );
+                    const newWeight = (fontWeight === 'bold') ? 'normal' : 'bold';
+                    setProp(props => props.fontWeight = newWeight);
+          if (isEditing) try { applyToContent(el => el.style.fontWeight = newWeight); } catch (e) {}
                   }}
-                  onMouseDown={(e) => e.preventDefault()}
                   style={{
                     fontSize: '12px',
                     padding: '6px 8px',
@@ -1114,11 +1192,10 @@ export const Text = ({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setProp(props => 
-                      props.fontStyle = props.fontStyle === 'italic' ? 'normal' : 'italic'
-                    );
+                    const newStyle = (fontStyle === 'italic') ? 'normal' : 'italic';
+                    setProp(props => props.fontStyle = newStyle);
+          if (isEditing) try { applyToContent(el => el.style.fontStyle = newStyle); } catch (e) {}
                   }}
-                  onMouseDown={(e) => e.preventDefault()}
                   style={{
                     fontSize: '12px',
                     padding: '6px 8px',
@@ -1149,6 +1226,109 @@ export const Text = ({
                 </button>
               </div>
             </div>
+
+            {/* Glyph stroke + compact shadow controls: everything fits on a single row using small buttons + dropdowns */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%', flexWrap: 'nowrap' }}>
+              {/* Glyph stroke compact */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); const v = !textStrokeEnabled; setProp(props => props.textStrokeEnabled = v); if (isEditing) applyToContent(el => { if (v) { el.style.webkitTextStroke = `${textStrokeWidth}px ${textStrokeColor}`; const fallback = generateStrokeTextShadow(textStrokeWidth, textStrokeColor); const original = textShadow || ''; el.style.textShadow = [fallback, original].filter(Boolean).join(', '); } else { el.style.webkitTextStroke = ''; el.style.textShadow = textShadow || ''; } }); }}
+                  aria-pressed={!!textStrokeEnabled}
+                  title={textStrokeEnabled ? 'Glyph stroke enabled' : 'Enable glyph stroke'}
+                  style={{ width: 34, height: 28, borderRadius: 8, border: textStrokeEnabled ? '1px solid #722ed1' : '1px solid #e0e0e0', background: textStrokeEnabled ? 'linear-gradient(135deg, #722ed1, #9254de)' : 'white', color: textStrokeEnabled ? 'white' : '#000', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >S</button>
+                <input
+                  type="color"
+                  value={textStrokeColor || '#000000'}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { const v = e.target.value; setProp(props => props.textStrokeColor = v); if (isEditing && textStrokeEnabled) applyToContent(el => { el.style.webkitTextStroke = `${textStrokeWidth}px ${v}`; const fallback = generateStrokeTextShadow(textStrokeWidth, v); const original = textShadow || ''; el.style.textShadow = [fallback, original].filter(Boolean).join(', '); }); }}
+                  style={{ width: 34, height: 28, border: 'none', padding: 2, cursor: 'pointer' }}
+                />
+                <input type="range" min={0} max={8} value={parseInt(textStrokeWidth) || 0} onClick={(e) => e.stopPropagation()} onChange={(e) => { const v = Number(e.target.value); setProp(props => props.textStrokeWidth = v); if (isEditing && textStrokeEnabled) applyToContent(el => { el.style.webkitTextStroke = `${v}px ${textStrokeColor}`; const fallback = generateStrokeTextShadow(v, textStrokeColor); const original = textShadow || ''; el.style.textShadow = [fallback, original].filter(Boolean).join(', '); }); }} style={{ width: 64 }} />
+              </div>
+
+              {/* Text shadow compact popover (controlled) */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === 'textShadow' ? null : 'textShadow'); }}
+                  aria-expanded={openDropdown === 'textShadow'}
+                  title="Text shadow"
+                  style={{ listStyle: 'none', cursor: 'pointer', padding: '6px 8px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)', background: textShadowPreset !== 'none' ? 'linear-gradient(180deg,#fafafa,#f3f3f3)' : 'white', fontSize: 12, minWidth: 40, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', transition: 'all 120ms ease' }}
+                >TS</button>
+                {openDropdown === 'textShadow' && (
+                  <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '40px', left: 0, zIndex: 100000, background: 'white', padding: 12, borderRadius: 12, boxShadow: '0 12px 40px rgba(15,15,15,0.12)', minWidth: 260, maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTextShadowPreset('none'); setProp(p => p.textShadow = ''); if (isEditing) applyToContent(el => el.style.textShadow = ''); }} style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', background: textShadowPreset === 'none' ? '#fbfbfb' : 'white', cursor: 'pointer', minWidth: 64 }}>None</button>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTextShadowPreset('soft'); const v = `0px ${textShadowOffsetY}px ${textShadowBlur}px ${textShadowColor}`; setProp(p => p.textShadow = v); if (isEditing) applyToContent(el => el.style.textShadow = v); }} style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', background: textShadowPreset === 'soft' ? '#fbfbfb' : 'white', cursor: 'pointer', minWidth: 64 }}>Soft</button>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTextShadowPreset('heavy'); const v = `1px ${textShadowOffsetY}px ${Math.round(textShadowBlur * 1.5)}px ${textShadowColor}`; setProp(p => p.textShadow = v); if (isEditing) applyToContent(el => el.style.textShadow = v); }} style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', background: textShadowPreset === 'heavy' ? '#fbfbfb' : 'white', cursor: 'pointer', minWidth: 64 }}>Heavy</button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+                      <label style={{ display: 'none' }}>Offset X</label>
+                      <input type="range" min={-12} max={12} value={textShadowOffsetX} onChange={(e) => { const v = Number(e.target.value); setTextShadowOffsetX(v); const style = textShadowPreset === 'heavy' ? `1px ${textShadowOffsetY}px ${Math.round(textShadowBlur * 1.5)}px ${textShadowColor}` : `0px ${textShadowOffsetY}px ${textShadowBlur}px ${textShadowColor}`; setProp(p => p.textShadow = style); if (isEditing) applyToContent(el => el.style.textShadow = style); }} style={{ width: 140 }} />
+                      <label style={{ display: 'none' }}>Offset Y</label>
+                      <input type="range" min={-12} max={12} value={textShadowOffsetY} onChange={(e) => { const v = Number(e.target.value); setTextShadowOffsetY(v); const style = textShadowPreset === 'heavy' ? `1px ${v}px ${Math.round(textShadowBlur * 1.5)}px ${textShadowColor}` : `0px ${v}px ${textShadowBlur}px ${textShadowColor}`; setProp(p => p.textShadow = style); if (isEditing) applyToContent(el => el.style.textShadow = style); }} style={{ width: 140 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <label style={{ fontSize: 12, color: '#333' }}>Blur</label>
+                        <input type="range" min={0} max={24} value={textShadowBlur} onChange={(e) => { const v = Number(e.target.value); setTextShadowBlur(v); const style = textShadowPreset === 'heavy' ? `1px ${textShadowOffsetY}px ${Math.round(v * 1.5)}px ${textShadowColor}` : `0px ${textShadowOffsetY}px ${v}px ${textShadowColor}`; setProp(p => p.textShadow = style); if (isEditing) applyToContent(el => el.style.textShadow = style); }} style={{ width: 160 }} />
+                      </div>
+                      <input type="color" value={textShadowColor} onChange={(e) => { const v = e.target.value; setTextShadowColor(v); const style = textShadowPreset === 'heavy' ? `1px ${textShadowOffsetY}px ${Math.round(textShadowBlur * 1.5)}px ${v}` : `0px ${textShadowOffsetY}px ${textShadowBlur}px ${v}`; setProp(p => { p.textShadow = style; p.textShadowColor = v; }); if (isEditing) applyToContent(el => el.style.textShadow = style); }} style={{ width: 36, height: 32, border: 'none', padding: 2, cursor: 'pointer', borderRadius: 6 }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Box shadow compact popover (controlled) */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === 'boxShadow' ? null : 'boxShadow'); }}
+                  aria-expanded={openDropdown === 'boxShadow'}
+                  title="Box shadow"
+                  style={{ listStyle: 'none', cursor: 'pointer', padding: '6px 8px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)', background: boxShadowPreset !== 'none' ? 'linear-gradient(180deg,#fafafa,#f3f3f3)' : 'white', fontSize: 12, minWidth: 40, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', transition: 'all 120ms ease' }}
+                >BS</button>
+                {openDropdown === 'boxShadow' && (
+                  <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '40px', left: 0, zIndex: 100000, background: 'white', padding: 12, borderRadius: 12, boxShadow: '0 12px 40px rgba(15,15,15,0.12)', minWidth: 260, maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBoxShadowPreset('none'); setProp(p => p.boxShadow = 'none'); if (isEditing) applyToContent(el => el.style.boxShadow = 'none'); }} style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', background: boxShadowPreset === 'none' ? '#fbfbfb' : 'white', cursor: 'pointer', minWidth: 64 }}>None</button>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBoxShadowPreset('soft'); const v = `${boxShadowOffsetX}px ${boxShadowOffsetY}px ${boxShadowBlur}px ${boxShadowColor}`; setProp(p => p.boxShadow = v); if (isEditing) applyToContent(el => el.style.boxShadow = v); }} style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', background: boxShadowPreset === 'soft' ? '#fbfbfb' : 'white', cursor: 'pointer', minWidth: 64 }}>Soft</button>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBoxShadowPreset('deep'); const v = `${boxShadowOffsetX}px ${boxShadowOffsetY}px ${boxShadowBlur * 2}px ${boxShadowColor}`; setProp(p => p.boxShadow = v); if (isEditing) applyToContent(el => el.style.boxShadow = v); }} style={{ padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)', background: boxShadowPreset === 'deep' ? '#fbfbfb' : 'white', cursor: 'pointer', minWidth: 64 }}>Deep</button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 6, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 12, color: '#333' }}>Offset X</label>
+                        <input type="range" min={-40} max={40} value={boxShadowOffsetX} onChange={(e) => { const v = Number(e.target.value); setBoxShadowOffsetX(v); const style = `${v}px ${boxShadowOffsetY}px ${boxShadowBlur}px ${boxShadowColor}`; setProp(p => p.boxShadow = style); if (isEditing) applyToContent(el => el.style.boxShadow = style); }} style={{ width: 160 }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 12, color: '#333' }}>Offset Y</label>
+                        <input type="range" min={-12} max={12} value={boxShadowOffsetY} onChange={(e) => { const v = Number(e.target.value); setBoxShadowOffsetY(v); const style = `${boxShadowOffsetX}px ${v}px ${boxShadowBlur}px ${boxShadowColor}`; setProp(p => p.boxShadow = style); if (isEditing) applyToContent(el => el.style.boxShadow = style); }} style={{ width: 140 }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 12, color: '#333' }}>Blur</label>
+                        <input type="range" min={0} max={80} value={boxShadowBlur} onChange={(e) => { const v = Number(e.target.value); setBoxShadowBlur(v); const style = `${boxShadowOffsetX}px ${boxShadowOffsetY}px ${v}px ${boxShadowColor}`; setProp(p => p.boxShadow = style); if (isEditing) applyToContent(el => el.style.boxShadow = style); }} style={{ width: 140 }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                        <label style={{ fontSize: 12, color: '#333' }}>Color</label>
+                        <input type="color" value={boxShadowColor} onChange={(e) => { const v = e.target.value; setBoxShadowColor(v); const style = `${boxShadowOffsetX}px ${boxShadowOffsetY}px ${boxShadowBlur}px ${v}`; setProp(p => p.boxShadow = style); if (isEditing) applyToContent(el => el.style.boxShadow = style); }} style={{ width: 40, height: 32, border: 'none', padding: 2, cursor: 'pointer', borderRadius: 6 }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+              {/* Compact exit button moved into the main controls row */}
+              <div style={{ marginLeft: 'auto' }}>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsEditing(false);
+                    setProp(props => { props.text = localText; });
+                  }}
+                  title="Exit"
+                  style={{ width: 36, height: 28, borderRadius: 8, border: '1px solid #e0e0e0', background: 'linear-gradient(135deg, #ff4d4f, #ff7875)', color: 'white', cursor: 'pointer' }}
+                >✕</button>
+              </div>
           </div>
         </div>
       )}
@@ -1167,135 +1347,6 @@ export const Text = ({
   );
 };
 
-// Portal Controls Component - renders outside of the Text to avoid overflow clipping
-const PortalControls = ({ 
-  boxPosition, 
-  dragRef, 
-  nodeId,
-  isDragging,
-  setIsDragging,
-  handleEditClick
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
-  
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 2147483646
-      }}
-    >
-      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000000
-        }}
-      >
-        {/* Left section - MOVE (Craft.js drag) */}
-        <div
-          ref={dragRef}
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Middle section - EDIT */}
-        <div
-          style={{
-            background: '#722ed1',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleEditClick(e);
-          }}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          title="Edit text content"
-        >
-          ✏️ EDIT
-        </div>
-        
-        {/* Right section - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            // Optional: Add visual feedback for snapping
-            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
-
-      
-    </div>,
-    document.body
-  );
-};
 
 // Define all supported props for the Text component
 Text.craft = {
@@ -1387,7 +1438,17 @@ Text.craft = {
     textDecoration: "none",
     textTransform: "none",
     textIndent: 0,
-    textShadow: "",
+  textShadow: "",
+  textShadowColor: '#000000',
+  textShadowOffsetX: 0,
+  textShadowOffsetY: 0,
+  // Glyph stroke (text border)
+  textStrokeEnabled: false,
+  textStrokeWidth: 0,
+  textStrokeColor: '#000000',
+    boxShadowColor: '#000000',
+    boxShadowOffsetX: 0,
+    boxShadowOffsetY: 0,
     verticalAlign: "baseline",
     whiteSpace: "normal",
     wordBreak: "normal",

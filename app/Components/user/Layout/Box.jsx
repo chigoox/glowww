@@ -10,6 +10,7 @@ import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import ResizeHandles from "../support/ResizeHandles";
+import PortalControls from "../support/PortalControls";
 
 export const Box = ({
   
@@ -216,90 +217,7 @@ placeContent,
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
-  // DEBUG: Test if programmatic move works and test container switching
-  useEffect(() => {
-    if (typeof window !== 'undefined' && nodeId) {
-      window.testCraftMove = (fromNodeId, toNodeId) => {
-        try {
-          console.log(`Testing programmatic move: ${fromNodeId} -> ${toNodeId}`);
-          editorActions.move(fromNodeId, toNodeId, 0);
-          console.log('✅ Programmatic move successful');
-          return true;
-        } catch (error) {
-          console.error('❌ Programmatic move failed:', error);
-          return false;
-        }
-      };
 
-      // Test container switching functionality with improved diagnostics
-      window.testContainerSwitching = () => {
-        try {
-          const nodes = query.getNodes();
-          console.log('🔍 Available nodes:', Object.keys(nodes));
-          
-          // Find all Box containers - use only Craft.js isCanvas() method
-          const containers = Object.entries(nodes).filter(([id, node]) => {
-            const isBox = node.data.displayName === 'Box';
-            const canAcceptDrops = query.node(id).isCanvas();
-            
-            console.log(`📦 Checking node ${id} (${node.data.displayName}):`, {
-              isBox,
-              canAcceptDrops,
-              hasRules: !!query.node(id).rules,
-              canDrop: query.node(id).rules?.canDrop?.() || false,
-              canMoveIn: query.node(id).rules?.canMoveIn?.() || false,
-            });
-            return isBox && canAcceptDrops;
-          });
-          console.log('📦 Canvas-enabled containers:', containers.map(([id, node]) => id));
-          
-          // Find all draggable elements (exclude ROOT and containers)
-          const elements = Object.entries(nodes).filter(([id, node]) => {
-            const isNotRoot = node.data.displayName !== 'Root' && id !== 'ROOT';
-            const isNotCanvas = !query.node(id).isCanvas();
-            const canBeDragged = query.node(id).rules?.canDrag?.() || false;
-            
-            return isNotRoot && isNotCanvas && canBeDragged;
-          });
-          console.log('🔧 Draggable elements:', elements.map(([id, node]) => ({ id, name: node.data.displayName })));
-          
-          // Additional diagnostics: Check connector status
-          window.testConnectors = () => {
-            elements.forEach(([id, node]) => {
-              const domElement = node.dom;
-              if (domElement) {
-                console.log(`🔗 Connector status for ${id}:`, {
-                  hasDom: !!domElement,
-                  hasDataCraftNodeId: domElement.getAttribute('data-craft-node-id'),
-                  craftDataAttribute: domElement.getAttribute('data-craft'),
-                  classList: Array.from(domElement.classList || [])
-                });
-              }
-            });
-          };
-          
-          if (containers.length >= 2 && elements.length >= 1) {
-            const [elementId] = elements[0];
-            const [containerId] = containers[1]; // Move to second container
-            
-            console.log(`🚚 Testing container switch: moving ${elementId} (${nodes[elementId].data.displayName}) to ${containerId} (${nodes[containerId].data.displayName})`);
-            editorActions.move(elementId, containerId, 0);
-            console.log('✅ Container switching test successful');
-            return true;
-          } else {
-            console.log('❌ Not enough canvas containers or draggable elements for testing', {
-              containers: containers.length,
-              elements: elements.length
-            });
-            return false;
-          }
-        } catch (error) {
-          console.error('❌ Container switching test failed:', error);
-          return false;
-        }
-      };
-    }
-  }, [nodeId, editorActions, query]);
 
   const cardRef = useRef(null);
   const dragRef = useRef(null);
@@ -693,19 +611,18 @@ placeContent,
             nodeId={nodeId}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
-          />
+            updateBoxPosition={updateBoxPosition}
 
-          <ResizeHandles 
-                      boxPosition={boxPosition} 
-                      nodeId={nodeId}
-                      targetRef={cardRef}
+            targetRef={cardRef}
                       editorActions={editorActions}
                       craftQuery={query}
                       minWidth={safeMinWidth}
                       minHeight={safeMinHeight}
                       onResize={updateBoxPosition}
                       onResizeEnd={updateBoxPosition}
-                    />
+          />
+
+   
 
         </div>
         
@@ -725,106 +642,7 @@ placeContent,
   );
 };
 
-// Portal Controls Component - renders outside of the Box to avoid overflow clipping
-const PortalControls = ({ 
-  boxPosition, 
-  dragRef, 
-  nodeId,
-  isDragging,
-  setIsDragging
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
-  
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999
-      }}
-    >
-      {/* Combined pill-shaped drag controls */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
-        <div
-          ref={dragRef}
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '2px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Right half - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            // Optional: Add visual feedback for snapping
-            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
 
-
- 
-    </div>,
-    document.body
-  );
-};
 
 // Define default props for Craft.js - these will be the initial values
 Box.craft = {

@@ -112,6 +112,9 @@ const SnapPositionHandle = ({
       canvasRect: containerRect // Use container rect instead of canvas rect
     };
 
+  // Track whether the pointer actually moved enough to consider this a drag
+  dragState.current.hasMoved = false;
+
     setIsDragging(true);
 
     // Register all elements for snapping (relative to the same container)
@@ -171,6 +174,11 @@ const SnapPositionHandle = ({
     const newX = startElementX + deltaX;
     const newY = startElementY + deltaY;
 
+    // Mark as moved only after a small threshold to ignore click/noop
+    if (!dragState.current.hasMoved && (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2)) {
+      dragState.current.hasMoved = true;
+    }
+
     // Get snap position from snap grid system
     console.log('🚀 About to call snapGridSystem.getSnapPosition', { nodeId, newX, newY, elementWidth, elementHeight });
     const snapResult = snapGridSystem.getSnapPosition(
@@ -195,8 +203,8 @@ const SnapPositionHandle = ({
     }
 
     // Store current position and mouse coordinates for enhanced movement on drag end
-    dragState.current.currentX = finalX;
-    dragState.current.currentY = finalY;
+  dragState.current.currentX = finalX;
+  dragState.current.currentY = finalY;
     dragState.current.mouseX = e.clientX;
     dragState.current.mouseY = e.clientY;
 
@@ -206,6 +214,12 @@ const SnapPositionHandle = ({
       dom.style.position = 'absolute';
       dom.style.left = `${finalX}px`;
       dom.style.top = `${finalY}px`;
+      // Freeze the element's visual size during dragging to avoid layout collapse
+      // (this prevents rem/% based widths from appearing to change when element is removed from flow)
+      try {
+        dom.style.width = `${elementWidth}px`;
+        dom.style.height = `${elementHeight}px`;
+      } catch (_) {}
     }
 
     // Also update Craft.js state to keep it in sync
@@ -273,8 +287,9 @@ const SnapPositionHandle = ({
     let percentTop = 0;
     const container = getParentContainer();
   const { elementWidth, elementHeight } = dragState.current;
-    let finalX = dragState.current.currentX || 0;
-    let finalY = dragState.current.currentY || 0;
+  // If no movement occurred, fall back to the original start positions
+  let finalX = (typeof dragState.current.currentX === 'number') ? dragState.current.currentX : dragState.current.startElementX;
+  let finalY = (typeof dragState.current.currentY === 'number') ? dragState.current.currentY : dragState.current.startElementY;
 
     if (container) {
       const containerRect = container.getBoundingClientRect();
@@ -309,32 +324,70 @@ const SnapPositionHandle = ({
       if (baseHeight) heightPercent = (elementHeight / baseHeight) * 100;
     }
 
-    setProp((props) => {
-      if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
-        props.left = formatPct(percentLeft);
-        props.top = formatPct(percentTop);
-        props.position = 'absolute';
-        if (widthPercent) props.width = formatPct(widthPercent);
-        if (heightPercent) props.height = formatPct(heightPercent);
-      } else if (props.style) {
-        props.style = {
-          ...props.style,
-          position: 'absolute',
-          left: formatPct(percentLeft),
-          top: formatPct(percentTop),
-          ...(widthPercent ? { width: formatPct(widthPercent) } : {}),
-          ...(heightPercent ? { height: formatPct(heightPercent) } : {})
+    // Only commit position changes if the user actually dragged the handle.
+    if (dragState.current.hasMoved) {
+  setProp((props) => {
+        // Decide whether to persist width/height changes.
+        // Only commit size if the original props used numeric-style units (px or %),
+        // to avoid replacing sensible defaults like "16rem" on Text components.
+        const originalWidth = (props && props.width) || (props && props.style && props.style.width);
+        const originalHeight = (props && props.height) || (props && props.style && props.style.height);
+
+        const isNumericUnit = (v) => {
+          if (v === undefined || v === null) return false;
+          if (typeof v === 'number') return true;
+          if (typeof v === 'string') {
+            const s = v.trim();
+            return s.endsWith('px') || s.endsWith('%');
+          }
+          return false;
         };
-      } else {
-        props.style = {
-          position: 'absolute',
-          left: formatPct(percentLeft),
-          top: formatPct(percentTop),
-          ...(widthPercent ? { width: formatPct(widthPercent) } : {}),
-          ...(heightPercent ? { height: formatPct(heightPercent) } : {})
-        };
-      }
-    });
+
+        const commitSize = isNumericUnit(originalWidth) || isNumericUnit(originalHeight);
+
+        if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
+          props.left = formatPct(percentLeft);
+          props.top = formatPct(percentTop);
+          props.position = 'absolute';
+          if (commitSize && widthPercent) props.width = formatPct(widthPercent);
+          if (commitSize && heightPercent) props.height = formatPct(heightPercent);
+        } else if (props.style) {
+          props.style = {
+            ...props.style,
+            position: 'absolute',
+            left: formatPct(percentLeft),
+            top: formatPct(percentTop),
+            ...(commitSize && widthPercent ? { width: formatPct(widthPercent) } : {}),
+            ...(commitSize && heightPercent ? { height: formatPct(heightPercent) } : {})
+          };
+        } else {
+          props.style = {
+            position: 'absolute',
+            left: formatPct(percentLeft),
+            top: formatPct(percentTop),
+            ...(commitSize && widthPercent ? { width: formatPct(widthPercent) } : {}),
+            ...(commitSize && heightPercent ? { height: formatPct(heightPercent) } : {})
+          };
+        }
+      });
+        // If we didn't commit size but we added inline px sizes for dragging, clear them so
+        // the component's original sizing (e.g. rem) is preserved by CSS on next render.
+        const originalWidth = (typeof dragState.current.originalWidth !== 'undefined') ? dragState.current.originalWidth : null;
+        const originalHeight = (typeof dragState.current.originalHeight !== 'undefined') ? dragState.current.originalHeight : null;
+        // If commitSize was false (we didn't write width/height), remove inline sizes
+        // (we can't access commitSize here directly, so infer from props by checking if props were numeric - re-evaluate quickly)
+        try {
+          // If element still has inline px width we set during dragging, remove it so CSS wins
+          if (dom && dom.style) {
+            dom.style.width = '';
+            dom.style.height = '';
+          }
+        } catch (_) {}
+    } else {
+      // No meaningful move detected: do not modify props. Keep DOM state as-is.
+      // Still clear snap indicators and cleanup tracked elements below.
+      console.log('SnapPositionHandle: click without drag - skipping position commit');
+    }
 
     // Clear snap indicators after a brief delay to keep them visible
     setTimeout(() => {

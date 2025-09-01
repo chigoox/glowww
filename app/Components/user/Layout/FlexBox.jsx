@@ -10,6 +10,7 @@ import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import ResizeHandles from "../support/ResizeHandles";
+import PortalControls from "../support/PortalControls";
 
 export const FlexBox = ({
   
@@ -725,10 +726,7 @@ placeContent,
             isDragging={isDragging}
             setIsDragging={setIsDragging}
             updateBoxPosition={updateBoxPosition}
-          />
-          <ResizeHandles 
-            boxPosition={boxPosition} 
-            nodeId={nodeId}
+
             targetRef={cardRef}
             editorActions={editorActions}
             craftQuery={query}
@@ -737,6 +735,7 @@ placeContent,
             onResize={updateBoxPosition}
             onResizeEnd={updateBoxPosition}
           />
+          
         </>
       )}
       {children}
@@ -754,108 +753,7 @@ placeContent,
   );
 };
 
-// Portal Controls Component - renders outside of the Box to avoid overflow clipping
-const PortalControls = ({ 
-  boxPosition, 
-  dragRef, 
-  handleResizeStart,
-  nodeId,
-  isDragging,
-  setIsDragging,
-  updateBoxPosition
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
-  
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999
-      }}
-    >
-      {/* Combined pill-shaped drag controls */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left half - MOVE (Craft.js drag) - Now interactive */}
-        <div
-          ref={dragRef}
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '2px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Right half - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-            updateBoxPosition?.();
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            updateBoxPosition?.();
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-            updateBoxPosition?.();
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
 
-  {/* Resize handles removed; now provided by <ResizeHandles /> */}
-    </div>,
-    document.body
-  );
-};
 
 // Define default props for Craft.js - these will be the initial values
 FlexBox.craft = {

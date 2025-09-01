@@ -12,6 +12,7 @@ import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import SnapPositionHandle from '../../editor/SnapPositionHandle';
 import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import ResizeHandles from "../support/ResizeHandles";
+import PortalControls from "../support/PortalControls";
 
 export const Video = ({
   // Video Source
@@ -432,14 +433,12 @@ export const Video = ({
           <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
-          handleEditClick={() => setShowMediaLibrary(true)}
           nodeId={nodeId}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
-        />
-        <ResizeHandles 
-          boxPosition={boxPosition} 
-          nodeId={nodeId}
+          updateBoxPosition={updateBoxPosition}
+
+          onEditClick={() => setShowMediaLibrary(true)}
           targetRef={videoRef}
           editorActions={editorActions}
           craftQuery={query}
@@ -448,6 +447,7 @@ export const Video = ({
           onResize={updateBoxPosition}
           onResizeEnd={updateBoxPosition}
         />
+
         </div>
       )}
 
@@ -499,128 +499,6 @@ export const Video = ({
   );
 };
 
-// Portal Controls Component
-const PortalControls = ({ 
-  boxPosition, 
-  dragRef,
-  handleEditClick,
-  nodeId,
-  isDragging,
-  setIsDragging
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
-
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999 
-      }}
-    >
-      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left section - MOVE (Craft.js drag) */}
-        <div
-          ref={dragRef}
-          data-cy="move-handle"
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Middle section - EDIT */}
-        <div
-          style={{
-            background: '#722ed1',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onClick={handleEditClick}
-          title="Change video"
-        >
-          🎬 EDIT
-        </div>
-        
-        {/* Right section - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            // Optional: Add visual feedback for snapping
-            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
-
-     
-    </div>,
-    document.body
-  );
-};
 
 // Craft configuration
 Video.craft = {

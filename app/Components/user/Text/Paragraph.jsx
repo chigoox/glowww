@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useRef, useEffect, useState } from "react";
+import { Drawer } from 'antd';
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
 import { EditOutlined } from '@ant-design/icons';
@@ -11,6 +12,7 @@ import useEditorDisplay from "../../utils/context/useEditorDisplay";
 import ResizeHandles from "../support/ResizeHandles";
 import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../../editor/SnapPositionHandle";
+import PortalControls from "../support/PortalControls";
 
 // Dynamically import the Editor to avoid SSR issues
 const Editor = dynamic(() => import('@tinymce/tinymce-react').then(mod => mod.Editor), {
@@ -89,6 +91,7 @@ export const Paragraph = ({
   const [isResizing, setIsResizing] = useState(false);
   const [boxPosition, setBoxPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [currentContent, setCurrentContent] = useState(content); // Track current editing content
+  const [isMobilePlacement, setIsMobilePlacement] = useState(false);
 
   // Track previous parent to detect container changes
   const prevParentRef = useRef(parent);
@@ -111,6 +114,14 @@ export const Paragraph = ({
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  // Determine placement (bottom on small screens)
+  useEffect(() => {
+    const detect = () => setIsMobilePlacement(window.innerWidth < 640);
+    detect();
+    window.addEventListener('resize', detect);
+    return () => window.removeEventListener('resize', detect);
   }, []);
 
   // Sync currentContent with content prop when not editing
@@ -301,76 +312,78 @@ export const Paragraph = ({
           <PortalControls
             boxPosition={boxPosition}
             dragRef={dragRef}
-            handleEditClick={handleEditClick}
             nodeId={nodeId}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
+            updateBoxPosition={updateBoxPosition}
+
+            onEditClick={handleEditClick}
+            targetRef={paragraphRef}
+            editorActions={editorActions}
+            craftQuery={query}
+            minWidth={typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50}
+            minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
+            onResize={updateBoxPosition}
+            onResizeEnd={updateBoxPosition}
           />
-        <ResizeHandles
-          boxPosition={boxPosition} 
-          nodeId={nodeId}
-          targetRef={paragraphRef}
-          editorActions={editorActions}
-          craftQuery={query}
-          minWidth={typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50}
-          minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
-          onResize={updateBoxPosition}
-          onResizeEnd={updateBoxPosition}
-        />
+   
         </div>
       )}
 
-      {/* Content display or editor */}
+      {/* Content display or editor (Drawer) */}
       {isEditing ? (
-        <div style={{ position: 'relative' }}>
-          {/* Editor controls */}
-          <div style={{
-            position: 'absolute',
-            top: -40,
-            right: 0,
-            zIndex: 1001,
-            display: 'flex',
-            gap: '8px'
-          }}>
-            <button
-              onClick={handleSaveEdit}
-              style={{
-                background: '#52c41a',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Save
-            </button>
-            <button
-              onClick={handleCancelEdit}
-              style={{
-                background: '#ff4d4f',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
+        <Drawer
+          title="Edit content"
+          open={isEditing}
+          onClose={handleCancelEdit}
+          placement={isMobilePlacement ? 'bottom' : 'right'}
+          width={isMobilePlacement ? '100%' : 520}
+          height={isMobilePlacement ? '50vh' : undefined}
+          getContainer={() => typeof document !== 'undefined' ? document.body : null}
+          style={{ zIndex: 10000 }}
+          footer={(
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={handleSaveEdit}
+                style={{
+                  background: '#52c41a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Save
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                style={{
+                  background: '#ff4d4f',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        >
+          <div style={{ minHeight: 120 }}>
+            <TinyMCEEditor
+              key={editorKey}
+              value={currentContent}
+              onInit={(evt, editor) => editorRef.current = editor}
+              height={isMobilePlacement ? 300 : editorHeight}
+              onChange={handleEditorChange}
+            />
           </div>
-
-          {/* TinyMCE Editor - only loads on client */}
-          <TinyMCEEditor
-            key={editorKey}
-            value={currentContent}
-            onInit={(evt, editor) => editorRef.current = editor}
-            height={editorHeight}
-            onChange={handleEditorChange}
-          />
-        </div>
+        </Drawer>
       ) : (
         // Display content when not editing - allow clicks to pass through for selection
         <div
@@ -396,123 +409,7 @@ export const Paragraph = ({
   );
 };
 
-// Portal Controls Component - renders outside of the Paragraph to avoid overflow clipping
-const PortalControls = ({ 
-  boxPosition, 
-  dragRef, 
-  handleEditClick,
-  nodeId,
-  isDragging,
-  setIsDragging
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
-  
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999
-      }}
-    >
-      {/* Combined pill-shaped controls with Edit button */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left - MOVE (Craft.js drag) */}
-        <div
-          ref={dragRef}
-          data-handle-type="move"
-            data-craft-node-id={nodeId}
-            className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '2px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Center - EDIT (Edit content) */}
-        <div
-          style={{
-            background: '#722ed1',
-            color: 'white',
-            padding: '2px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '36px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onClick={handleEditClick}
-          title="Edit paragraph content"
-        >
-          ✏️ EDIT
-        </div>
 
-        {/* Right - POS (Custom position drag) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={() => setIsDragging && setIsDragging(true)}
-          onDragMove={(e, { x, y, snapped }) => {
-            if (Math.random() < 0.05) {
-              console.log(`Paragraph position -> x:${x} y:${y} snapped:${snapped}`);
-            }
-          }}
-          onDragEnd={() => setIsDragging && setIsDragging(false)}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
-
-    
-    </div>,
-    document.body
-  );
-};
 
 // Craft configuration
 Paragraph.craft = {

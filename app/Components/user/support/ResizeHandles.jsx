@@ -99,6 +99,15 @@ export const ResizeHandles = ({
 
     const aspectRatio = startWidth / startHeight;
 
+    // Track whether the pointer actually moved enough to consider this a resize
+    let hasMoved = false;
+
+    // Freeze visual size during drag to avoid layout jumps when element is removed from flow
+    try {
+      targetRef.current.style.width = `${startWidth}px`;
+      targetRef.current.style.height = `${startHeight}px`;
+    } catch (_) {}
+
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
@@ -218,15 +227,25 @@ export const ResizeHandles = ({
         }
       }
 
-      editorActions.history.throttle(500).setProp(nodeId, (props) => {
-        props.width = Math.round(newWidth);
-        props.height = Math.round(newHeight);
-        if (direction.includes('w')) props.left = Math.round(newLeft);
-        if (direction.includes('n')) props.top = Math.round(newTop);
-        if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
-          props.position = 'absolute';
-        }
-      });
+      // Mark moved after a small threshold to ignore clicks without drag
+      if (!hasMoved && (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2)) {
+        hasMoved = true;
+      }
+
+      // Only commit intermediate prop updates while the user is actually resizing
+      if (hasMoved) {
+        editorActions.history.throttle(500).setProp(nodeId, (props) => {
+          props.width = Math.round(newWidth);
+          props.height = Math.round(newHeight);
+          if (direction.includes('w')) props.left = Math.round(newLeft);
+          if (direction.includes('n')) props.top = Math.round(newTop);
+          if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
+            props.position = 'absolute';
+          }
+        });
+      }
+
+      // Always call onResize for preview/visual updates even if not committing props yet
       onResize?.({ width: newWidth, height: newHeight, left: newLeft, top: newTop, direction });
     };
 
@@ -237,7 +256,15 @@ export const ResizeHandles = ({
       document.removeEventListener('mouseup', handleMouseUp);
       if (targetRef?.current) {
         const finalRect = targetRef.current.getBoundingClientRect();
-        // NEW: Always convert resized dimensions (and position if changed) to percentages
+        // If no meaningful movement occurred, do not persist size/position changes.
+        if (!hasMoved) {
+          // Clear any inline sizes we set during drag so original CSS (eg. rem) remains
+          try { targetRef.current.style.width = ''; targetRef.current.style.height = ''; } catch (_) {}
+          onResizeEnd?.({ width: finalRect.width, height: finalRect.height });
+          return;
+        }
+
+        // NEW: Convert resized dimensions (and position if changed) to percentages
         try {
           // Prefer immediate parent element for relative % so layout containers without explicit positioning still work
           const parentEl = targetRef.current.offsetParent || targetRef.current.parentElement;
@@ -276,6 +303,9 @@ export const ResizeHandles = ({
                   });
                 }
               });
+
+              // Clear inline sizes we set during dragging so CSS rules can re-apply
+              try { targetRef.current.style.width = ''; targetRef.current.style.height = ''; } catch (_) {}
 
               // Fallback: next frame verify conversion; if still numeric convert again
               requestAnimationFrame(() => {

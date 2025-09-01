@@ -1,71 +1,43 @@
 'use client'
 
-import React, { useRef, useEffect, useState, useCallback } from "react";
-import { useNode, useEditor, Element } from "@craftjs/core";
+import {
+  AlignCenterOutlined,
+  AlignLeftOutlined,
+  AlignRightOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  LeftOutlined,
+  PictureOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  RightOutlined
+} from '@ant-design/icons';
+import { useEditor, useNode } from "@craftjs/core";
+import {
+  Button as AntButton,
+  ColorPicker,
+  Input,
+  Modal,
+  Radio,
+  Select,
+  Slider,
+  Switch,
+  Tabs
+} from 'antd';
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from 'react-dom';
+import MediaLibrary from '../../editor/MediaLibrary';
+import SnapPositionHandle from '../../editor/SnapPositionHandle';
 import ContextMenu from "../../utils/context/ContextMenu";
-import { useContextMenu } from "../../utils/hooks/useContextMenu";
-import useEditorDisplay from "../../utils/craft/useEditorDisplay";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import { useCraftSnap } from '../../utils/craft/useCraftSnap';
-import SnapPositionHandle from '../../editor/SnapPositionHandle';
-import { snapGridSystem } from '../../utils/grid/SnapGridSystem';
-import { 
-  EditOutlined, 
-  PlusOutlined, 
-  DeleteOutlined, 
-  LeftOutlined, 
-  RightOutlined,
-  PlayCircleOutlined,
-  PictureOutlined,
-  VideoCameraOutlined,
-  UploadOutlined,
-  EyeOutlined,
-  FontSizeOutlined,
-  BgColorsOutlined,
-  AlignLeftOutlined,
-  AlignCenterOutlined,
-  AlignRightOutlined,
-  VerticalAlignTopOutlined,
-  VerticalAlignMiddleOutlined,
-  VerticalAlignBottomOutlined
-} from '@ant-design/icons';
-import { 
-  Modal, 
-  Input, 
-  Select, 
-  Switch, 
-  Button as AntButton, 
-  Upload, 
-  Tabs,
-  Slider,
-  Radio,
-  ColorPicker,
-  InputNumber,
-  message,
-  Tooltip,
-  Divider
-} from 'antd';
-import { Paragraph } from "../Text/Paragraph";
-import MediaLibrary from '../../editor/MediaLibrary';
+import useEditorDisplay from "../../utils/craft/useEditorDisplay";
+import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import ResizeHandles from "../support/ResizeHandles";
+import PortalControls from '../support/PortalControls';
 
 const { TabPane } = Tabs;
 
-// Mock data for firebase media library
-const MOCK_MEDIA_LIBRARY = {
-  images: [
-    { id: 1, url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800', name: 'Mountain Lake' },
-    { id: 2, url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800', name: 'Ocean Sunset' },
-    { id: 3, url: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800', name: 'Forest Path' },
-    { id: 4, url: 'https://images.unsplash.com/photo-1501436513145-30f24e19fcc4?w=800', name: 'Desert Dunes' },
-    { id: 5, url: 'https://images.unsplash.com/photo-1476820865390-c52aeebb9891?w=800', name: 'City Lights' }
-  ],
-  videos: [
-    { id: 1, url: 'https://www.youtube.com/watch?v=oASwMQDJPAw&ab_channel=MEDCARS', name: 'Sample Video 1', thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=400' },
-    { id: 2, url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', name: 'YouTube Video', thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400' }
-  ]
-};
 
 // Caption position options
 const CAPTION_POSITIONS = [
@@ -1161,23 +1133,22 @@ export const Carousel = ({
           <div>
        <PortalControls
             boxPosition={boxPosition}
-            handleEditClick={() => setModalVisible(true)}
             nodeId={nodeId}
             isDragging={isDragging}
             setIsDragging={setIsDragging}
             dragRef={dragRef}
-          />
-            <ResizeHandles 
-              boxPosition={boxPosition} 
-              nodeId={nodeId}
-              targetRef={carouselRef}
+            updateBoxPosition={updateBoxPosition}
+
+            onEditClick={() => setModalVisible(true)}
+            targetRef={carouselRef}
               editorActions={editorActions}
               craftQuery={query}
               minWidth={safeMinWidth}
               minHeight={safeMinHeight}
               onResize={() => { if(!isResizing) setIsResizing(true); updateBoxPosition(); }}
               onResizeEnd={() => { setIsResizing(false); updateBoxPosition(); }}
-            />
+          />
+           
           </div>
         )}
 
@@ -1327,128 +1298,7 @@ export const Carousel = ({
   );
 };
 
-// Portal Controls Component - renders outside of the Carousel to avoid overflow clipping
-const PortalControls = ({ 
-  boxPosition, 
-  handleEditClick,
-  nodeId,
-  setIsDragging,
-  dragRef
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
 
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999
-      }}
-    >
-      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left section - MOVE (Craft.js drag) */}
-        <div
-          ref={dragRef}
-          data-cy="move-handle"
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Middle section - EDIT */}
-        <div
-          style={{
-            background: '#722ed1',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onClick={handleEditClick}
-          title="Edit carousel settings"
-        >
-          🎠 EDIT
-        </div>
-        
-        {/* Right section - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            // Optional: Add visual feedback for snapping
-            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
-
-     
-  
-    </div>,
-    document.body
-  );
-};
 
 // CraftJS configuration
 Carousel.craft = {

@@ -10,6 +10,7 @@ import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import ResizeHandles from "../support/ResizeHandles";
+import PortalControls from "../support/PortalControls";
 
 const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -357,14 +358,12 @@ export const Image = ({
          <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
-          handleEditClick={() => setShowMediaLibrary(true)}
           nodeId={nodeId}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
-        />
-        <ResizeHandles 
-          boxPosition={boxPosition} 
-          nodeId={nodeId}
+          updateBoxPosition={updateBoxPosition}
+
+          onEditClick={() => setShowMediaLibrary(true)}
           targetRef={imageRef}
           editorActions={editorActions}
           craftQuery={query}
@@ -373,6 +372,7 @@ export const Image = ({
           onResize={updateBoxPosition}
           onResizeEnd={updateBoxPosition}
         />
+        
        </div>
       )}
 
@@ -419,128 +419,7 @@ export const Image = ({
   );
 };
 
-// Portal Controls Component - renders outside of the Image to avoid overflow clipping
-const PortalControls = ({ 
-  boxPosition, 
-  dragRef,
-  handleEditClick,
-  nodeId,
-  isDragging,
-  setIsDragging
-}) => {
-  if (typeof window === 'undefined') return null; // SSR check
 
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none', // Allow clicks to pass through
-        zIndex: 99999
-      }}
-    >
-      {/* Combined three-section pill-shaped controls: MOVE | EDIT | POS */}
-      <div
-        style={{
-          position: 'absolute',
-          top: boxPosition.top - 28,
-          left: boxPosition.left + boxPosition.width / 2,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          background: 'white',
-          borderRadius: '16px',
-          border: '2px solid #d9d9d9',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          pointerEvents: 'auto', // Re-enable pointer events for this element
-          zIndex: 10000
-        }}
-      >
-        {/* Left section - MOVE (Craft.js drag) */}
-        <div
-          ref={dragRef}
-          data-cy="move-handle"
-          data-handle-type="move"
-          data-craft-node-id={nodeId}
-          className="move-handle"
-          style={{
-            background: '#52c41a',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '14px 0 0 14px',
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          title="Drag to move between containers"
-        >
-          📦 MOVE
-        </div>
-        
-        {/* Middle section - EDIT */}
-        <div
-          style={{
-            background: '#722ed1',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onClick={handleEditClick}
-          title="Change image"
-        >
-          🖼️ EDIT
-        </div>
-        
-        {/* Right section - POS (Custom position drag with snapping) */}
-        <SnapPositionHandle
-          nodeId={nodeId}
-          style={{
-            background: '#1890ff',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '0 14px 14px 0',
-            cursor: 'move',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            minWidth: '48px',
-            justifyContent: 'center',
-            transition: 'background 0.2s ease'
-          }}
-          onDragStart={(e) => {
-            setIsDragging(true);
-          }}
-          onDragMove={(e, { x, y, snapped }) => {
-            // Optional: Add visual feedback for snapping
-            console.log(`Element moved to ${x}, ${y}, snapped: ${snapped}`);
-          }}
-          onDragEnd={(e) => {
-            setIsDragging(false);
-          }}
-        >
-          ↕↔ POS
-        </SnapPositionHandle>
-      </div>
-
-      
-    </div>,
-    document.body
-  );
-};
 
 // CraftJS configuration
 Image.craft = {

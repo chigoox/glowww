@@ -16,6 +16,7 @@ import { db as DATABASE } from '@/lib/firebase';
 import ContextMenu from "../../utils/context/ContextMenu";
 import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import useEditorDisplay from "../../utils/craft/useEditorDisplay";
+import PortalControls from "../support/PortalControls";
 
 
 // Mock Stripe Products Data (kept as fallback when no Firestore products are available)
@@ -356,6 +357,10 @@ export const ShopFlexBox = ({
     // Layout props
     width = "100%",
     height = "auto",
+    minWidth = "auto",
+    maxWidth = "",
+    minHeight = "auto",
+    maxHeight = "",
     display = "flex",
     flexDirection = "row",
     flexWrap = "wrap",
@@ -779,14 +784,37 @@ export const ShopFlexBox = ({
     useEffect(() => {
         if (!isSelected) return;
         updateBoxPosition();
+
         const onScroll = () => updateBoxPosition();
         const onResize = () => updateBoxPosition();
-        window.addEventListener('scroll', onScroll);
+
+        // Find scrollable ancestor elements and listen to their scroll events so the portal
+        // position updates when scrolling inside nested containers (not just window).
+        const scrollParents = [];
+        try {
+            let el = cardRef.current?.parentElement;
+            while (el && el !== document.body) {
+                const style = window.getComputedStyle(el);
+                const overflowY = style.overflowY || '';
+                const isScrollable = /(auto|scroll)/.test(overflowY) || el.scrollHeight > el.clientHeight;
+                if (isScrollable) scrollParents.push(el);
+                el = el.parentElement;
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        // Attach listeners
+        scrollParents.forEach(sp => sp.addEventListener('scroll', onScroll, { passive: true }));
+        window.addEventListener('scroll', onScroll, { passive: true });
         window.addEventListener('resize', onResize);
+
         return () => {
+            scrollParents.forEach(sp => sp.removeEventListener('scroll', onScroll));
             window.removeEventListener('scroll', onScroll);
             window.removeEventListener('resize', onResize);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isSelected]);
 
     // Local resize handler removed; centralized <ResizeHandles> internal logic will manage snapping & constraints
@@ -826,7 +854,7 @@ export const ShopFlexBox = ({
                     }}
                 >
                     {/* Discount Badge */}
-                    {showDiscount && hasDiscount && (
+                    {(!!showDiscount && !!hasDiscount && discountPercent > 0) && (
                         <div
                             style={{
                                 position: 'absolute',
@@ -842,12 +870,12 @@ export const ShopFlexBox = ({
                                 zIndex: 10
                             }}
                         >
-                            {discountPercent}% OFF
+                            {discountPercent > 0 ? `${discountPercent}% OFF` : null}
                         </div>
                     )}
 
                     {/* Wishlist Button */}
-                    {showWishlist && (
+                    {(!!showWishlist) && (
                         <button
                             style={{
                                 position: 'absolute',
@@ -1003,7 +1031,7 @@ export const ShopFlexBox = ({
                         >
                             {formatPrice(product.price)}
                         </span>
-                        {hasDiscount && (
+                        {(!!hasDiscount) && (
                             <span
                                 style={{
                                     fontSize: originalPriceFontSize,
@@ -1018,7 +1046,7 @@ export const ShopFlexBox = ({
                     </div>
 
                     {/* Quick Add Button */}
-                    {showQuickAdd && (
+                    {(!!showQuickAdd) && (
                         <button
                             style={{
                                 backgroundColor: buttonBackgroundColor,
@@ -1078,22 +1106,22 @@ export const ShopFlexBox = ({
                     <>
                         <PortalControls
                             boxPosition={boxPosition}
+                            isSelected={isSelected}
+                            setProp={setProp}
+                            nodeId={nodeId}
                             dragRef={dragRef}
-                            nodeId={nodeId}
-                            onEdit={() => setIsEditModalOpen(true)}
                             updateBoxPosition={updateBoxPosition}
-                        />
-                        <ResizeHandles 
-                            boxPosition={boxPosition}
-                            nodeId={nodeId}
+
+                            onEditClick={() => setIsEditModalOpen(true)}
                             targetRef={cardRef}
                             editorActions={editorActions}
                             craftQuery={craftQuery}
-                            minWidth={50}
-                            minHeight={20}
+                            minWidth={typeof minWidth === 'number' ? minWidth : parseInt(minWidth) || 50}
+                            minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
                             onResize={updateBoxPosition}
                             onResizeEnd={updateBoxPosition}
                         />
+            
                     </>
                 )}
                 {/* Edit button now lives inside portal controls */}
@@ -1140,7 +1168,7 @@ export const ShopFlexBox = ({
                 open={isEditModalOpen}
                 onCancel={() => setIsEditModalOpen(false)}
                 width={1400}
-                style={{ top: 20 }}
+                style={{ top: 20, zIndex: 999999 }}
                 footer={[
                     <Button key="cancel" onClick={() => setIsEditModalOpen(false)}>
                         Cancel
@@ -1262,99 +1290,6 @@ export const ShopFlexBox = ({
     );
 };
 
-// Portal controls (MOVE and POS) similar to Box
-const PortalControls = ({ boxPosition, dragRef, nodeId, onEdit, updateBoxPosition }) => {
-    if (typeof window === 'undefined') return null;
-    return createPortal(
-        <div style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 99999 }}>
-            <div
-                style={{
-                    position: 'absolute',
-                    top: boxPosition.top - 28,
-                    left: boxPosition.left + boxPosition.width / 2,
-                    transform: 'translateX(-50%)',
-                    display: 'flex',
-                    background: 'white',
-                    borderRadius: '16px',
-                    border: '2px solid #d9d9d9',
-                    fontSize: '9px',
-                    fontWeight: 'bold',
-                    userSelect: 'none',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                    pointerEvents: 'auto',
-                }}
-            >
-                {/* Left - MOVE */}
-                <div
-                    ref={dragRef}
-                    data-craft-node-id={nodeId}
-                    className="move-handle"
-                    style={{
-                        background: '#52c41a',
-                        color: 'white',
-                        padding: '2px',
-                        borderRadius: '14px 0 0 14px',
-                        cursor: 'grab',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        minWidth: '48px',
-                        justifyContent: 'center',
-                        transition: 'background 0.2s ease'
-                    }}
-                    title="Drag to move between containers"
-                >
-                    📦 MOVE
-                </div>
-                {/* Center - EDIT */}
-                <div
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-                    style={{
-                        background: '#722ed1',
-                        color: 'white',
-                        padding: '4px 8px',
-                        borderRadius: '0',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        minWidth: '48px',
-                        justifyContent: 'center',
-                        transition: 'background 0.2s ease'
-                    }}
-                    title="Configure shop items"
-                >
-                    ⚙️ EDIT
-                </div>
-                {/* Right - POS */}
-                <SnapPositionHandle
-                    nodeId={nodeId}
-                    style={{
-                        background: '#1890ff',
-                        color: 'white',
-                        padding: '4px',
-                        borderRadius: '0 14px 14px 0',
-                        cursor: 'move',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '2px',
-                        minWidth: '48px',
-                        justifyContent: 'center',
-                        transition: 'background 0.2s ease'
-                    }}
-                    onDragStart={() => updateBoxPosition?.()}
-                    onDragMove={() => updateBoxPosition?.()}
-                    onDragEnd={() => updateBoxPosition?.()}
-                >
-                    ↕↔ POS
-                </SnapPositionHandle>
-            </div>
-
-        </div>,
-        document.body
-    );
-};
 
 // Separate StyleEditor component to prevent recreation
 const StyleEditorModal = ({ 
@@ -2068,6 +2003,10 @@ ShopFlexBox.craft = {
         slideInterval: 3000,
         width: "auto",
         height: "auto",
+        minWidth: "auto",
+        maxWidth: "",
+        minHeight: "auto",
+        maxHeight: "",
         display: "flex",
         flexDirection: "row",
         flexWrap: "wrap",

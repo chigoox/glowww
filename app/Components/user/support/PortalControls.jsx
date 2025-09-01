@@ -1,8 +1,9 @@
 'use client'
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import SnapPositionHandle from '../../editor/SnapPositionHandle';
+import ResizeHandles from './ResizeHandles';
 
 /**
  * Reusable portal controls for Craft.js elements.
@@ -25,19 +26,29 @@ import SnapPositionHandle from '../../editor/SnapPositionHandle';
  */
 export default function PortalControls({
   boxPosition,
+  targetRef,
+  editorActions,
+  craftQuery,
+  minWidth,
+  minHeight,
+  onResize,
+  onResizeEnd,
   nodeId,
   dragRef,
   onEditClick,
   handleResizeStart,
-  order = ['MOVE', 'EDIT', 'POS'],
-  show = { move: true, edit: true, pos: true, corners: true, edges: true },
-  labels = { move: 'MOVE', edit: 'EDIT', pos: 'POS' },
+  order = ["MOVE", "EDIT", "POS"],
+  show = { move: true, edit: true, pos: true, corners: true},
+  labels = { move: "MOVE", edit: "EDIT", pos: "POS" },
   offsetY = -28,
   offsetX = 0,
   zIndex = 99999,
-  styleOverrides = {}
+  styleOverrides = {},
+  // Optional callback that the portal can call to request a position refresh
+  // Keep the name compatible with other code: updateBoxPosition
+  updateBoxPosition,
 }) {
-  if (typeof window === 'undefined' || !boxPosition) return null;
+  if (typeof window === "undefined" || !boxPosition) return null;
 
   const { top = 0, left = 0, width = 0, height = 0 } = boxPosition || {};
   const showMove = show?.move && !!dragRef;
@@ -45,22 +56,22 @@ export default function PortalControls({
   const showPos = show?.pos && !!nodeId;
 
   const colors = {
-    move: styleOverrides.colors?.move || '#52c41a',
-    edit: styleOverrides.colors?.edit || '#722ed1',
-    pos: styleOverrides.colors?.pos || '#1890ff'
+    move: styleOverrides.colors?.move || "#52c41a",
+    edit: styleOverrides.colors?.edit || "#722ed1",
+    pos: styleOverrides.colors?.pos || "#1890ff",
   };
 
   const baseSegmentStyle = {
-    color: 'white',
-    padding: '4px 10px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '4px',
+    color: "white",
+    padding: "4px 10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "4px",
     minWidth: 56,
-    cursor: 'pointer',
-    transition: 'background 0.2s ease',
-    ...styleOverrides.segment
+    cursor: "pointer",
+    transition: "background 0.2s ease",
+    ...styleOverrides.segment,
   };
 
   const segments = [];
@@ -68,14 +79,15 @@ export default function PortalControls({
   const makeMove = () => (
     <div
       key="MOVE"
+      className="move-handle"
       ref={dragRef}
       data-handle-type="move"
       data-craft-node-id={nodeId}
       style={{
         ...baseSegmentStyle,
         background: colors.move,
-        cursor: dragRef ? 'grab' : 'not-allowed',
-        borderRight: '1px solid rgba(255,255,255,0.6)'
+        cursor: dragRef ? "grab" : "not-allowed",
+        borderRight: "1px solid rgba(255,255,255,0.6)",
       }}
       title="Drag to move between containers"
       onMouseDown={(e) => e.stopPropagation()}
@@ -88,11 +100,16 @@ export default function PortalControls({
     <div
       key="EDIT"
       onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => { e.stopPropagation(); onEditClick?.(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        // Forward the original event to the consumer so handlers that expect (e)
+        // (for example to call preventDefault()) won't receive undefined.
+        onEditClick?.(e);
+      }}
       style={{
         ...baseSegmentStyle,
         background: colors.edit,
-        borderRight: '1px solid rgba(255,255,255,0.6)'
+        borderRight: "1px solid rgba(255,255,255,0.6)",
       }}
       title="Edit"
     >
@@ -107,7 +124,7 @@ export default function PortalControls({
       style={{
         ...baseSegmentStyle,
         background: colors.pos,
-        cursor: 'move'
+        cursor: "move",
       }}
     >
       {labels.pos}
@@ -117,7 +134,7 @@ export default function PortalControls({
   const factory = {
     MOVE: () => showMove && makeMove(),
     EDIT: () => showEdit && makeEdit(),
-    POS: () => showPos && makePos()
+    POS: () => showPos && makePos(),
   };
 
   order.forEach((seg, idx) => {
@@ -126,37 +143,144 @@ export default function PortalControls({
   });
 
   const showAnySegment = segments.length > 0;
-  const showCorners = !!handleResizeStart && show?.corners !== false;
-  const showEdges = !!handleResizeStart && show?.edges !== false;
+  const showCorners = true; // Always show resize handles
+
+  // Keep the portal positioned during nested/container scrolling and style changes.
+  // If a consumer passes `updateBoxPosition` it will be called (throttled via rAF).
+  // This logic is intentionally opt-in (only runs when nodeId is provided).
+  const rafRef = useRef(null);
+  const observerRef = useRef(null);
+
+  useEffect(() => {
+    if (!nodeId) return;
+
+    const scheduleUpdate = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        try {
+          updateBoxPosition?.();
+        } catch (e) {
+          /* swallow */
+        }
+      });
+    };
+
+    // Find the target element; prefer a provided ref (more reliable), fallback to craft data attribute
+    let targetEl = null;
+    try {
+      if (targetRef && targetRef.current) {
+        targetEl = targetRef.current;
+      } else {
+        targetEl = document.querySelector(`[data-craft-node-id="${nodeId}"]`);
+      }
+    } catch (e) {
+      targetEl = null;
+    }
+
+    // collect scrollable ancestor elements
+    const scrollParents = [];
+    try {
+      let el = targetEl?.parentElement || null;
+      while (el && el !== document.body) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY || "";
+        const isScrollable =
+          /(auto|scroll)/.test(overflowY) || el.scrollHeight > el.clientHeight;
+        if (isScrollable) scrollParents.push(el);
+        el = el.parentElement;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+
+    const onScroll = () => scheduleUpdate();
+
+    scrollParents.forEach((sp) =>
+      sp.addEventListener("scroll", onScroll, { passive: true })
+    );
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+
+    try {
+      const mo = new MutationObserver(() => scheduleUpdate());
+      observerRef.current = mo;
+      if (targetEl)
+        mo.observe(targetEl, {
+          attributes: true,
+          attributeFilter: ["style", "class"],
+        });
+      scrollParents.slice(0, 5).forEach((a) => {
+        try {
+          mo.observe(a, {
+            attributes: true,
+            attributeFilter: ["style", "class"],
+          });
+        } catch (e) {}
+      });
+    } catch (e) {
+      /* ignore */
+    }
+
+    // initial
+    scheduleUpdate();
+
+    return () => {
+      try {
+        scrollParents.forEach((sp) =>
+          sp.removeEventListener("scroll", onScroll)
+        );
+      } catch (e) {}
+      try {
+        window.removeEventListener("scroll", onScroll);
+      } catch (e) {}
+      try {
+        window.removeEventListener("resize", onScroll);
+      } catch (e) {}
+      try {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      } catch (e) {}
+      try {
+        observerRef.current && observerRef.current.disconnect();
+      } catch (e) {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    nodeId,
+    boxPosition?.top,
+    boxPosition?.left,
+    boxPosition?.width,
+    boxPosition?.height,
+    updateBoxPosition,
+  ]);
 
   return createPortal(
     <div
       style={{
-        position: 'fixed',
+        position: "fixed",
         top: 0,
         left: 0,
-        pointerEvents: 'none',
-        zIndex
+        pointerEvents: "none",
+        zIndex,
       }}
     >
       {showAnySegment && (
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: top + offsetY,
             left: left + width / 2 + offsetX,
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            background: 'white',
-            borderRadius: '16px',
-            border: '2px solid #d9d9d9',
-            overflow: 'hidden',
-            fontSize: '10px',
+            transform: "translateX(-50%)",
+            display: "flex",
+            background: "white",
+            borderRadius: "16px",
+            border: "2px solid #d9d9d9",
+            overflow: "hidden",
+            fontSize: "10px",
             fontWeight: 600,
-            userSelect: 'none',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            pointerEvents: 'auto',
-            ...styleOverrides.pill
+            userSelect: "none",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            pointerEvents: "auto",
+            ...styleOverrides.pill,
           }}
         >
           {segments}
@@ -165,61 +289,17 @@ export default function PortalControls({
 
       {/* Resize handles */}
       {showCorners && (
-        <>
-          {/* Top-left */}
-          <div
-            style={{ position: 'absolute', top: top - 4, left: left - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: 2, cursor: 'nw-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'nw')}
-            title="Resize"
-          />
-          {/* Top-right */}
-          <div
-            style={{ position: 'absolute', top: top - 4, left: left + width - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: 2, cursor: 'ne-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'ne')}
-            title="Resize"
-          />
-          {/* Bottom-left */}
-          <div
-            style={{ position: 'absolute', top: top + height - 4, left: left - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: 2, cursor: 'sw-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'sw')}
-            title="Resize"
-          />
-          {/* Bottom-right */}
-          <div
-            style={{ position: 'absolute', top: top + height - 4, left: left + width - 4, width: 8, height: 8, background: 'white', border: '2px solid #1890ff', borderRadius: 2, cursor: 'se-resize', pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'se')}
-            title="Resize"
-          />
-        </>
-      )}
-
-      {showEdges && (
-        <>
-          {/* Top edge */}
-          <div
-            style={{ position: 'absolute', top: top - 4, left: left + width / 2 - 10, width: 20, height: 8, background: 'rgba(24, 144, 255, 0.3)', cursor: 'n-resize', borderRadius: 4, pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'n')}
-            title="Resize height"
-          />
-          {/* Bottom edge */}
-          <div
-            style={{ position: 'absolute', top: top + height - 4, left: left + width / 2 - 10, width: 20, height: 8, background: 'rgba(24, 144, 255, 0.3)', cursor: 's-resize', borderRadius: 4, pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 's')}
-            title="Resize height"
-          />
-          {/* Left edge */}
-          <div
-            style={{ position: 'absolute', left: left - 4, top: top + height / 2 - 10, width: 8, height: 20, background: 'rgba(24, 144, 255, 0.3)', cursor: 'w-resize', borderRadius: 4, pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'w')}
-            title="Resize width"
-          />
-          {/* Right edge */}
-          <div
-            style={{ position: 'absolute', left: left + width - 4, top: top + height / 2 - 10, width: 8, height: 20, background: 'rgba(24, 144, 255, 0.3)', cursor: 'e-resize', borderRadius: 4, pointerEvents: 'auto' }}
-            onMouseDown={(e) => handleResizeStart(e, 'e')}
-            title="Resize width"
-          />
-        </>
+        <ResizeHandles
+          boxPosition={boxPosition}
+          nodeId={nodeId}
+          targetRef={targetRef}
+          editorActions={editorActions}
+          craftQuery={craftQuery}
+          minWidth={minWidth}
+          minHeight={minHeight}
+          onResize={onResize}
+          onResizeEnd={onResizeEnd}
+        />
       )}
     </div>,
     document.body
