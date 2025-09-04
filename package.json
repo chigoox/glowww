@@ -16,6 +16,7 @@
     "@craftjs/core": "^0.2.12",
     "@craftjs/layers": "^0.2.7",
     "@google-analytics/data": "^5.0.0",
+    "@monaco-editor/react": "^4.7.0",
     "@react-email/render": "^0.0.15",
     "@sparticuz/chromium": "^138.0.2",
     "@stripe/react-stripe-js": "^2.7.2",

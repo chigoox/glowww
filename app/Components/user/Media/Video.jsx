@@ -550,6 +550,7 @@ Video.craft = {
       supportedProps: [
         // Video Properties
         'videoSrc',
+        'videoType',
         'autoplay',
         'controls',
         'loop',

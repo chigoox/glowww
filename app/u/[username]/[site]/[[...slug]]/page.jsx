@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import pako from 'pako';
 import { useParams } from 'next/navigation';
 import { Editor, Element, Frame } from '@craftjs/core';
 
@@ -59,6 +60,14 @@ export default function PublishedSitePage() {
   const [pages, setPages] = useState([]); // metadata list
   const [pageContent, setPageContent] = useState(null); // serialized nodes (object or string)
   const [pageTitle, setPageTitle] = useState('');
+  // Sanitized frame + error (must be declared before any conditional return to preserve hook order)
+  const [sanitizedFrame, setSanitizedFrame] = useState(null);
+  const [sanitizeError, setSanitizeError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null); // Store debug info
+
+  // Debug panel state
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugView, setDebugView] = useState('original'); // 'original' | 'content' | 'frame' | 'compressed'
 
   // Helpers to find page by path similar to Preview
   const buildPagePath = (page, pagesByIdOrKey) => {
@@ -154,11 +163,306 @@ export default function PublishedSitePage() {
   // Quick debug toggle: append ?dbg=1 to the URL to show internal state overlay
   const isDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dbg') === '1';
 
+  // Debug functions
+  const debugFunctions = {
+    logPageContent: () => {
+      console.log('[Debug] Page Content:', pageContent);
+    },
+    logFrameData: () => {
+      console.log('[Debug] Sanitized Frame:', sanitizedFrame);
+      const frameData = JSON.stringify(sanitizedFrame);
+      console.log('[Debug] Frame Data String:', frameData);
+    },
+    validateNodes: () => {
+      if (sanitizedFrame && typeof sanitizedFrame === 'object') {
+        const nodes = Object.keys(sanitizedFrame);
+        console.log('[Debug] Node validation:');
+        nodes.forEach(nodeId => {
+          const node = sanitizedFrame[nodeId];
+          const hasType = node?.type?.resolvedName;
+          const hasProps = node?.props;
+          console.log(`  ${nodeId}: type=${hasType || 'MISSING'}, props=${!!hasProps}`);
+        });
+      }
+    },
+    testCraftValidation: () => {
+      if (sanitizedFrame) {
+        const validateForCraft = (frame) => {
+          if (!frame || typeof frame !== 'object') return false;
+          try {
+            for (const [nodeId, node] of Object.entries(frame)) {
+              if (!node || typeof node !== 'object') {
+                console.error('[Debug] Invalid node (not object):', nodeId);
+                return false;
+              }
+              if (nodeId !== 'ROOT') {
+                if (!node.type) {
+                  console.error('[Debug] Missing type:', nodeId);
+                  return false;
+                }
+                const typeObj = node.type;
+                const hasResolver = typeof typeObj === 'string' || 
+                                   (typeObj && (typeObj.resolvedName || typeObj.displayName || typeObj.name));
+                if (!hasResolver) {
+                  console.error('[Debug] Invalid type structure:', nodeId, typeObj);
+                  return false;
+                }
+              }
+            }
+            return true;
+          } catch (err) {
+            console.error('[Debug] Validation error:', err);
+            return false;
+          }
+        };
+        const result = validateForCraft(sanitizedFrame);
+        console.log('[Debug] Craft validation result:', result);
+      }
+    },
+    exportDebugData: () => {
+      const data = {
+        username,
+        site,
+        slug: rawSlug,
+        slugPath,
+        pageTitle,
+        pageContent,
+        sanitizedFrame,
+        siteInfo,
+        pages: pages.length,
+        debugInfo,
+        timestamp: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `published-debug-${username}-${site}-${slugPath || 'home'}-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const triggerManualRetry = () => {
     setAttempt(0);
     setLastErrorInfo(null);
     setReloadNonce(n => n + 1);
   };
+
+  // --- Decompression + sanitation pipeline ---------------------------------
+  // pageContent at this point should already be an object (getPage decompresses).
+  // Guard against legacy raw or double-compressed values.
+  useEffect(() => {
+    try {
+      if (!pageContent) {
+        setSanitizedFrame(null);
+        return;
+      }
+      
+      let frameObj = pageContent;
+      // If still a string, attempt JSON parse (no compression expected here now)
+      if (typeof frameObj === 'string') {
+        try {
+          frameObj = JSON.parse(frameObj);
+        } catch (parseErr) {
+          // Heuristic: maybe it's base64 compressed (should not happen normally)
+          if (/^[A-Za-z0-9+/=]+$/.test(frameObj.slice(0, 50))) {
+            try {
+              const bin = atob(frameObj);
+              const bytes = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              const inflated = pako.inflate(bytes, { to: 'string' });
+              frameObj = JSON.parse(inflated);
+            } catch (deepErr) {
+              throw deepErr;
+            }
+          } else {
+            throw parseErr;
+          }
+        }
+      }
+
+      if (!frameObj || typeof frameObj !== 'object') throw new Error('Frame not an object');
+
+      // Enhanced node validation and pruning
+      const nodes = { ...frameObj };
+      const invalidIds = new Set();
+      
+      console.log('[PublishedSitePage] Starting sanitization, node count:', Object.keys(nodes).length);
+      
+      // First pass: identify invalid nodes with more thorough checking
+      for (const [id, node] of Object.entries(nodes)) {
+        if (id === 'ROOT') continue;
+        
+        // Check if node exists and is an object
+        if (!node || typeof node !== 'object') {
+          console.log('[PublishedSitePage] Invalid node (not object):', id, node);
+          invalidIds.add(id);
+          continue;
+        }
+        
+        // Check for type property with various possible structures
+        const hasValidType = node.type && (
+          typeof node.type === 'string' ||
+          (typeof node.type === 'object' && (
+            node.type.resolvedName || 
+            node.type.displayName || 
+            node.type.name ||
+            node.type._payload // For lazy components
+          ))
+        );
+        
+        if (!hasValidType) {
+          console.log('[PublishedSitePage] Invalid node (no valid type):', id, {
+            nodeKeys: Object.keys(node),
+            typeInfo: node.type
+          });
+          invalidIds.add(id);
+          continue;
+        }
+        
+        // Additional validation: check for circular references or malformed data
+        try {
+          JSON.stringify(node);
+        } catch (circularErr) {
+          console.log('[PublishedSitePage] Invalid node (circular ref):', id);
+          invalidIds.add(id);
+        }
+      }
+      
+      // Second pass: remove invalid nodes
+      if (invalidIds.size) {
+        console.log('[PublishedSitePage] Removing invalid nodes:', Array.from(invalidIds));
+        for (const bad of invalidIds) {
+          delete nodes[bad];
+        }
+      }
+      
+      // Third pass: clean up references to removed nodes
+      for (const [id, node] of Object.entries(nodes)) {
+        if (!node || typeof node !== 'object') continue;
+        
+        // Clean child node references
+        if (Array.isArray(node.nodes)) {
+          const originalLength = node.nodes.length;
+          node.nodes = node.nodes.filter(cid => !invalidIds.has(cid) && nodes[cid]);
+          if (node.nodes.length !== originalLength) {
+            console.log(`[PublishedSitePage] Cleaned ${originalLength - node.nodes.length} orphan child refs from ${id}`);
+          }
+        }
+        
+        // Clean linked node references
+        if (Array.isArray(node.linkedNodes)) {
+          const originalLength = node.linkedNodes.length;
+          node.linkedNodes = node.linkedNodes.filter(cid => !invalidIds.has(cid) && nodes[cid]);
+          if (node.linkedNodes.length !== originalLength) {
+            console.log(`[PublishedSitePage] Cleaned ${originalLength - node.linkedNodes.length} orphan linked refs from ${id}`);
+          }
+        }
+        
+        // Clean parent references
+        if (node.parent && (invalidIds.has(node.parent) || !nodes[node.parent])) {
+          console.log(`[PublishedSitePage] Cleaned orphan parent ref from ${id}: ${node.parent}`);
+          delete node.parent;
+        }
+      }
+
+      // Fourth pass: inject Button defaults & normalize type objects
+      for (const [id, node] of Object.entries(nodes)) {
+        if (!node || typeof node !== 'object') continue;
+        // Normalize type: if string, convert to object with resolvedName
+        if (typeof node.type === 'string') {
+          node.type = { resolvedName: node.type };
+        } else if (node.type && typeof node.type === 'object' && !node.type.resolvedName) {
+          // Promote any known name/displayName to resolvedName
+          const candidate = node.type.displayName || node.type.name;
+          if (candidate) node.type.resolvedName = candidate;
+        }
+        if (node.type?.resolvedName === 'Button' || node.type?.resolvedName === 'CraftButton') {
+          const props = (node.props && typeof node.props === 'object') ? node.props : (node.props = {});
+          const requiredDefaults = {
+            text: 'Click Me',
+            backgroundColor: '#1890ff',
+            color: '#ffffff',
+            padding: '8px 16px',
+            margin: '5px 0',
+            display: 'inline-flex',
+            fontSize: 14,
+            fontWeight: '400',
+            border: '1px solid #1890ff',
+            borderRadius: 6,
+            buttonType: 'primary',
+            size: 'medium',
+            hidden: false
+          };
+          let injected = false;
+          for (const [k,v] of Object.entries(requiredDefaults)) {
+            if (props[k] === undefined) { props[k] = v; injected = true; }
+          }
+          if (injected) {
+            console.info('[PublishedSitePage] Injected Button defaults for node', id);
+          }
+        }
+      }
+
+      // Fifth pass: ensure all referenced child/linked node IDs exist; create placeholders otherwise
+      const referenced = new Set();
+      for (const node of Object.values(nodes)) {
+        if (!node || typeof node !== 'object') continue;
+        if (Array.isArray(node.nodes)) node.nodes.forEach(cid => referenced.add(cid));
+        if (Array.isArray(node.linkedNodes)) node.linkedNodes.forEach(cid => referenced.add(cid));
+      }
+      const missingRefs = Array.from(referenced).filter(id => !nodes[id]);
+      if (missingRefs.length) {
+        console.warn('[PublishedSitePage] Creating placeholder Text nodes for missing references:', missingRefs);
+        missingRefs.forEach(mid => {
+          nodes[mid] = {
+            type: { resolvedName: 'Text' },
+            isCanvas: false,
+            props: { text: '[Missing node replaced]' },
+            displayName: 'Text',
+            custom: {},
+            hidden: false,
+            parent: 'ROOT',
+            nodes: [],
+            linkedNodes: {}
+          };
+          // Attach to ROOT to keep a valid parent chain if not already referenced elsewhere
+          if (nodes.ROOT && Array.isArray(nodes.ROOT.nodes) && !nodes.ROOT.nodes.includes(mid)) {
+            nodes.ROOT.nodes.push(mid);
+          }
+        });
+      }
+      
+      // Final validation: ensure ROOT exists and has valid structure
+      if (!nodes.ROOT) {
+        console.log('[PublishedSitePage] Adding missing ROOT node');
+        nodes.ROOT = {
+          type: { resolvedName: "Root" },
+          isCanvas: true,
+          props: {},
+          displayName: "Root",
+          custom: {},
+          hidden: false,
+          nodes: [],
+          linkedNodes: {}
+        };
+      }
+      
+      console.log('[PublishedSitePage] Sanitization complete:', {
+        originalNodes: Object.keys(frameObj).length,
+        finalNodes: Object.keys(nodes).length,
+        removedCount: invalidIds.size,
+        rootChildCount: nodes.ROOT?.nodes?.length || 0
+      });
+      
+      setSanitizedFrame(nodes);
+      setSanitizeError(null);
+    } catch (err) {
+      console.error('[PublishedSitePage] sanitize pipeline failed', err);
+      setSanitizeError(err.message || 'Sanitize failed');
+    }
+  }, [pageContent]);
 
   useEffect(() => {
     let isMounted = true;
@@ -183,6 +487,14 @@ export default function PublishedSitePage() {
         const pageList = await withRetry(async () => await getSitePages(pubSite.userId, pubSite.id));
         if (!isMounted) return;
         setPages(pageList);
+        
+        // Store debug info
+        setDebugInfo({
+          site: pubSite,
+          pages: pageList.length,
+          loadTime: Date.now(),
+          slugPath
+        });
 
         if (slug[0] === 'shop') {
           setPageContent(null);
@@ -310,16 +622,136 @@ export default function PublishedSitePage() {
     );
   }
 
-  // Render Craft page in read-only mode
-  const frameData = typeof pageContent === 'string' ? pageContent : JSON.stringify(pageContent);
-  // parse to inspect node structure
-  let parsedFrame = null;
-  try {
-    parsedFrame = typeof pageContent === 'string' ? JSON.parse(pageContent) : pageContent;
-  } catch (e) {
-    parsedFrame = null;
+  if (sanitizeError) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Content error</h2>
+          <p className="text-gray-600 text-sm">{sanitizeError}</p>
+        </div>
+      </div>
+    );
   }
+
+  if (!sanitizedFrame) {
+    return null; // interim while sanitizing
+  }
+
+  // Render Craft page in read-only mode
+  const frameData = JSON.stringify(sanitizedFrame);
+  const parsedFrame = sanitizedFrame;
   const rootNodes = parsedFrame?.ROOT?.nodes || [];
+
+  // Final validation before Craft deserialization - this should catch any remaining issues
+  const validateForCraft = (frame) => {
+    if (!frame || typeof frame !== 'object') return false;
+    
+    try {
+      // Test if Craft.js can handle this structure by validating all nodes
+      for (const [nodeId, node] of Object.entries(frame)) {
+        if (!node || typeof node !== 'object') {
+          console.error('[PublishedSitePage] Pre-Craft validation failed: Invalid node', nodeId);
+          return false;
+        }
+        
+        // For non-ROOT nodes, ensure they have valid type structure
+        if (nodeId !== 'ROOT') {
+          if (!node.type) {
+            console.error('[PublishedSitePage] Pre-Craft validation failed: Missing type', nodeId);
+            return false;
+          }
+          
+          // Check that type has required properties for Craft deserialization
+          const typeObj = node.type;
+          const hasResolver = typeof typeObj === 'string' || 
+                             (typeObj && (typeObj.resolvedName || typeObj.displayName || typeObj.name));
+          
+          if (!hasResolver) {
+            console.error('[PublishedSitePage] Pre-Craft validation failed: Invalid type structure', nodeId, typeObj);
+            return false;
+          }
+        }
+        
+        // Validate node structure has required Craft properties
+        if (nodeId !== 'ROOT' && (!node.hasOwnProperty('props') || !node.hasOwnProperty('displayName'))) {
+          console.error('[PublishedSitePage] Pre-Craft validation failed: Missing required props', nodeId);
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('[PublishedSitePage] Pre-Craft validation error:', err);
+      return false;
+    }
+  };
+
+  // Validate the sanitized frame before attempting Craft deserialization
+  const isCraftReady = validateForCraft(sanitizedFrame);
+  
+  if (!isCraftReady) {
+    console.error('[PublishedSitePage] Frame failed Craft validation, showing fallback');
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Content structure error</h2>
+          <p className="text-gray-600 text-sm">
+            This page's content structure is incompatible with the current renderer. 
+            Please edit and republish the page from the editor.
+          </p>
+          <details style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
+            <summary style={{ cursor: 'pointer' }}>Show debug info</summary>
+            <pre style={{ maxHeight: 300, overflow: 'auto', fontSize: '12px' }}>
+              {JSON.stringify({ 
+                nodeCount: Object.keys(sanitizedFrame || {}).length,
+                rootChildCount: rootNodes.length,
+                nodeIds: Object.keys(sanitizedFrame || {}),
+                sampleFrame: frameData?.slice(0, 1000) 
+              }, null, 2)}
+            </pre>
+          </details>
+        </div>
+      </div>
+    );
+  }
+
+  // Validate parsed frame structure to avoid Craft deserialization runtime errors
+  const findInvalidNodes = (frame) => {
+    const invalid = [];
+    if (!frame || typeof frame !== 'object') return invalid;
+    try {
+      for (const [key, node] of Object.entries(frame)) {
+        if (!node || typeof node !== 'object') continue;
+        // Skip ROOT itself
+        if (key === 'ROOT') continue;
+        // Node should have a 'type' object with resolvedName or displayName
+        if (!node.type || !(node.type.resolvedName || node.type.displayName || node.type.name)) {
+          invalid.push({ id: key, node });
+        }
+      }
+    } catch (e) {
+      // If something goes wrong, mark as invalid to be safe
+      return [{ id: 'PARSE_ERROR', node: String(e) }];
+    }
+    return invalid;
+  };
+
+  const invalidNodes = findInvalidNodes(parsedFrame);
+  if (invalidNodes.length > 0) {
+    console.error('[PublishedSitePage] Invalid frame nodes detected - aborting Craft mount', invalidNodes, { framePreview: frameData.slice(0, 800) });
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Content parsing error</h2>
+          <p className="text-gray-600 text-sm">This page contains malformed content that cannot be rendered. Check the page in the editor and republish.</p>
+          <details style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
+            <summary style={{ cursor: 'pointer' }}>Show debug info</summary>
+            <pre style={{ maxHeight: 300, overflow: 'auto' }}>{JSON.stringify({ invalidNodes: invalidNodes.slice(0,10), framePreview: frameData.slice(0,2000) }, null, 2)}</pre>
+          </details>
+        </div>
+      </div>
+    );
+  }
 
   // Determine whether ROOT has visible styles (background, padding, minHeight, border, etc.)
   const rootProps = parsedFrame?.ROOT?.props || {};
@@ -367,14 +799,263 @@ export default function PublishedSitePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {isDebug && (
-        <div style={{ position: 'fixed', right: 12, top: 12, zIndex: 99999, background: 'rgba(0,0,0,0.6)', color: 'white', padding: 10, borderRadius: 6, maxWidth: 420 }}>
-          <div style={{ fontWeight: '700', marginBottom: 6 }}>DEBUG</div>
-          <div style={{ fontSize: 12, maxHeight: 240, overflow: 'auto' }}>
-            <pre style={{ color: 'white', fontSize: 11, margin: 0 }}>{JSON.stringify({ siteInfo, pagesCount: pages.length, pageTitle, frameDataPreview: frameData.slice(0, 400) }, null, 2)}</pre>
+      {/* Enhanced Debug Panel */}
+      {(isDebug || showDebug) && (
+        <div style={{
+          position: 'fixed',
+          right: 12,
+          top: 12,
+          zIndex: 99999,
+          background: 'rgba(0,0,0,0.9)',
+          color: 'white',
+          padding: 16,
+          borderRadius: 8,
+          maxWidth: 600,
+          maxHeight: '80vh',
+          overflow: 'auto',
+          fontFamily: 'monospace',
+          fontSize: 12
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 'bold' }}>🚀 Published Debug Panel</h3>
+            <button
+              onClick={() => setShowDebug(false)}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                marginLeft: 'auto'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          
+          {/* Debug Controls */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button
+                onClick={() => setDebugView('original')}
+                style={{
+                  background: debugView === 'original' ? '#2563eb' : 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11
+                }}
+              >
+                Original Debug
+              </button>
+              <button
+                onClick={() => setDebugView('content')}
+                style={{
+                  background: debugView === 'content' ? '#2563eb' : 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11
+                }}
+              >
+                Page Content JSON
+              </button>
+              <button
+                onClick={() => setDebugView('frame')}
+                style={{
+                  background: debugView === 'frame' ? '#2563eb' : 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11
+                }}
+              >
+                Sanitized Frame
+              </button>
+              <button
+                onClick={() => setDebugView('compressed')}
+                style={{
+                  background: debugView === 'compressed' ? '#2563eb' : 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11
+                }}
+              >
+                Compressed Data
+              </button>
+            </div>
+            
+            {/* Debug Function Buttons */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+              {Object.entries(debugFunctions).map(([name, fn]) => (
+                <button
+                  key={name}
+                  onClick={fn}
+                  style={{
+                    background: '#059669',
+                    border: 'none',
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: 3,
+                    cursor: 'pointer',
+                    fontSize: 10
+                  }}
+                >
+                  {name.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Debug Content */}
+          <div style={{ maxHeight: 400, overflow: 'auto' }}>
+            {debugView === 'original' && (
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                  Original Debug Info (same as old debug panel):
+                </div>
+                <pre style={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  padding: 8, 
+                  borderRadius: 4, 
+                  fontSize: 10,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {JSON.stringify({
+                    siteInfo: siteInfo,
+                    pagesCount: pages.length,
+                    pageTitle: pageTitle,
+                    frameDataPreview: sanitizedFrame ? JSON.stringify(sanitizedFrame).slice(0, 400) + '...' : 'No frame data',
+                    username,
+                    site,
+                    slugPath
+                  }, null, 2)}
+                </pre>
+              </div>
+            )}
+            
+            {debugView === 'content' && (
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                  Raw Page Content (from database):
+                </div>
+                <pre style={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  padding: 8, 
+                  borderRadius: 4, 
+                  fontSize: 10,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {pageContent ? JSON.stringify(pageContent, null, 2) : 'No content'}
+                </pre>
+                
+                {debugInfo && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>
+                      Extended Debug Info:
+                    </div>
+                    <pre style={{ 
+                      background: 'rgba(255,255,255,0.1)', 
+                      padding: 8, 
+                      borderRadius: 4, 
+                      fontSize: 10,
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {debugView === 'frame' && (
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                  Sanitized Craft.js Frame (after processing):
+                </div>
+                <pre style={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  padding: 8, 
+                  borderRadius: 4, 
+                  fontSize: 10,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {sanitizedFrame ? JSON.stringify(sanitizedFrame, null, 2) : 'No sanitized frame'}
+                </pre>
+              </div>
+            )}
+            
+            {debugView === 'compressed' && (
+              <div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                  Frame JSON String (for Craft.js):
+                </div>
+                <pre style={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  padding: 8, 
+                  borderRadius: 4, 
+                  fontSize: 10,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}>
+                  {sanitizedFrame ? JSON.stringify(sanitizedFrame) : 'No frame data string'}
+                </pre>
+                
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8, marginTop: 12 }}>
+                  Original Raw Page Content String:
+                </div>
+                <pre style={{ 
+                  background: 'rgba(255,255,255,0.1)', 
+                  padding: 8, 
+                  borderRadius: 4, 
+                  fontSize: 10,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}>
+                  {pageContent ? (typeof pageContent === 'string' ? pageContent : JSON.stringify(pageContent)) : 'No raw content'}
+                </pre>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Debug Toggle Button */}
+      {!showDebug && (isDebug || window.location.search.includes('debug') || window.location.search.includes('dbg')) && (
+        <button
+          onClick={() => setShowDebug(true)}
+          style={{
+            position: 'fixed',
+            right: 12,
+            top: 12,
+            zIndex: 99998,
+            background: '#dc2626',
+            color: 'white',
+            border: 'none',
+            padding: '8px 12px',
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 'bold'
+          }}
+        >
+          🚀 Debug
+        </button>
+      )}
+
       <div className="w-full overflow-auto">
         <PagesProvider>
           <Editor
@@ -385,6 +1066,7 @@ export default function PublishedSitePage() {
               GridBox,
               Image,
               Button,
+              CraftButton: Button, // Map legacy CraftButton to Button
               Link,
               Paragraph,
               Video,

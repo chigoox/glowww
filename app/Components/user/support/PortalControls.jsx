@@ -42,7 +42,7 @@ export default function PortalControls({
   labels = { move: "MOVE", edit: "EDIT", pos: "POS" },
   offsetY = -28,
   offsetX = 0,
-  zIndex = 99999,
+  zIndex = 999,
   styleOverrides = {},
   // Optional callback that the portal can call to request a position refresh
   // Keep the name compatible with other code: updateBoxPosition

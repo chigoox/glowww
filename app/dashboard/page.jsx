@@ -423,7 +423,7 @@ export default function Dashboard() {
   const confirmDeleteSite = async () => {
     if (!siteToDelete) return;
     try {
-      await deleteSite(siteToDelete.id, user.uid);
+  await deleteSite(user.uid, siteToDelete.id);
       await loadUserSites();
       message.success('Site deleted successfully');
       setIsDeleteModalVisible(false);

@@ -101,16 +101,42 @@ export const ResizeHandles = ({
 
     // Track whether the pointer actually moved enough to consider this a resize
     let hasMoved = false;
+    const MOVEMENT_THRESHOLD = 5; // Increase threshold to prevent accidental resizes
 
-    // Freeze visual size during drag to avoid layout jumps when element is removed from flow
-    try {
-      targetRef.current.style.width = `${startWidth}px`;
-      targetRef.current.style.height = `${startHeight}px`;
-    } catch (_) {}
+    // Track initial positions to detect meaningful movement
+    let hasSignificantMovement = false;
+
+    // Only freeze visual size during drag if we detect actual movement first
+    // This prevents any visual changes for pure clicks
+    let hasSetInlineStyles = false;
 
     const handleMouseMove = (moveEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
+
+      // Track movement early to determine if this should be treated as a resize
+      if (!hasMoved && (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1)) {
+        hasMoved = true;
+      }
+
+      // Track significant movement separately for more robust detection
+      if (!hasSignificantMovement && (Math.abs(deltaX) > MOVEMENT_THRESHOLD || Math.abs(deltaY) > MOVEMENT_THRESHOLD)) {
+        hasSignificantMovement = true;
+        
+        // Only now set inline styles to freeze size during drag
+        if (!hasSetInlineStyles) {
+          try {
+            targetRef.current.style.width = `${startWidth}px`;
+            targetRef.current.style.height = `${startHeight}px`;
+            hasSetInlineStyles = true;
+          } catch (_) {}
+        }
+      }
+
+      // If no significant movement, just return early - don't calculate any dimensions
+      if (!hasSignificantMovement) {
+        return;
+      }
 
       let newWidth = startWidth;
       let newHeight = startHeight;
@@ -227,25 +253,18 @@ export const ResizeHandles = ({
         }
       }
 
-      // Mark moved after a small threshold to ignore clicks without drag
-      if (!hasMoved && (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2)) {
-        hasMoved = true;
-      }
+      // Only commit intermediate prop updates for significant movements
+      editorActions.history.throttle(500).setProp(nodeId, (props) => {
+        props.width = Math.round(newWidth);
+        props.height = Math.round(newHeight);
+        if (direction.includes('w')) props.left = Math.round(newLeft);
+        if (direction.includes('n')) props.top = Math.round(newTop);
+        if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
+          props.position = 'absolute';
+        }
+      });
 
-      // Only commit intermediate prop updates while the user is actually resizing
-      if (hasMoved) {
-        editorActions.history.throttle(500).setProp(nodeId, (props) => {
-          props.width = Math.round(newWidth);
-          props.height = Math.round(newHeight);
-          if (direction.includes('w')) props.left = Math.round(newLeft);
-          if (direction.includes('n')) props.top = Math.round(newTop);
-          if ((direction.includes('w') || direction.includes('n')) && props.position !== 'absolute') {
-            props.position = 'absolute';
-          }
-        });
-      }
-
-      // Always call onResize for preview/visual updates even if not committing props yet
+      // Call onResize for preview/visual updates
       onResize?.({ width: newWidth, height: newHeight, left: newLeft, top: newTop, direction });
     };
 
@@ -254,14 +273,52 @@ export const ResizeHandles = ({
       setTimeout(() => snapGridSystem.cleanupTrackedElements(), 100);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      
       if (targetRef?.current) {
         const finalRect = targetRef.current.getBoundingClientRect();
-        // If no meaningful movement occurred, do not persist size/position changes.
-        if (!hasMoved) {
-          // Clear any inline sizes we set during drag so original CSS (eg. rem) remains
-          try { targetRef.current.style.width = ''; targetRef.current.style.height = ''; } catch (_) {}
-          onResizeEnd?.({ width: finalRect.width, height: finalRect.height });
+        
+        // If no significant movement occurred, completely abort any changes
+        if (!hasMoved || !hasSignificantMovement) {
+          // Only clear inline styles if we actually set them
+          if (hasSetInlineStyles) {
+            try { 
+              targetRef.current.style.width = ''; 
+              targetRef.current.style.height = ''; 
+            } catch (_) {}
+          }
+          
+          // Log the abort for debugging
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('[ResizeHandles] Resize aborted - no significant movement:', {
+              nodeId,
+              hasMoved,
+              hasSignificantMovement,
+              hasSetInlineStyles,
+              finalWidth: finalRect.width,
+              finalHeight: finalRect.height
+            });
+          }
+          
+          // Call onResizeEnd but with no changes indicated
+          onResizeEnd?.({ 
+            width: finalRect.width, 
+            height: finalRect.height, 
+            aborted: true // Flag to indicate this was aborted
+          });
+          
+          // Early return - no prop changes should be made
           return;
+        }
+
+        // Log successful resize for debugging
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[ResizeHandles] Resize completed:', {
+            nodeId,
+            startWidth,
+            startHeight,
+            finalWidth: finalRect.width,
+            finalHeight: finalRect.height
+          });
         }
 
         // NEW: Convert resized dimensions (and position if changed) to percentages

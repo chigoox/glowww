@@ -23,17 +23,33 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
         // Get additional user data from Firestore
         const additionalUserData = await getUserData(firebaseUser.uid);
         setUserData(additionalUserData);
-        
-        // Enhance user object with userData for easier access
+
+        // Derive subscription tier (new schema prioritizes subscriptionTier)
+        const subscriptionTier = additionalUserData?.subscriptionTier ||
+          additionalUserData?.tier || // backward compatibility
+          additionalUserData?.subscription?.plan || 'free';
+
+        const isAdmin = subscriptionTier === 'admin';
+
+        // Build normalized subscription object (preserve existing fields)
+        const normalizedSubscription = {
+          plan: subscriptionTier,
+          tier: subscriptionTier,
+          status: additionalUserData?.subscription?.status || 'active',
+          ...(additionalUserData?.subscription || {})
+        };
+
+        // Enhance user object with derived properties
         const enhancedUser = {
           ...firebaseUser,
           username: additionalUserData?.username,
           fullName: additionalUserData?.fullName,
-          subscription: additionalUserData?.subscription || { plan: 'free', status: 'active' }
+          subscriptionTier,
+          isAdmin,
+            subscription: normalizedSubscription
         };
         setUser(enhancedUser);
       } else {

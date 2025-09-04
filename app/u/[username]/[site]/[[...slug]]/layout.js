@@ -30,7 +30,9 @@ async function resolveSiteAndPage(params) {
 }
 
 export async function generateMetadata({ params }) {
-  const { site, page, slugPath } = await resolveSiteAndPage(params);
+  // `params` may be a proxy that must be awaited in Next.js internals.
+  const awaitedParams = (await params) || {};
+  const { site, page, slugPath } = await resolveSiteAndPage(awaitedParams);
   return buildPageMetadata(site, page, slugPath);
 }
 

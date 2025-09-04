@@ -261,20 +261,20 @@ export const Image = ({
     return value;
   };
 
-  // Build computed styles
+  // Build computed styles with better handling for percentage values
   const computedStyles = {
-    width: processValue(width, 'width'),
-    height: processValue(height, 'height'),
+    width: typeof width === 'string' && width.includes('%') ? width : processValue(width, 'width'),
+    height: typeof height === 'string' && height.includes('%') ? height : processValue(height, 'height'),
     minWidth: processValue(minWidth, 'minWidth'),
     maxWidth: processValue(maxWidth, 'maxWidth'),
     minHeight: processValue(minHeight, 'minHeight'),
     maxHeight: processValue(maxHeight, 'maxHeight'),
     display,
     position,
-    top: processValue(top, 'top'),
-    right: processValue(right, 'right'),
-    bottom: processValue(bottom, 'bottom'),
-    left: processValue(left, 'left'),
+    top: typeof top === 'string' && top.includes('%') ? top : processValue(top, 'top'),
+    right: typeof right === 'string' && right.includes('%') ? right : processValue(right, 'right'),
+    bottom: typeof bottom === 'string' && bottom.includes('%') ? bottom : processValue(bottom, 'bottom'),
+    left: typeof left === 'string' && left.includes('%') ? left : processValue(left, 'left'),
     zIndex,
     margin: processValue(margin, 'margin'),
     padding: processValue(padding, 'padding'),
@@ -461,11 +461,15 @@ Image.craft = {
       supportedProps: [
         // Image Properties
         "src",
-        "alt",
+        "alt", 
         "objectFit",
         "objectPosition",
 
+        // Border & Styling  
         'borderRadius','border',
+        'borderWidth',
+        'borderStyle', 
+        'borderColor',
         
         // Size & Position
         "width",
@@ -477,27 +481,28 @@ Image.craft = {
         "position",
         "top",
         "left",
+        "right",
+        "bottom",
         "zIndex",
+        "display",
         
         // Spacing
         "margin",
         "padding",
         
-        // Visual Styling
-        "borderWidth",
-        "borderStyle", 
-        "borderColor",
-        "borderRadius",
+        // Visual Effects
         "boxShadow",
         "opacity",
+        "filter",
 
         // Border Radius - All corners
-        'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius', 
+        'borderTopLeftRadius', 'borderTopRightRadius', 
         'borderBottomLeftRadius', 'borderBottomRightRadius',
         
         // HTML Attributes
         "title",
-        "className"
+        "className",
+        "id"
       ]
     }
   }

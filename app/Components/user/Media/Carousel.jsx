@@ -1386,9 +1386,15 @@ Carousel.craft = {
         // Visual
         "borderRadius", "backgroundColor", "border", "boxShadow",
         
+        // Carousel Data & Control
+        "slides", "currentSlide",
+        
         // Carousel Settings
         "autoplay", "autoplayInterval", "showArrows", "showDots", 
         "infinite", "transition", "transitionDuration", "swipeToSlide",
+        
+        // Style Objects (nested properties)
+        "imageStyles", "videoStyles", "captionStyles",
         
         // HTML Attributes
         "className", "id", "title"
