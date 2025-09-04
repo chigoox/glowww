@@ -3,6 +3,16 @@ applyTo: '**'
 ---
 Provide project context and coding guidelines that AI should follow when generating code, answering questions, or reviewing changes.
 
+//MUST HAVE
+-modern and sleek design
+-responsive design
+-beautiful animations and transitions
+-user our theme engine to support light and dark mode
+-only dark and light mode outside of editor (home page, about page, settings page, etc...)
+--colors like panel backgrounds, text colors, borders, etc... are for editor only
+--use our theme engine to get colors for editor (ex: theme.getColor('editor.background'))
+
+
 // style guide (core)
 - use Antd components
 - use Tailwind CSS utilities only for layout, spacing, minor visual tweaks when Antd token/config not suitable

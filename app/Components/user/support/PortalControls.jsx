@@ -37,7 +37,7 @@ export default function PortalControls({
   dragRef,
   onEditClick,
   handleResizeStart,
-  order = ["MOVE", "EDIT", "POS"],
+  order = ["MOVE","POS", "EDIT" ],
   show = { move: true, edit: true, pos: true, corners: true},
   labels = { move: "MOVE", edit: "EDIT", pos: "POS" },
   offsetY = -28,

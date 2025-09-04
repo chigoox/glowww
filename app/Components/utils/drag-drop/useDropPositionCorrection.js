@@ -1185,7 +1185,9 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     };
     
     // Enhanced mouse tracking for position only
+    let dropFrozen = false;
     const handleMouseMove = (e) => {
+      if (dropFrozen) return;
       if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         // Update stored positions (no visual feedback)
         const newPosition = { x: e.clientX, y: e.clientY };
@@ -1193,22 +1195,23 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
         lastMousePositionRef.current = newPosition;
       }
     };
-    
+
     // Listen for dragover to update mouse position during drag
     const handleDragOver = (e) => {
+      if (dropFrozen) return;
       if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         e.preventDefault(); // Allow drop
-        
+
         const mouseX = e.clientX;
         const mouseY = e.clientY;
-        
+
         dropStateRef.current.mousePosition = { x: mouseX, y: mouseY };
         lastMousePositionRef.current = { x: mouseX, y: mouseY };
-        
+
         // Container detection still works (just no visual feedback)
-          const detected = findContainerAtPosition(mouseX, mouseY);
-          const targetContainer = Array.isArray(detected) ? (detected[0]?.nodeId || 'ROOT') : detected;
-        
+        const detected = findContainerAtPosition(mouseX, mouseY);
+        const targetContainer = Array.isArray(detected) ? (detected[0]?.nodeId || 'ROOT') : detected;
+
       } else if (dropStateRef.current.potentialDragNodeId) {
         // Check if this is a Craft.js drag operation in progress
         // Look for common Craft.js drag indicators with broader selectors
@@ -1217,18 +1220,18 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
           '[class*="drop"], [class*="indicator"], [class*="drag-preview"], ' +
           '[data-testid*="drop"], [data-testid*="indicator"]'
         );
-        
+
         // Also check if we're currently in a drag state by looking for dragging classes
         const isDragging = document.querySelector('.craft-dragging, [class*="dragging"], [draggable="true"]:not([draggable="true"][data-component])');
-        
+
         if (craftDropIndicator || isDragging) {
           // Craft.js drag is active, don't interfere yet
           dropStateRef.current.craftDragActive = true;
-          
+
           // Just track mouse position for when the drop completes
           dropStateRef.current.mousePosition = { x: e.clientX, y: e.clientY };
           lastMousePositionRef.current = { x: e.clientX, y: e.clientY };
-          
+
         } else {
           // No obvious Craft.js indicators, but we have a potential drag
           // This might be a direct component move, activate our system
@@ -1241,7 +1244,13 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     // Capture mouseup separately to freeze final release coordinates
     const handleMouseUp = (e) => {
       if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove || dropStateRef.current.potentialDragNodeId) {
-        dropStateRef.current.mousePosition = { x: e.clientX, y: e.clientY };
+        // FIXED: Capture and freeze the exact release position
+        const releasePosition = { x: e.clientX, y: e.clientY };
+        dropStateRef.current.mousePosition = releasePosition;
+        dropStateRef.current.finalReleasePosition = releasePosition; // Store separately to prevent overwriting
+        dropFrozen = true; // Prevent further mousemove/dragover updates
+        setTimeout(() => { dropFrozen = false; }, 1200); // Unfreeze after drop logic completes
+        console.log('🎯 Mouse released at:', releasePosition);
       }
     };
 

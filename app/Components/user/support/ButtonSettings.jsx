@@ -33,6 +33,7 @@ import * as AntdIcons from '@ant-design/icons';
 import { useEditor } from '@craftjs/core';
 import dynamic from 'next/dynamic';
 import { getAllComponentsWithProps } from './PropExtractor';
+import { useUserProps } from '../../utils/userprops/useUserProps';
 
 // Dynamically import Monaco Editor to avoid SSR issues
 const MonacoEditor = dynamic(
@@ -64,6 +65,9 @@ const ButtonSettings = ({
   onPropsChange 
 }) => {
   const { query, actions } = useEditor();
+  const { listUserPropPaths, getNodeMeta } = useUserProps();
+  const [bindingTargetPath, setBindingTargetPath] = useState(currentProps.userPropBindingPath || '');
+  const [bindingValue, setBindingValue] = useState(currentProps.userPropBindingValue || '');
   
   // Local state for settings
   const [activeTab, setActiveTab] = useState('appearance');
@@ -682,6 +686,48 @@ const ButtonSettings = ({
     );
   };
 
+  const UserPropsBindingTab = () => {
+    const paths = listUserPropPaths({ leavesOnly: true }) || [];
+    return (
+      <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Card title="User Prop Binding" size="small">
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <div>
+              <Text strong>Select Target User Prop Path</Text>
+              <Select
+                showSearch
+                allowClear
+                value={bindingTargetPath || undefined}
+                onChange={(val) => { setBindingTargetPath(val || ''); updateProp('userPropBindingPath', val || ''); }}
+                style={{ width: '100%', marginTop: 4 }}
+                placeholder="Choose a user prop leaf path"
+                options={paths.map(p => ({
+                  label: p.path + (getNodeMeta(p.path)?.global ? ' (global)' : ''),
+                  value: p.path
+                }))}
+              />
+            </div>
+            <div>
+              <Text strong>Value To Set On Click</Text>
+              <Input
+                value={bindingValue}
+                onChange={(e) => { setBindingValue(e.target.value); updateProp('userPropBindingValue', e.target.value); }}
+                placeholder="New value (string type only for now)"
+                style={{ marginTop: 4 }}
+              />
+            </div>
+            <Alert type="info" message="When this button is clicked in runtime, the selected user prop path will be updated to the value above." showIcon />
+            <Button
+              disabled={!bindingTargetPath}
+              onClick={() => message.success('Binding stored. It will execute on click.')}>
+              Save Binding
+            </Button>
+          </Space>
+        </Card>
+      </Space>
+    );
+  };
+
   const tabItems = [
     {
       key: 'appearance',
@@ -722,6 +768,16 @@ const ButtonSettings = ({
         </Space>
       ),
       children: <ScriptTab />
+    },
+    {
+      key: 'userPropsBinding',
+      label: (
+        <Space>
+          <LinkOutlined />
+          User Prop Binding
+        </Space>
+      ),
+      children: <UserPropsBindingTab />
     }
   ];
 

@@ -1,4 +1,4 @@
-const { describe, it, expect, jest, beforeEach } = require('@jest/globals');
+const { describe, it, expect, beforeEach } = require('@jest/globals');
 
 // Mock Firebase Admin
 const mockFirestore = {

@@ -12,14 +12,17 @@ import {
   MenuOutlined, MinusOutlined, PictureOutlined, PlusOutlined, PushpinOutlined,
   RadiusBottomleftOutlined, RadiusBottomrightOutlined, RadiusUpleftOutlined,
   RadiusUprightOutlined, SettingOutlined, ShrinkOutlined, StrikethroughOutlined,
-  TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,FormOutlined  ,
-  VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined, ShoppingCartOutlined
+  TableOutlined, UnderlineOutlined, UploadOutlined, VerticalAlignBottomOutlined,FormOutlined,
+  VerticalAlignMiddleOutlined, VerticalAlignTopOutlined, LinkOutlined, ShoppingCartOutlined,
+  UserOutlined
 } from "@ant-design/icons";
 import { Button, Collapse, ColorPicker, Divider, Form, Input, Select, Slider, Space, Tooltip, Switch, InputNumber, Typography, Tag, Radio } from "antd";
 import { useEditor } from "@craftjs/core";
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useMultiSelect } from '../utils/context/MultiSelectContext';
 import { FigmaStyleMenu } from './FigmaStyleMenu';
+import UserPropsManager from '../utils/userprops/UserPropsManager';
+import { useUserProps } from '../utils/userprops/useUserProps';
 
 const { TextArea } = Input;
 // Debounce utility
@@ -743,6 +746,9 @@ export function StyleMenu({
     ariaDescribedBy: props?.ariaDescribedBy || "", ariaLabelledBy: props?.ariaLabelledBy || "",
     dataAttributes: props?.dataAttributes || {}
   });
+
+  // State for UserPropsManager modal
+  const [userPropsModalVisible, setUserPropsModalVisible] = useState(false);
 
 // Sync local state with selected node props when selection changes
   useEffect(() => {
@@ -3535,6 +3541,26 @@ if (shouldShow('attributes')) {
   }
 }
 
+// User Props Section (Always available for user components)
+items.push({
+  key: 'userProps',
+  label: <span><UserOutlined /> User Props</span>,
+  children: (
+    <div style={{ padding: '0 20px 16px 20px' }}>
+      <Form.Item label="Custom Properties" style={sharedStyles.formItem}>
+        <Button 
+          icon={<FormOutlined />} 
+          onClick={() => setUserPropsModalVisible(true)}
+          size="small"
+          block
+        >
+          Manage User Props
+        </Button>
+      </Form.Item>
+    </div>
+  )
+});
+
     return items;
   }, [localStyle, shouldShow, handleInputChange, handleSelectChange, handleSliderChange, handleColorChange, handleButtonGroupChange, handleNumberChange, handleSwitchChange, sharedStyles, debouncedSync]);
 
@@ -3652,6 +3678,14 @@ if (shouldShow('attributes')) {
           </div>
         )}
       </div>
+
+      {/* UserPropsManager Modal */}
+      <UserPropsManager
+        visible={userPropsModalVisible}
+        onClose={() => setUserPropsModalVisible(false)}
+        nodeId={selected?.isMultiple ? null : selected?.id}
+        selectedNodes={selected?.isMultiple ? selected.nodes : null}
+      />
     </div>
   );
 }

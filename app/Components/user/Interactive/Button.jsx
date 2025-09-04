@@ -14,6 +14,8 @@ import useEditorDisplay from "../../utils/craft/useEditorDisplay";
 import { useContextMenu } from "../../utils/hooks/useContextMenu";
 import ButtonSettings from "../support/ButtonSettings";
 import PortalControls from "../support/PortalControls";
+// Corrected relative path to userProps hook
+import { useUserProps } from '../../utils/userprops/useUserProps';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -344,6 +346,19 @@ const ButtonComponent = ({
     // Execute custom script
     executeCustomScript();
     
+    // User prop binding (simple string value update)
+    try {
+      if (props.userPropBindingPath && props.userPropBindingPath.trim()) {
+        const { setPrimitiveAtPath } = useUserProps(props.userPropBindingTarget || nodeId); // default to same node
+        const targetNode = props.userPropBindingTarget || nodeId;
+        const value = props.userPropBindingValue !== undefined ? props.userPropBindingValue : '';
+        // Execute mutation
+        setPrimitiveAtPath(props.userPropBindingPath, value, 'string', targetNode);
+      }
+    } catch (err) {
+      console.warn('User prop binding failed:', err);
+    }
+
     // Handle navigation
     handleNavigation();
   };
