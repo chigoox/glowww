@@ -1,12 +1,14 @@
 'use client'
 
 import { useEditor, useNode } from "@craftjs/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import ContextMenu from "../../utils/context/ContextMenu";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import useEditorDisplay from "../../utils/context/useEditorDisplay";
 import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import PortalControls from "../support/PortalControls";
+import { useUserProps } from '../../utils/userprops/useUserProps';
+import BindSelector from '../support/BindSelector';
 
 export const Text = ({
   // Content
@@ -239,14 +241,22 @@ export const Text = ({
   ariaLabelledBy = "",
   
   // Data Attributes
-  dataAttributes = {}
+  dataAttributes = {},
+  // Binding (optional)
+  textBindingPath = '',
+  textBindingScope = 'local'
 }) => {
-  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent } = useNode((node) => ({
+  const { id: nodeId, connectors: { connect, drag }, actions: { setProp }, selected: isSelected, parent, userPropsWatcherSnapshot } = useNode((node) => ({
     id: node.id,
     selected: node.events.selected,
     parent: node.data.parent,
+    userPropsWatcherSnapshot: node.data.props.userPropsWatcherSnapshot
   }));
   const { actions: editorActions, query } = useEditor();
+  // User props API (must be after nodeId available)
+  const userPropsApi = useUserProps(nodeId);
+  const userPropsApiRef = useRef(userPropsApi); // stable ref
+  useEffect(() => { userPropsApiRef.current = userPropsApi; }, [userPropsApi]);
   
   // Use snap functionality
   const { connectors: { snapConnect, snapDrag } } = useCraftSnap(nodeId);
@@ -257,6 +267,8 @@ export const Text = ({
   // Use our shared editor display hook
   const { hideEditorUI } = useEditorDisplay();
 
+  // Outer wrapper (for measuring & selection) and inner editable paragraph
+  const wrapperRef = useRef(null);
   const textRef = useRef(null);
   const dragRef = useRef(null);
   const contentRef = useRef(null);
@@ -281,6 +293,36 @@ export const Text = ({
   const [boxShadowColor, setBoxShadowColor] = useState('#000000');
   // Which dropdown is currently open ('textShadow' | 'boxShadow' | null)
   const [openDropdown, setOpenDropdown] = useState(null);
+  // When bound, watch user prop value and sync component text (one-way source of truth)
+  useEffect(() => {
+    if (!textBindingPath) return;
+    try {
+      const api = userPropsApiRef.current;
+      const scopeNode = textBindingScope === 'global' ? 'ROOT' : nodeId;
+      const val = api.getValueAtPath(textBindingPath, scopeNode);
+      if (typeof val === 'string' && val !== text) {
+        setProp(p => { p.text = val; });
+        if (!isEditing) setLocalText(val);
+      }
+    } catch (e) {
+      // ignore errors during sync
+    }
+  }, [textBindingPath, textBindingScope, nodeId, isEditing, text, userPropsWatcherSnapshot, setProp]);
+
+  // When editing a bound text, push edits back to user prop path (live)
+  useEffect(() => {
+    if (!isEditing) return;
+    if (!textBindingPath) return;
+    const handle = setTimeout(() => {
+      try {
+        const api = userPropsApiRef.current;
+        const scopeNode = textBindingScope === 'global' ? 'ROOT' : nodeId;
+        // push localText to user prop path
+        api.setPrimitiveSmartAtPath(textBindingPath, localText, { respectExistingType: true }, scopeNode);
+      } catch {/* ignore */}
+    }, 150); // debounce
+    return () => clearTimeout(handle);
+  }, [localText, isEditing, textBindingPath, textBindingScope, nodeId]);
   // Safe numeric min constraints (respect explicit 0 instead of falsy fallback)
   const safeMinWidth = (() => {
     if (typeof minWidth === 'number') return minWidth;
@@ -343,9 +385,9 @@ export const Text = ({
   };
 
   // Function to update box position for portal positioning
-  const updateBoxPosition = () => {
-    if (textRef.current) {
-      const rect = textRef.current.getBoundingClientRect();
+  const updateBoxPosition = useCallback(() => {
+    if (wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
       setBoxPosition({
         top: rect.top + window.scrollY,
         left: rect.left + window.scrollX,
@@ -353,7 +395,7 @@ export const Text = ({
         height: rect.height
       });
     }
-  };
+  }, []);
 
   // Helper to apply live style updates to the actual text element (span/p)
   const applyToContent = (fn) => {
@@ -452,8 +494,8 @@ export const Text = ({
 
   useEffect(() => {
     const connectElements = () => {
-      if (textRef.current) {
-        snapConnect(textRef.current); // selection & snap registration
+      if (wrapperRef.current) {
+        snapConnect(wrapperRef.current); // selection & snap registration
       }
       if (dragRef.current) {
         // Use core Craft drag for container moves (like Box/FlexBox) instead of snapDrag
@@ -538,12 +580,12 @@ export const Text = ({
       });
       
       // Restore cursor position after the update
-      if (textRef.current && document.activeElement === textRef.current) {
+    if (textRef.current && document.activeElement === textRef.current) {
         const range = document.createRange();
         const selection = window.getSelection();
         
         try {
-          const textNode = textRef.current.childNodes[0] || textRef.current;
+      const textNode = textRef.current.childNodes[0] || textRef.current;
           const maxLength = textNode.nodeType === Node.TEXT_NODE ? textNode.textContent.length : 0;
           const safePosition = Math.min(cursorPosition, maxLength);
           
@@ -570,12 +612,12 @@ export const Text = ({
       setProp(props => {
         props.text = localText;
       });
-      textRef.current?.blur();
+  textRef.current?.blur();
     }
     if (e.key === 'Escape') {
       setIsEditing(false);
       setLocalText(text);
-      textRef.current?.blur();
+  textRef.current?.blur();
     }
   };
 
@@ -662,9 +704,9 @@ export const Text = ({
 
     const handleGlobalClick = (e) => {
       // Check if click is inside the text element or font controls
-      if (!textRef.current) return;
+  if (!wrapperRef.current) return;
 
-      const isInsideText = textRef.current.contains(e.target);
+  const isInsideText = wrapperRef.current.contains(e.target);
       const isInsideControls = e.target.closest && (e.target.closest('[data-font-controls]') ||
                               e.target.tagName === 'BUTTON' ||
                               e.target.tagName === 'SELECT' ||
@@ -889,7 +931,7 @@ export const Text = ({
   return (
     <div
       className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
-      ref={textRef}
+      ref={wrapperRef}
       style={{
         ...computedStyles,
         position: 'relative',
@@ -988,7 +1030,7 @@ export const Text = ({
           <span ref={contentRef} style={contentStyles}>{localText}</span>
         </p>
       ) : (
-        <p
+  <p
           style={{
             display: 'block',
             width: '100%',
@@ -1317,7 +1359,36 @@ export const Text = ({
               </div>
             </div>
               {/* Compact exit button moved into the main controls row */}
-              <div style={{ marginLeft: 'auto' }}>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                {/* Binding selector */}
+                <BindSelector
+                  nodeId={nodeId}
+                  variant="toolbar"
+                  showLabel={false}
+                  binding={(() => {
+                    if (!textBindingPath) return null;
+                    return { path: textBindingPath, scope: textBindingScope || 'local' };
+                  })()}
+                  onChange={(b) => {
+                    setProp(p => {
+                      p.textBindingPath = b?.path || '';
+                      p.textBindingScope = b?.scope || 'local';
+                    });
+                    if (b && b.path) {
+                      try {
+                        const api = userPropsApiRef.current;
+                        const scopeNode = b.scope === 'global' ? 'ROOT' : nodeId;
+                        const val = api.getValueAtPath(b.path, scopeNode);
+                        if (typeof val === 'string') {
+                          setProp(p => { p.text = val; });
+                          setLocalText(val);
+                        }
+                      } catch {/* ignore */}
+                    }
+                  }}
+                  label="Bind Text"
+                  style={{ height: 32 }}
+                />
                 <button
                   onClick={(e) => {
                     e.preventDefault();
@@ -1590,7 +1661,11 @@ Text.craft = {
     ariaLabelledBy: "",
     
     // Data Attributes
-    dataAttributes: {}
+  dataAttributes: {},
+
+  // Binding
+  textBindingPath: '',
+  textBindingScope: 'local'
   },
   rules: {
     canDrag: () => true,

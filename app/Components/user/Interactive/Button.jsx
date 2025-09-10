@@ -172,6 +172,8 @@ const ButtonComponent = ({
   const { hideEditorUI } = useEditorDisplay();
   const { snapConnect } = useCraftSnap();
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  // User props API (hook must be called at top-level)
+  const userPropsApi = useUserProps(nodeId);
   
   const buttonRef = useRef(null);
   const dragRef = useRef(null);
@@ -180,6 +182,38 @@ const ButtonComponent = ({
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [buttonPosition, setButtonPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [toggleStates, setToggleStates] = useState({});
+
+  // Coercion helpers to keep component prop values in the right type
+  const smartInfer = (val) => {
+    if (val === null || val === undefined) return val;
+    if (typeof val !== 'string') return val;
+    const s = val.trim();
+    if (s === '') return '';
+    if (s === 'true') return true;
+    if (s === 'false') return false;
+    const n = Number(s);
+    if (!Number.isNaN(n) && /^-?\d*(\.\d+)?$/.test(s)) return n;
+    return val;
+  };
+
+  const coerceToMatchType = (current, input) => {
+    // If we have an existing type on the prop, match it
+    if (typeof current === 'number') {
+      if (typeof input === 'number') return input;
+      const n = Number(input);
+      return Number.isNaN(n) ? current : n;
+    }
+    if (typeof current === 'boolean') {
+      if (typeof input === 'boolean') return input;
+      if (typeof input === 'string') return input === 'true';
+      return Boolean(input);
+    }
+    if (typeof current === 'string') {
+      return String(input);
+    }
+    // Fallback: infer basic primitives from string; otherwise pass-through
+    return smartInfer(input);
+  };
 
   // Update position function
   const updateButtonPosition = useCallback(() => {
@@ -266,26 +300,52 @@ const ButtonComponent = ({
 
   // Execute control
   const executeControl = (control) => {
-    if (!control.targetComponent || !control.targetProp || !actions) return;
-    
+    if (!actions) return;
+    const category = control.targetCategory || 'component';
+    const isToggle = !!control.isToggle;
     try {
-      if (control.isToggle) {
-        const currentState = toggleStates[control.id] || 0;
-        const nextState = control.loop ? 
-          (currentState + 1) % control.toggleValues.length :
-          Math.min(currentState + 1, control.toggleValues.length - 1);
-        
-        setToggleStates(prev => ({ ...prev, [control.id]: nextState }));
-        
-        const value = control.toggleValues[nextState];
-        actions.setProp(control.targetComponent, (props) => {
-          props[control.targetProp] = value;
-        });
-      } else {
-        const value = control.values[0];
-        actions.setProp(control.targetComponent, (props) => {
-          props[control.targetProp] = value;
-        });
+      if (category === 'component') {
+        if (!control.targetComponent || !control.targetProp) return;
+        // Read current value to determine desired type
+        let currentVal;
+        try {
+          currentVal = query.node(control.targetComponent).get().data.props[control.targetProp];
+        } catch (_) {
+          currentVal = undefined;
+        }
+        if (isToggle) {
+          const currentState = toggleStates[control.id] || 0;
+          const nextState = control.loop ? (currentState + 1) % control.toggleValues.length : Math.min(currentState + 1, control.toggleValues.length - 1);
+          setToggleStates(prev => ({ ...prev, [control.id]: nextState }));
+          const raw = control.toggleValues[nextState];
+          const value = coerceToMatchType(currentVal, raw);
+          actions.setProp(control.targetComponent, (props) => {
+            props[control.targetProp] = value;
+          });
+        } else {
+          const raw = control.values?.[0];
+          const value = coerceToMatchType(currentVal, raw);
+          actions.setProp(control.targetComponent, (props) => {
+            props[control.targetProp] = value;
+          });
+        }
+      } else if (category === 'userProps') {
+        const targetNode = control.targetUserNodeId || control.targetComponent; // component id or 'ROOT'
+        const path = control.targetUserPropPath;
+        if (!targetNode || !path) return;
+        const { setPrimitiveSmartAtPath, inferTypeFromString } = userPropsApi;
+        if (isToggle) {
+          const currentState = toggleStates[control.id] || 0;
+          const nextState = control.loop ? (currentState + 1) % control.toggleValues.length : Math.min(currentState + 1, control.toggleValues.length - 1);
+          setToggleStates(prev => ({ ...prev, [control.id]: nextState }));
+          const raw = control.toggleValues[nextState];
+          const inferred = inferTypeFromString(String(raw));
+          setPrimitiveSmartAtPath(path, raw, { explicitType: undefined, respectExistingType: true, inferredType: inferred }, targetNode);
+        } else {
+          const raw = control.values?.[0];
+          const inferred = inferTypeFromString(String(raw ?? ''));
+          setPrimitiveSmartAtPath(path, raw, { explicitType: undefined, respectExistingType: true, inferredType: inferred }, targetNode);
+        }
       }
     } catch (error) {
       console.error('Error executing control:', error);
@@ -346,14 +406,19 @@ const ButtonComponent = ({
     // Execute custom script
     executeCustomScript();
     
-    // User prop binding (simple string value update)
+    // User prop binding with smart coercion
     try {
       if (props.userPropBindingPath && props.userPropBindingPath.trim()) {
-        const { setPrimitiveAtPath } = useUserProps(props.userPropBindingTarget || nodeId); // default to same node
+        const { setPrimitiveSmartAtPath, inferTypeFromString } = userPropsApi;
         const targetNode = props.userPropBindingTarget || nodeId;
-        const value = props.userPropBindingValue !== undefined ? props.userPropBindingValue : '';
-        // Execute mutation
-        setPrimitiveAtPath(props.userPropBindingPath, value, 'string', targetNode);
+        const raw = props.userPropBindingValue !== undefined ? props.userPropBindingValue : '';
+        const explicitType = props.userPropBindingType || undefined;
+        const inferred = inferTypeFromString(String(raw));
+        setPrimitiveSmartAtPath(props.userPropBindingPath, raw, {
+          explicitType: explicitType || undefined,
+          respectExistingType: !explicitType,
+          inferredType: inferred
+        }, targetNode);
       }
     } catch (err) {
       console.warn('User prop binding failed:', err);

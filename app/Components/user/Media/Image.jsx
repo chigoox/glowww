@@ -352,17 +352,15 @@ export const Image = ({
       }}
       onContextMenu={hideEditorUI ? undefined : handleContextMenu}
     >
-      {/* Portal controls rendered outside this container to avoid overflow clipping */}
-      {isClient && isSelected && !hideEditorUI && (
-       <div>
-         <PortalControls
+      {/* Portal controls moved to a real React portal so their dropdowns overlay the image */}
+      {isClient && isSelected && !hideEditorUI && createPortal(
+        <PortalControls
           boxPosition={boxPosition}
           dragRef={dragRef}
           nodeId={nodeId}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
           updateBoxPosition={updateBoxPosition}
-
           onEditClick={() => setShowMediaLibrary(true)}
           targetRef={imageRef}
           editorActions={editorActions}
@@ -371,9 +369,8 @@ export const Image = ({
           minHeight={typeof minHeight === 'number' ? minHeight : parseInt(minHeight) || 20}
           onResize={updateBoxPosition}
           onResizeEnd={updateBoxPosition}
-        />
-        
-       </div>
+        />,
+        document.body
       )}
 
       {/* Main image */}

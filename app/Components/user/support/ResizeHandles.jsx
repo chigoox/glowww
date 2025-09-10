@@ -39,7 +39,7 @@ export const ResizeHandles = ({
   edgeLength = 20,
   edgeThickness = 8,
   portal = true,
-  zIndex = 99999,
+  zIndex = 999,
   enableInternalResize = true,
   nodeId,
   targetRef,

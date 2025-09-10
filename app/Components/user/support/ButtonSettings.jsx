@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Modal, 
   Tabs, 
@@ -15,7 +15,7 @@ import {
   Card,
   Divider,
   AutoComplete,
-  message,
+  Alert,
   Tooltip,
   Row,
   Col
@@ -66,8 +66,6 @@ const ButtonSettings = ({
 }) => {
   const { query, actions } = useEditor();
   const { listUserPropPaths, getNodeMeta } = useUserProps();
-  const [bindingTargetPath, setBindingTargetPath] = useState(currentProps.userPropBindingPath || '');
-  const [bindingValue, setBindingValue] = useState(currentProps.userPropBindingValue || '');
   
   // Local state for settings
   const [activeTab, setActiveTab] = useState('appearance');
@@ -94,13 +92,23 @@ const ButtonSettings = ({
   }, [iconSearch]);
 
   // Update props helper
-  const updateProp = (propName, value) => {
-    if (onPropsChange) {
-      onPropsChange({ [propName]: value });
-    } else if (actions) {
-      actions.setProp(nodeId, (props) => {
-        props[propName] = value;
-      });
+  // Debounced updates to avoid focus loss on every keystroke
+  const debouncedTimers = useRef({});
+  const updateProp = (propName, value, opts = { debounce: false }) => {
+    const doSet = () => {
+      if (onPropsChange) {
+        onPropsChange({ [propName]: value });
+      } else if (actions) {
+        actions.setProp(nodeId, (props) => {
+          props[propName] = value;
+        });
+      }
+    };
+    if (opts.debounce) {
+      clearTimeout(debouncedTimers.current[propName]);
+      debouncedTimers.current[propName] = setTimeout(doSet, 250);
+    } else {
+      doSet();
     }
   };
 
@@ -109,7 +117,10 @@ const ButtonSettings = ({
     const newControl = {
       id: Date.now().toString(),
       targetComponent: '',
-      targetProp: '',
+  targetProp: '',
+  targetCategory: 'component', // 'component' | 'userProps'
+  targetUserNodeId: '', // component id or 'ROOT'
+  targetUserPropPath: '',
       trigger: 'click',
       isToggle: false,
       values: [''],
@@ -152,14 +163,25 @@ const ButtonSettings = ({
 
   // Render property input based on type
   const renderPropertyInput = (control, valueIndex = null) => {
-    if (!control.targetComponent || !control.targetProp) return null;
+    const category = control.targetCategory || 'component';
+    if (!control.targetComponent) return null;
 
-    const component = availableComponents.find(c => c.id === control.targetComponent);
-    if (!component) return null;
-
-    const properties = getComponentProperties(component.type);
-    const property = properties[control.targetProp];
-    if (!property) return null;
+    let property = null;
+    if (category === 'component') {
+      if (!control.targetProp) return null;
+      const component = availableComponents.find(c => c.id === control.targetComponent);
+      if (!component) return null;
+      const properties = getComponentProperties(component.type);
+      property = properties[control.targetProp];
+      if (!property) return null;
+    } else if (category === 'userProps') {
+      const nodeIdForUser = control.targetUserNodeId || control.targetComponent;
+      if (!nodeIdForUser || !control.targetUserPropPath) return null;
+      const meta = getNodeMeta(control.targetUserPropPath, nodeIdForUser);
+      if (!meta) return null;
+      const typeMap = { string: 'text', number: 'number', boolean: 'boolean', object: 'object', array: 'array' };
+      property = { type: typeMap[meta.type] || 'text', label: control.targetUserPropPath };
+    }
 
     const isToggleValue = valueIndex !== null;
     const value = isToggleValue ? 
@@ -188,8 +210,14 @@ const ButtonSettings = ({
       case 'number':
         return (
           <InputNumber
-            value={parseFloat(value) || 0}
-            onChange={onChange}
+            value={
+              typeof value === 'number'
+                ? value
+                : (value === '' || value === null || value === undefined
+                    ? undefined
+                    : (Number.isNaN(Number(value)) ? undefined : Number(value)))
+            }
+            onChange={(num) => onChange(num)}
             style={{ width: '100%' }}
           />
         );
@@ -197,7 +225,7 @@ const ButtonSettings = ({
         return (
           <Select
             value={value}
-            onChange={onChange}
+            onChange={(v) => onChange(v)}
             style={{ width: '100%' }}
           >
             {property.options.map(option => (
@@ -209,7 +237,7 @@ const ButtonSettings = ({
         return (
           <Switch
             checked={value === 'true' || value === true}
-            onChange={(checked) => onChange(checked)}
+            onChange={(checked) => onChange(Boolean(checked))}
           />
         );
       case 'array':
@@ -318,7 +346,7 @@ const ButtonSettings = ({
             <Text strong>Button Text</Text>
             <Input
               value={currentProps.text || ''}
-              onChange={(e) => updateProp('text', e.target.value)}
+              onChange={(e) => updateProp('text', e.target.value, { debounce: true })}
               placeholder="Enter button text"
               style={{ marginTop: 4 }}
             />
@@ -451,27 +479,108 @@ const ButtonSettings = ({
                       </Select>
                     </Col>
                     <Col span={12}>
-                      <Text strong>Property to Control</Text>
+                      <Text strong>Control Type</Text>
                       <Select
-                        value={control.targetProp}
-                        onChange={(value) => updateControl(index, 'targetProp', value)}
+                        value={control.targetCategory || 'component'}
+                        onChange={(value) => {
+                          const patch = value === 'component'
+                            ? { targetCategory: value, targetProp: '', targetUserNodeId: '', targetUserPropPath: '' }
+                            : { targetCategory: value, targetProp: '', targetUserNodeId: control.targetComponent || '', targetUserPropPath: '' };
+                          const updated = { ...control, ...patch };
+                          const updatedControls = [...(currentProps.controls || [])];
+                          updatedControls[index] = updated;
+                          updateProp('controls', updatedControls);
+                        }}
                         style={{ width: '100%', marginTop: 4 }}
-                        placeholder="Select property"
-                        disabled={!control.targetComponent}
                       >
-                        {control.targetComponent && (() => {
-                          const component = availableComponents.find(c => c.id === control.targetComponent);
-                          if (component) {
-                            const properties = getComponentProperties(component.type);
-                            return Object.entries(properties).map(([key, prop]) => (
-                              <Option key={key} value={key}>{prop.label}</Option>
-                            ));
-                          }
-                          return [];
-                        })()}
+                        <Option value="component">Component Props</Option>
+                        <Option value="userProps">User Props</Option>
                       </Select>
                     </Col>
                   </Row>
+
+                  {(control.targetCategory || 'component') === 'component' ? (
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Text strong>Property to Control</Text>
+                        <Select
+                          value={control.targetProp}
+                          onChange={(value) => updateControl(index, 'targetProp', value)}
+                          style={{ width: '100%', marginTop: 4 }}
+                          placeholder="Select property"
+                          disabled={!control.targetComponent}
+                        >
+                          {control.targetComponent && (() => {
+                            const component = availableComponents.find(c => c.id === control.targetComponent);
+                            if (component) {
+                              const properties = getComponentProperties(component.type);
+                              return Object.entries(properties).map(([key, prop]) => (
+                                <Option key={key} value={key}>{prop.label}</Option>
+                              ));
+                            }
+                            return [];
+                          })()}
+                        </Select>
+                      </Col>
+                    </Row>
+                  ) : (
+                    <>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Text strong>User Prop Scope</Text>
+                          <Select
+                            value={control.targetUserNodeId || control.targetComponent || ''}
+                            onChange={(value) => updateControl(index, 'targetUserNodeId', value)}
+                            style={{ width: '100%', marginTop: 4 }}
+                            disabled={!control.targetComponent}
+                          >
+                            {!!control.targetComponent && <Option value={control.targetComponent}>Local (this component)</Option>}
+                            <Option value={'ROOT'}>Global</Option>
+                          </Select>
+                        </Col>
+                        <Col span={12}>
+                          <Text strong>User Prop Path</Text>
+                          <Select
+                            showSearch
+                            allowClear
+                            value={control.targetUserPropPath || undefined}
+                            onChange={(value) => updateControl(index, 'targetUserPropPath', value || '')}
+                            style={{ width: '100%', marginTop: 4 }}
+                            placeholder="Select user prop path"
+                            disabled={!control.targetUserNodeId && !control.targetComponent}
+                            options={( () => {
+                              const nodeIdForPaths = control.targetUserNodeId || control.targetComponent;
+                              if (!nodeIdForPaths) return [];
+                              const locals = listUserPropPaths({ leavesOnly: true }, nodeIdForPaths) || [];
+                              const globals = nodeIdForPaths !== 'ROOT' ? (listUserPropPaths({ leavesOnly: true }, 'ROOT') || []) : [];
+                              const isLocalBound = (p) => !!(getNodeMeta(p.path, nodeIdForPaths)?.meta?.ref);
+                              const isGlobalBound = (p) => !!(getNodeMeta(p.path, 'ROOT')?.meta?.ref);
+                              const localFree = locals.filter(p => !isLocalBound(p)).map(p => ({ label: p.path, value: p.path }));
+                              const localBound = locals.filter(p => isLocalBound(p)).map(p => ({ label: `${p.path} — bound to component prop`, value: `__bound__local__${p.path}` , disabled: true }));
+                              const globalFree = globals.filter(p => !isGlobalBound(p)).map(p => ({ label: `${p.path} (global)`, value: p.path }));
+                              const globalBound = globals.filter(p => isGlobalBound(p)).map(p => ({ label: `${p.path} (global) — bound to component prop`, value: `__bound__global__${p.path}`, disabled: true }));
+                              const groups = [];
+                              groups.push({ label: 'Local User Props', options: localFree });
+                              if (localBound.length) groups.push({ label: 'Local (bound - not selectable)', options: localBound });
+                              if (globalFree.length) groups.push({ label: 'Global User Props', options: globalFree });
+                              if (globalBound.length) groups.push({ label: 'Global (bound - not selectable)', options: globalBound });
+                              return groups;
+                            })()}
+                          />
+                          {(control.targetUserPropPath && (control.targetUserNodeId || control.targetComponent)) && (
+                            (() => {
+                              const meta = getNodeMeta(control.targetUserPropPath, control.targetUserNodeId || control.targetComponent);
+                              return meta ? (
+                                <div style={{ marginTop: 4 }}>
+                                  <Text type="secondary" style={{ fontSize: 12 }}>Type: {meta.type}{meta.global ? ' (global)' : ''}</Text>
+                                </div>
+                              ) : null;
+                            })()
+                          )}
+                        </Col>
+                      </Row>
+                    </>
+                  )}
 
                   <Row gutter={16}>
                     <Col span={12}>
@@ -497,53 +606,67 @@ const ButtonSettings = ({
                     </Col>
                   </Row>
 
-                  {control.isToggle ? (
-                    <>
-                      <div>
-                        <Text strong>Number of Toggle Values</Text>
-                        <InputNumber
-                          min={2}
-                          max={10}
-                          value={control.toggleValues.length}
-                          onChange={(count) => {
-                            const newValues = [...control.toggleValues];
-                            while (newValues.length < count) newValues.push('');
-                            while (newValues.length > count) newValues.pop();
-                            updateControl(index, 'toggleValues', newValues);
-                          }}
-                          style={{ width: '100%', marginTop: 4 }}
+                  {(() => {
+                    const isUserProps = (control.targetCategory || 'component') === 'userProps';
+                    const hasUserPath = !!control.targetUserPropPath;
+                    if (isUserProps && !hasUserPath) {
+                      return (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message="Select a User Prop Path to configure values"
+                          style={{ marginTop: 8 }}
                         />
-                      </div>
-
-                      <Space direction="vertical" style={{ width: '100%' }}>
-                        {control.toggleValues.map((value, valueIndex) => (
-                          <div key={valueIndex}>
-                            <Text strong>Value {valueIndex + 1}:</Text>
-                            <div style={{ marginTop: 4 }}>
-                              {renderPropertyInput({ ...control, index }, valueIndex)}
-                            </div>
-                          </div>
-                        ))}
-                      </Space>
-
-                      <div>
-                        <Space>
-                          <Switch
-                            checked={control.loop}
-                            onChange={(value) => updateControl(index, 'loop', value)}
+                      );
+                    }
+                    return control.isToggle ? (
+                      <>
+                        <div>
+                          <Text strong>Number of Toggle Values</Text>
+                          <InputNumber
+                            min={2}
+                            max={10}
+                            value={control.toggleValues.length}
+                            onChange={(count) => {
+                              const newValues = [...control.toggleValues];
+                              while (newValues.length < count) newValues.push('');
+                              while (newValues.length > count) newValues.pop();
+                              updateControl(index, 'toggleValues', newValues);
+                            }}
+                            style={{ width: '100%', marginTop: 4 }}
                           />
-                          <Text strong>Loop back to first value</Text>
+                        </div>
+
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          {control.toggleValues.map((value, valueIndex) => (
+                            <div key={valueIndex}>
+                              <Text strong>Value {valueIndex + 1}:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                {renderPropertyInput({ ...control, index }, valueIndex)}
+                              </div>
+                            </div>
+                          ))}
                         </Space>
+
+                        <div>
+                          <Space>
+                            <Switch
+                              checked={control.loop}
+                              onChange={(value) => updateControl(index, 'loop', value)}
+                            />
+                            <Text strong>Loop back to first value</Text>
+                          </Space>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <Text strong>Value:</Text>
+                        <div style={{ marginTop: 4 }}>
+                          {renderPropertyInput({ ...control, index })}
+                        </div>
                       </div>
-                    </>
-                  ) : (
-                    <div>
-                      <Text strong>Value:</Text>
-                      <div style={{ marginTop: 4 }}>
-                        {renderPropertyInput({ ...control, index })}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </Space>
               </Card>
             ))}
@@ -576,7 +699,7 @@ const ButtonSettings = ({
               <Text strong>External URL</Text>
               <Input
                 value={currentProps.navigationUrl}
-                onChange={(e) => updateProp('navigationUrl', e.target.value)}
+                onChange={(e) => updateProp('navigationUrl', e.target.value, { debounce: true })}
                 placeholder="https://example.com"
                 style={{ marginTop: 4 }}
               />
@@ -588,7 +711,7 @@ const ButtonSettings = ({
               <Text strong>Internal Page Path</Text>
               <Input
                 value={currentProps.navigationPage}
-                onChange={(e) => updateProp('navigationPage', e.target.value)}
+                onChange={(e) => updateProp('navigationPage', e.target.value, { debounce: true })}
                 placeholder="/about"
                 style={{ marginTop: 4 }}
               />
@@ -600,7 +723,7 @@ const ButtonSettings = ({
               <Text strong>Element ID to Scroll To</Text>
               <Input
                 value={currentProps.scrollTarget}
-                onChange={(e) => updateProp('scrollTarget', e.target.value)}
+                onChange={(e) => updateProp('scrollTarget', e.target.value, { debounce: true })}
                 placeholder="section-id"
                 style={{ marginTop: 4 }}
               />
@@ -686,47 +809,6 @@ const ButtonSettings = ({
     );
   };
 
-  const UserPropsBindingTab = () => {
-    const paths = listUserPropPaths({ leavesOnly: true }) || [];
-    return (
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Card title="User Prop Binding" size="small">
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <div>
-              <Text strong>Select Target User Prop Path</Text>
-              <Select
-                showSearch
-                allowClear
-                value={bindingTargetPath || undefined}
-                onChange={(val) => { setBindingTargetPath(val || ''); updateProp('userPropBindingPath', val || ''); }}
-                style={{ width: '100%', marginTop: 4 }}
-                placeholder="Choose a user prop leaf path"
-                options={paths.map(p => ({
-                  label: p.path + (getNodeMeta(p.path)?.global ? ' (global)' : ''),
-                  value: p.path
-                }))}
-              />
-            </div>
-            <div>
-              <Text strong>Value To Set On Click</Text>
-              <Input
-                value={bindingValue}
-                onChange={(e) => { setBindingValue(e.target.value); updateProp('userPropBindingValue', e.target.value); }}
-                placeholder="New value (string type only for now)"
-                style={{ marginTop: 4 }}
-              />
-            </div>
-            <Alert type="info" message="When this button is clicked in runtime, the selected user prop path will be updated to the value above." showIcon />
-            <Button
-              disabled={!bindingTargetPath}
-              onClick={() => message.success('Binding stored. It will execute on click.')}>
-              Save Binding
-            </Button>
-          </Space>
-        </Card>
-      </Space>
-    );
-  };
 
   const tabItems = [
     {
@@ -768,17 +850,7 @@ const ButtonSettings = ({
         </Space>
       ),
       children: <ScriptTab />
-    },
-    {
-      key: 'userPropsBinding',
-      label: (
-        <Space>
-          <LinkOutlined />
-          User Prop Binding
-        </Space>
-      ),
-      children: <UserPropsBindingTab />
-    }
+  }
   ];
 
   return (

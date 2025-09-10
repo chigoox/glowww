@@ -1,18 +1,31 @@
 'use client';
 
 import React, { createContext, useContext, useCallback } from 'react';
+// Phase 2 template & reorder support
+import * as userPropTemplates from './userPropTemplates.js';
+import { reorderArrayItem, setExpressionAtPath as engineSetExpressionAtPath, createNode } from './userPropsEngine';
 import { useEditor } from '@craftjs/core';
 import {
   ensureTree,
   touchLegacyMap,
   getNodeAtPath,
-  setNodeAtPath,
   setPrimitiveValueAtPath,
   deleteAtPath,
   listPaths,
   addChildToObject,
   pushItemToArray,
-  setGlobalFlag
+  setGlobalFlag,
+  setPrimitiveSmart,
+  inferTypeFromString,
+  coerceToType,
+  searchPaths,
+  setExpressionAtPath,
+  clearExpressionAtPath,
+  clearValidationAtPath,
+  extractExpressionDeps,
+  validateTree,
+  traverseAndSyncReferences,
+  evaluatePipeline
 } from './userPropsEngine';
 
 const UserPropsContext = createContext();
@@ -37,15 +50,14 @@ export const useUserProps = (nodeId = null) => {
     if (!targetNodeId) return {};
     
     try {
-      const node = query.node(targetNodeId);
-      const props = node.get().data.props;
-      return props.userProps || {};
+  const data = query.node(targetNodeId).get();
+  const props = data?.data?.props || {};
+  return props.userProps || {};
     } catch (error) {
       console.warn('Failed to get user props:', error);
       return {};
     }
   }, [query, nodeId]);
-
   // Internal: get or initialize nested tree for a node (mutates props in craft store)
   const getUserPropsTree = useCallback((targetNodeId = nodeId) => {
     if (!targetNodeId) return null;
@@ -188,8 +200,13 @@ export const useUserProps = (nodeId = null) => {
   const listUserPropPaths = useCallback((options = {}, targetNodeId = nodeId) => {
     const tree = getUserPropsTree(targetNodeId);
     if (!tree) return [];
-    // Omit root path itself
     return listPaths(tree, options);
+  }, [getUserPropsTree, nodeId]);
+
+  const searchUserPropPaths = useCallback((queryStr, options = {}, targetNodeId = nodeId) => {
+    const tree = getUserPropsTree(targetNodeId);
+    if (!tree) return [];
+    return searchPaths(tree, queryStr, options);
   }, [getUserPropsTree, nodeId]);
 
   const getValueAtPath = useCallback((path, targetNodeId = nodeId) => {
@@ -203,14 +220,88 @@ export const useUserProps = (nodeId = null) => {
     return node.value;
   }, [getUserPropsTree, nodeId]);
 
+  const scheduleEvaluation = useCallback((targetNodeId = nodeId) => {
+    // Defer so we run outside Immer draft lifecycle
+    setTimeout(async () => {
+      try {
+        const craftNode = query.node(targetNodeId).get();
+        const props = craftNode.data.props;
+        const tree = props.userPropsTree;
+        if (!tree) return;
+        const cloned = JSON.parse(JSON.stringify(tree));
+        const prevSnap = props.userPropsWatcherSnapshot || null;
+        const { exprChanges, validationErrors, watcherResult, metrics } = await evaluatePipeline(cloned, prevSnap);
+        actions.setProp(targetNodeId, (p) => {
+          const liveTree = ensureTree(p);
+          // Apply changed expression node values & error states
+          exprChanges.forEach(pt => {
+            try {
+              const src = getNodeAtPath(cloned, pt);
+              const dst = getNodeAtPath(liveTree, pt);
+              if (src && dst) {
+                dst.type = src.type;
+                if (dst.hasOwnProperty('value')) dst.value = src.value;
+                if (dst.meta && dst.meta.expressionError) delete dst.meta.expressionError;
+                if (src.meta && src.meta.expressionError) {
+                  dst.meta = dst.meta || {}; dst.meta.expressionError = src.meta.expressionError;
+                }
+              }
+            } catch {/* ignore individual path errors */}
+          });
+          // Copy expression errors for nodes without value changes
+          // (light pass: traverse cloned for meta.expressionError)
+          function propagateErrors(node, path='') {
+            if (!node) return;
+            if (node.meta && node.meta.expression && node.meta.expressionError) {
+              const dst = getNodeAtPath(liveTree, path);
+              if (dst) { dst.meta = dst.meta || {}; dst.meta.expressionError = node.meta.expressionError; }
+            } else if (node.meta && node.meta && node.meta.expression && !node.meta.expressionError) {
+              const dst = getNodeAtPath(liveTree, path); if (dst && dst.meta && dst.meta.expressionError) delete dst.meta.expressionError;
+            }
+            if (node.type === 'object') Object.entries(node.children||{}).forEach(([k,c])=>propagateErrors(c, path? path+'.'+k : k));
+            else if (node.type === 'array') (node.items||[]).forEach((c,i)=>propagateErrors(c, path? path+'.'+i : String(i)));
+          }
+          propagateErrors(cloned);
+          p.userPropsValidationErrors = validationErrors;
+          p.userPropsWatcherSnapshot = watcherResult.snapshot;
+          p.userPropsLastMetrics = metrics;
+          if (watcherResult.logs && watcherResult.logs.length) {
+            p.userPropsWatcherLogs = (p.userPropsWatcherLogs || []).concat(watcherResult.logs).slice(-200);
+          }
+          p.userPropsUndoStack = (p.userPropsUndoStack || []).slice(-19);
+          p.userPropsUndoStack.push(JSON.stringify(liveTree));
+          p.userPropsRedoStack = [];
+          touchLegacyMap(p);
+        });
+      } catch (e) {
+        console.warn('Deferred evaluation failed', e);
+      }
+    }, 0);
+  }, [actions, query, nodeId]);
+
   const setPrimitiveAtPath = useCallback((path, value, typeHint, targetNodeId = nodeId) => {
     if (!path) return;
     actions.setProp(targetNodeId, (props) => {
       const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node && node.meta && node.meta.ref) return; // ignore edits to bound props
       setPrimitiveValueAtPath(tree, path, value, typeHint);
       touchLegacyMap(props);
     });
-  }, [actions, nodeId]);
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  const setPrimitiveSmartAtPath = useCallback((path, rawValue, options = {}, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node && node.meta && node.meta.ref) return;
+      setPrimitiveSmart(tree, path, rawValue, options);
+      touchLegacyMap(props);
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
 
   const deletePath = useCallback((path, targetNodeId = nodeId) => {
     if (!path) return;
@@ -253,8 +344,360 @@ export const useUserProps = (nodeId = null) => {
     if (!tree) return null;
     const node = getNodeAtPath(tree, path);
     if (!node) return null;
-    return { type: node.type, global: !!node.global, isLeaf: !['object','array'].includes(node.type) };
+    return { type: node.type, global: !!node.global, isLeaf: !['object','array'].includes(node.type), meta: node.meta || {} };
   }, [getUserPropsTree, nodeId]);
+
+  const updateNodeMeta = useCallback((path, metaPatch, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node) {
+        node.meta = { ...(node.meta||{}), ...metaPatch };
+        touchLegacyMap(props);
+      }
+    });
+  }, [actions, nodeId]);
+
+  // Binding: copy & attach ref to component prop (live sync)
+  const bindUserPropToProp = useCallback((targetPath, sourceNodeId, propName, targetNodeId = nodeId) => {
+    if (!targetPath || !sourceNodeId || !propName) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, targetPath);
+      // Disallow binding for container nodes (object/array)
+      if (node && (node.type === 'object' || node.type === 'array')) {
+        console.warn('Binding disallowed: cannot bind object/array user prop nodes to component props.');
+        return; // abort
+      }
+      if (node) {
+        let value;
+        try { value = query.node(sourceNodeId).get().data.props[propName]; } catch { value = undefined; }
+        if (value !== undefined) {
+          // If source value itself is a container, disallow binding (must be primitive)
+          if (value && typeof value === 'object') {
+            console.warn('Binding disallowed: source component prop is an object/array; only primitive values can be bound.');
+            return; // abort without setting ref
+          }
+          // primitive binding only
+          let t = typeof value;
+          if (!['string','number','boolean'].includes(t)) t = 'string';
+          node.type = t;
+          node.value = value;
+        }
+        node.meta = node.meta || {};
+        node.meta.ref = { sourceNodeId, propName };
+      }
+      touchLegacyMap(props);
+    });
+  }, [actions, nodeId]);
+
+  const unbindUserPropPath = useCallback((targetPath, targetNodeId = nodeId) => {
+    if (!targetPath) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, targetPath);
+      if (node && node.meta && node.meta.ref) delete node.meta.ref;
+      touchLegacyMap(props);
+    });
+  }, [actions, nodeId]);
+
+  // Sync any bound refs by reading live component props through query
+  const syncBoundUserProps = useCallback((targetNodeId = nodeId) => {
+    if (!targetNodeId) return;
+    actions.setProp(targetNodeId, async (props) => {
+      const tree = ensureTree(props);
+      const changed = traverseAndSyncReferences(tree, (srcNodeId, propName) => {
+        try {
+          const n = query.node(srcNodeId).get();
+          return n.data.props[propName];
+        } catch { return undefined; }
+      });
+      const prevSnap = props.userPropsWatcherSnapshot || null;
+      const { exprChanges, validationErrors, watcherResult, metrics } = await evaluatePipeline(tree, prevSnap);
+      props.userPropsValidationErrors = validationErrors;
+      props.userPropsWatcherSnapshot = watcherResult.snapshot;
+      props.userPropsLastMetrics = metrics;
+      if (watcherResult.logs && watcherResult.logs.length) {
+        props.userPropsWatcherLogs = (props.userPropsWatcherLogs || []).concat(watcherResult.logs).slice(-200);
+      }
+      if (changed || exprChanges.length || watcherResult.triggered.length) {
+        props.userPropsUndoStack = (props.userPropsUndoStack || []).slice(-19);
+        props.userPropsUndoStack.push(JSON.stringify(tree));
+        props.userPropsRedoStack = [];
+        touchLegacyMap(props);
+      }
+    });
+  }, [actions, nodeId, query]);
+
+  const evaluateAll = useCallback((targetNodeId = nodeId) => {
+    scheduleEvaluation(targetNodeId);
+  }, [scheduleEvaluation]);
+
+  const getValidationErrors = useCallback((targetNodeId = nodeId) => {
+    try {
+      const node = query.node(targetNodeId).get();
+      return node.data.props.userPropsValidationErrors || {};
+    } catch { return {}; }
+  }, [query, nodeId]);
+
+  const addWatcher = useCallback((path, script, targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node) {
+        node.meta = node.meta || {};
+        node.meta.watchers = Array.isArray(node.meta.watchers) ? node.meta.watchers : [];
+        node.meta.watchers.push({ script });
+      }
+    });
+  }, [actions, nodeId]);
+
+  const removeWatcher = useCallback((path, index, targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node && node.meta && Array.isArray(node.meta.watchers)) {
+        node.meta.watchers.splice(index,1);
+      }
+    });
+  }, [actions, nodeId]);
+
+  const updateWatcher = useCallback((path, index, script, targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node && node.meta && Array.isArray(node.meta.watchers) && node.meta.watchers[index]) {
+        node.meta.watchers[index].script = script;
+      }
+    });
+  }, [actions, nodeId]);
+
+  const listWatchers = useCallback((path, targetNodeId = nodeId) => {
+    try {
+      const props = query.node(targetNodeId).get().data.props;
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      return node && node.meta && Array.isArray(node.meta.watchers) ? node.meta.watchers : [];
+    } catch { return []; }
+  }, [nodeId, query]);
+
+  // Expression APIs
+  const setExpression = useCallback((path, code, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      setExpressionAtPath(tree, path, code);
+      props.userPropsExpressionHistory = props.userPropsExpressionHistory || {};
+      const hist = props.userPropsExpressionHistory[path] || [];
+      if (!hist.includes(code)) props.userPropsExpressionHistory[path] = [code, ...hist].slice(0,5);
+      touchLegacyMap(props);
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  const clearExpression = useCallback((path, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      clearExpressionAtPath(tree, path);
+      touchLegacyMap(props);
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  // Validation merge & clear
+  const updateValidation = useCallback((path, partial, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node) {
+        node.meta = node.meta || {};
+        node.meta.validation = { ...(node.meta.validation||{}), ...partial };
+      }
+      const validation = validateTree(tree);
+      props.userPropsValidationErrors = validation;
+      touchLegacyMap(props);
+    });
+  }, [actions, nodeId]);
+
+  const clearValidation = useCallback((path, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      clearValidationAtPath(tree, path);
+      const validation = validateTree(tree);
+      props.userPropsValidationErrors = validation;
+      touchLegacyMap(props);
+    });
+  }, [actions, nodeId]);
+
+  const listDependencies = useCallback((expressionCode) => {
+    return Array.from(extractExpressionDeps(expressionCode || ''));
+  }, []);
+
+  const batchUpdate = useCallback((paths, mutator, targetNodeId = nodeId) => {
+    if (!Array.isArray(paths) || !paths.length) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      paths.forEach(p => { try { mutator(tree, p, getNodeAtPath(tree, p)); } catch {/* ignore */} });
+      touchLegacyMap(props);
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  const getExpressionHistory = useCallback((path, targetNodeId = nodeId) => {
+    try {
+      const node = query.node(targetNodeId).get();
+      return (node.data.props.userPropsExpressionHistory || {})[path] || [];
+    } catch { return []; }
+  }, [query, nodeId]);
+
+  const getJsValueAtPath = useCallback((path, targetNodeId = nodeId) => {
+    const tree = getUserPropsTree(targetNodeId);
+    if (!tree) return undefined;
+    const node = getNodeAtPath(tree, path);
+    if (!node) return undefined;
+    if (node.type === 'object' || node.type === 'array') {
+      // reconstruct JS manually
+      try { return JSON.parse(JSON.stringify(node)); } catch { return undefined; }
+    }
+    return node.value;
+  }, [getUserPropsTree, nodeId]);
+
+  // Simple JSON diff leveraging last two undo snapshots; line-based diff for readability
+  const getPathDiff = useCallback((path, targetNodeId = nodeId) => {
+    try {
+      const node = query.node(targetNodeId).get();
+      const stack = node.data.props.userPropsUndoStack || [];
+      if (stack.length < 2) return [];
+      const prevTree = JSON.parse(stack[stack.length - 2]);
+      const currTree = JSON.parse(stack[stack.length - 1]);
+      // traverse to path in both
+      const parts = path.split('.').filter(Boolean);
+      function dive(root){
+        let n = root; for(const p of parts){ if(!n) return undefined; if(n.type==='object') n = (n.children||{})[p]; else if(n.type==='array') n = (n.items||[])[Number(p)]; else return undefined; }
+        if(!n) return undefined;
+        if(n.type==='object' || n.type==='array') return JSON.parse(JSON.stringify(n));
+        return n.value;
+      }
+      const prevVal = dive(prevTree);
+      const currVal = dive(currTree);
+      const prevJson = JSON.stringify(prevVal, null, 2).split('\n');
+      const currJson = JSON.stringify(currVal, null, 2).split('\n');
+      // classic LCS diff (simplified) for small sizes
+      const m = prevJson.length, n2 = currJson.length;
+      const dp = Array.from({length:m+1},()=>Array(n2+1).fill(0));
+      for(let i=1;i<=m;i++) for(let j=1;j<=n2;j++) dp[i][j] = prevJson[i-1]===currJson[j-1]? dp[i-1][j-1]+1: Math.max(dp[i-1][j], dp[i][j-1]);
+      const diff=[]; let i=m,j=n2; while(i>0 && j>0){ if(prevJson[i-1]===currJson[j-1]){ diff.push({type:'unchanged', line:prevJson[i-1]}); i--; j--; } else if(dp[i-1][j]>=dp[i][j-1]){ diff.push({type:'removed', line:prevJson[i-1]}); i--; } else { diff.push({type:'added', line:currJson[j-1]}); j--; } }
+      while(i>0){ diff.push({type:'removed', line:prevJson[i-1]}); i--; }
+      while(j>0){ diff.push({type:'added', line:currJson[j-1]}); j--; }
+      return diff.reverse();
+    } catch { return []; }
+  }, [query, nodeId]);
+
+  const setValidationForPath = useCallback((path, rules, targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node) {
+        node.meta = node.meta || {};
+        node.meta.validation = { ...(node.meta.validation||{}), ...rules };
+      }
+      const validation = validateTree(tree);
+      props.userPropsValidationErrors = validation;
+    });
+  }, [actions, nodeId]);
+
+  // Undo / Redo
+  const undoUserProps = useCallback((targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const stack = props.userPropsUndoStack || [];
+      if (stack.length < 2) return; // nothing to undo (last is current)
+      const current = stack.pop();
+      props.userPropsRedoStack = props.userPropsRedoStack || [];
+      props.userPropsRedoStack.push(current);
+      const previousSerialized = stack[stack.length -1];
+      try { props.userPropsTree = JSON.parse(previousSerialized); touchLegacyMap(props); } catch {/* ignore */}
+    });
+  }, [actions, nodeId]);
+
+  const redoUserProps = useCallback((targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const redo = props.userPropsRedoStack || [];
+      if (!redo.length) return;
+      const nextSerialized = redo.pop();
+      props.userPropsUndoStack = props.userPropsUndoStack || [];
+      props.userPropsUndoStack.push(nextSerialized);
+      try { props.userPropsTree = JSON.parse(nextSerialized); touchLegacyMap(props); } catch {/* ignore */}
+    });
+  }, [actions, nodeId]);
+
+  const getWatcherLogs = useCallback((targetNodeId = nodeId) => {
+    try {
+      const node = query.node(targetNodeId).get();
+      return node.data.props.userPropsWatcherLogs || [];
+    } catch { return []; }
+  }, [query, nodeId]);
+
+  // --- Templates & Bulk ---
+  const applyExpressionTemplate = useCallback((path, templateKey, params = {}, targetNodeId = nodeId) => {
+    if (!path || !templateKey) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const code = userPropTemplates.buildExpressionTemplate(templateKey, params);
+      if (!code) return;
+      let node = getNodeAtPath(tree, path);
+      if (!node) {
+        const parts = path.split('.');
+        const key = parts.pop();
+        const parentPath = parts.join('.');
+        const parent = parentPath ? getNodeAtPath(tree, parentPath) : tree;
+        if (parent && parent.type === 'object') parent.children[key] = createNode('string', { value: '' });
+        node = getNodeAtPath(tree, path);
+      }
+      if (!node || node.type === 'object' || node.type === 'array') return;
+      engineSetExpressionAtPath(tree, path, code);
+      touchLegacyMap(props);
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  const applyWatcherTemplate = useCallback((path, templateKey, params = {}, targetNodeId = nodeId) => {
+    if (!path || !templateKey) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (!node) return;
+      const code = userPropTemplates.buildWatcherTemplate(templateKey, params);
+      if (!code) return;
+      node.meta = node.meta || {};
+      node.meta.watchers = Array.isArray(node.meta.watchers) ? node.meta.watchers : [];
+      node.meta.watchers.push({ script: code });
+      touchLegacyMap(props);
+    });
+  }, [actions, nodeId]);
+
+  const bulkApplyExpressionTemplate = useCallback((paths, templateKey, params = {}, targetNodeId = nodeId) => {
+    if (!Array.isArray(paths) || !paths.length || !templateKey) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const code = userPropTemplates.buildExpressionTemplate(templateKey, params);
+      if (!code) return;
+      paths.forEach(p => { try { const n = getNodeAtPath(tree, p); if (n && n.type !== 'object' && n.type !== 'array') engineSetExpressionAtPath(tree, p, code); } catch {/* ignore */} });
+      touchLegacyMap(props);
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  const reorderArray = useCallback((arrayPath, fromIndex, toIndex, targetNodeId = nodeId) => {
+    if (!arrayPath) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      try { reorderArrayItem(tree, arrayPath, fromIndex, toIndex); touchLegacyMap(props); } catch {/* ignore */}
+    });
+  }, [actions, nodeId]);
 
   return {
     // Core functions
@@ -274,13 +717,45 @@ export const useUserProps = (nodeId = null) => {
   // Tree functions
   getUserPropsTree,
   listUserPropPaths,
+  searchUserPropPaths,
   getValueAtPath,
   setPrimitiveAtPath,
+  setPrimitiveSmartAtPath,
   deletePath,
   addObjectChild,
   pushArrayItem,
   toggleGlobalFlag,
-  getNodeMeta
+  getNodeMeta,
+  updateNodeMeta,
+  bindUserPropToProp,
+  unbindUserPropPath,
+  syncBoundUserProps,
+  inferTypeFromString,
+  coerceToType,
+  // evaluation & validation
+  evaluateAll,
+  getValidationErrors,
+  setValidationForPath,
+  addWatcher
+  ,removeWatcher
+  ,updateWatcher
+  ,listWatchers
+  ,setExpression
+  ,clearExpression
+  ,updateValidation
+  ,clearValidation
+  ,listDependencies
+  ,batchUpdate
+  ,getExpressionHistory
+  ,getJsValueAtPath
+  ,getPathDiff
+  ,undoUserProps
+  ,redoUserProps
+  ,getWatcherLogs
+  ,applyExpressionTemplate
+  ,applyWatcherTemplate
+  ,bulkApplyExpressionTemplate
+  ,reorderArray
   };
 };
 
