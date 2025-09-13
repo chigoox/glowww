@@ -1,21 +1,21 @@
 // User Props Webhook integration (Phase 2)
 // Allows optional posting of pipelineComplete events to an external endpoint for analytics.
 // Usage:
-//   import { configureUserPropsWebhook } from './userPropsWebhook';
+//   const { configureUserPropsWebhook } = require('./userPropsWebhook');
 //   configureUserPropsWebhook('https://example.com/hook');
 // Endpoint receives JSON: { type:'pipelineComplete', durationMs, exprChanges, watchersTriggered, validationErrorCount, ts }
 // Debounced to avoid flooding during rapid edits.
 
-import { onUserPropsEvent } from './userPropsEngine';
+const { onUserPropsEvent } = require('./userPropsEngine');
 
 let webhookUrl = null;
 let queue = [];
 let timer = null;
 const DEBOUNCE_MS = 1500;
 
-export function configureUserPropsWebhook(url){
+function configureUserPropsWebhook(url){
   webhookUrl = url || null;
-  if(!webhookUrl){ queue=[]; clearTimeout(timer); timer=null; }
+  if(!webhookUrl){ queue=[]; if (timer) clearTimeout(timer); timer=null; }
 }
 
 function flush(){
@@ -39,3 +39,5 @@ onUserPropsEvent((evt)=>{
   if(timer) clearTimeout(timer);
   timer = setTimeout(flush, DEBOUNCE_MS);
 });
+
+module.exports = { configureUserPropsWebhook };

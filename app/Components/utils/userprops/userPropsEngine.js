@@ -42,9 +42,11 @@ function safeEvalSnippet(argsNames, argsValues, body, kind, pathRef) {
   const looksLikeExpression = (
     // not starting with common statement keywords
     !/^(let|const|var|if|for|while|do|switch|class|function|async|return|try|throw|import|export)\b/.test(trimmed) &&
-    // no top-level semicolon sequence (single expression) OR ends without semicolon
+    // and does not contain obvious statement tokens anywhere
+    !/\b(if|for|while|do|switch|return|function|class|try|catch|throw)\b/.test(trimmed) &&
+    !/[{};]/.test(trimmed) &&
+    // single-line only
     !trimmed.includes('\n') &&
-    !/;\s*$/.test(trimmed) &&
     // not an arrow func itself
     !/=>/.test(trimmed)
   );
@@ -533,10 +535,13 @@ function gatherExpressionNodes(root) {
 // Build dependency graph: nodes with expressions only; edges from dependency -> dependent
 function buildExpressionDependencyGraph(root){
   const exprMap = gatherExpressionNodes(root);
-  const nodes = Object.keys(exprMap).map(p=>({ id:p, hasError: !!(exprMap[p].node.meta && exprMap[p].node.meta.expressionError) }));
+  // include both expression nodes and their dependencies (even if not expressions) as nodes in the graph
+  const nodeIds = new Set(Object.keys(exprMap));
+  Object.values(exprMap).forEach(info => info.deps.forEach(d => nodeIds.add(d)));
+  const nodes = Array.from(nodeIds).map(p=>({ id:p, hasError: !!(exprMap[p] && exprMap[p].node.meta && exprMap[p].node.meta.expressionError) }));
   const edges = [];
   Object.entries(exprMap).forEach(([p, info])=>{
-    info.deps.forEach(dep=>{ if (exprMap[dep]) edges.push({ from: dep, to: p }); });
+    info.deps.forEach(dep=>{ edges.push({ from: dep, to: p }); });
   });
   // indegree for layering
   const indeg = {}; nodes.forEach(n=> indeg[n.id]=0);
@@ -649,7 +654,27 @@ async function runWatchers(root, previousSnapshot) {
   function recordSnapshot(node, path, acc){ acc[path]=getValue(node); if (node.type==='object') Object.entries(node.children||{}).forEach(([k,c])=>recordSnapshot(c,path?path+'.'+k:k,acc)); else if (node.type==='array')(node.items||[]).forEach((c,i)=>recordSnapshot(c,path?path+'.'+i:String(i),acc)); }
   // Build current snapshot once
   const currentSnap = {}; recordSnapshot(root,'',currentSnap);
-  async function visit(node,path){ if(!node) return; if (node.meta && Array.isArray(node.meta.watchers) && node.meta.watchers.length){ const prev = previousSnapshot?previousSnapshot[path]:undefined; const curr = currentSnap[path]; if (JSON.stringify(prev)!==JSON.stringify(curr)){ for (const w of node.meta.watchers){ try { const start = (typeof performance!=='undefined' && performance.now)? performance.now(): Date.now(); await safeEvalSnippet(['value','path','root','previous'], [curr,path,root,prev], w.script, 'watcher', path); triggered.push(path); __userPropsTelemetry.watchersRun++; const end = (typeof performance!=='undefined' && performance.now)? performance.now(): Date.now(); logs.push({ path, ts: Date.now(), durationMs: +(end-start).toFixed(2), error: null }); } catch(e){ __userPropsTelemetry.watcherErrors++; logs.push({ path, ts: Date.now(), durationMs: 0, error: e && e.message ? e.message : 'error' }); } } } } if (node.type==='object') { for (const [k,c] of Object.entries(node.children||{})) await visit(c,path?path+'.'+k:k); } else if (node.type==='array'){ let idx=0; for (const c of (node.items||[])) { await visit(c,path?path+'.'+idx: String(idx)); idx++; } } }
+  async function visit(node,path){
+    if(!node) return;
+    if (node.meta && Array.isArray(node.meta.watchers) && node.meta.watchers.length){
+      const prev = previousSnapshot?previousSnapshot[path]:undefined;
+      const curr = currentSnap[path];
+      const firstRun = !previousSnapshot; // treat as changed on first run to prime watchers
+      if (firstRun || JSON.stringify(prev)!==JSON.stringify(curr)){
+        for (const w of node.meta.watchers){
+          try {
+            const start = (typeof performance!=='undefined' && performance.now)? performance.now(): Date.now();
+            await safeEvalSnippet(['value','path','root','previous'], [curr,path,root,prev], w.script, 'watcher', path);
+            triggered.push(path); __userPropsTelemetry.watchersRun++;
+            const end = (typeof performance!=='undefined' && performance.now)? performance.now(): Date.now();
+            logs.push({ path, ts: Date.now(), durationMs: +(end-start).toFixed(2), error: null });
+          } catch(e){ __userPropsTelemetry.watcherErrors++; logs.push({ path, ts: Date.now(), durationMs: 0, error: e && e.message ? e.message : 'error' }); }
+        }
+      }
+    }
+    if (node.type==='object') { for (const [k,c] of Object.entries(node.children||{})) await visit(c,path?path+'.'+k:k); }
+    else if (node.type==='array'){ let idx=0; for (const c of (node.items||[])) { await visit(c,path?path+'.'+idx: String(idx)); idx++; } }
+  }
   await visit(root,'');
   return { triggered, snapshot: currentSnap, logs };
 }
