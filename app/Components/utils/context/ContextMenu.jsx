@@ -1137,6 +1137,32 @@ const ContextMenu = ({
             gap: 6,
             flexWrap: 'wrap'
           }}>
+            <Tooltip zIndex={99999} title="Open Props Manager">
+              <Button 
+                size="small" 
+                // Sliders icon without adding new heavy UI dependency; reuse EditOutlined for consistency
+                icon={<EditOutlined />} 
+                onClick={() => {
+                  try {
+                    if (targetNodeId) {
+                      actions.selectNode(targetNodeId);
+                    }
+                    const evt = new CustomEvent('open-props-manager', { detail: { target: 'component' } });
+                    window.dispatchEvent(evt);
+                  } catch {/* ignore */}
+                  onClose();
+                }} 
+                style={{ 
+                  width: 32, 
+                  height: 32,
+                  background: isDark ? 'rgba(24, 144, 255, 0.15)' : '#e6f7ff',
+                  border: isDark ? '1px solid rgba(24, 144, 255, 0.4)' : '1px solid #91d5ff',
+                  color: isDark ? '#69c0ff' : '#1890ff',
+                  borderRadius: 8,
+                  transition: 'all 0.2s ease'
+                }} 
+              />
+            </Tooltip>
             <Tooltip zIndex={99999} title="Cut">
               <Button 
                 size="small" 

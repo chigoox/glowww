@@ -1010,6 +1010,17 @@ export const FigmaStyleMenu = ({
         alignItems: 'center'
       }}>
         <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>Design</span>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <Tooltip title="Manage this component's props">
+            <Button size="small" icon={<CodeOutlined />} onClick={() => {
+              try {
+                // Open top-level Props Manager modal focused on Component tab
+                // We simulate by dispatching a custom event listened by TopBar or a global handler.
+                const evt = new CustomEvent('open-props-manager', { detail: { target: 'component' } });
+                window.dispatchEvent(evt);
+              } catch {/* ignore */}
+            }} />
+          </Tooltip>
         {onClose && (
           <Button 
             type="text" 
@@ -1020,6 +1031,7 @@ export const FigmaStyleMenu = ({
             ×
           </Button>
         )}
+        </div>
       </div>
 
       <div style={{ padding: 12 }}>

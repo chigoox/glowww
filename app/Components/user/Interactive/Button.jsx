@@ -48,6 +48,9 @@ const ButtonSafetyWrapper = (props) => {
 const ButtonComponent = ({
   // Content & Text
   text = "Click Me",
+  // Optional binding for text
+  textBindingPath = '',
+  textBindingScope = 'local',
   
   // Visual styling
   buttonType = "primary",
@@ -174,6 +177,8 @@ const ButtonComponent = ({
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   // User props API (hook must be called at top-level)
   const userPropsApi = useUserProps(nodeId);
+  const userPropsApiRef = useRef(userPropsApi);
+  useEffect(() => { userPropsApiRef.current = userPropsApi; }, [userPropsApi]);
   
   const buttonRef = useRef(null);
   const dragRef = useRef(null);
@@ -182,6 +187,26 @@ const ButtonComponent = ({
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [buttonPosition, setButtonPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
   const [toggleStates, setToggleStates] = useState({});
+
+  // Live read from binding: update button text when bound value changes (including Site Globals)
+  useEffect(() => {
+    if (!textBindingPath) return;
+    try {
+      const api = userPropsApiRef.current;
+      const scopeNode = textBindingScope === 'global' ? 'ROOT' : nodeId;
+      let val = api.getValueAtPath(textBindingPath, scopeNode);
+      if ((val === undefined || val === null) && textBindingScope === 'global' && api.getGlobalValue) {
+        const gv = api.getGlobalValue(textBindingPath);
+        if (gv !== undefined && gv !== null) val = String(gv);
+      }
+      if (val !== undefined && val !== null && String(val) !== text) {
+        const s = String(val);
+        // Use craft actions to update prop
+        actions.setProp(nodeId, (p) => { p.text = s; });
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textBindingPath, textBindingScope, nodeId, text, userPropsApi?.globalVersion]);
 
   // Coercion helpers to keep component prop values in the right type
   const smartInfer = (val) => {
@@ -303,6 +328,13 @@ const ButtonComponent = ({
     if (!actions) return;
     const category = control.targetCategory || 'component';
     const isToggle = !!control.isToggle;
+    const resolveScope = (t) => {
+      const s = typeof t === 'string' ? t.trim() : '';
+      if (!s) return { isGlobal: false, target: nodeId };
+      if (s === '__SITE__' || s === '__GLOBAL__' || s.toLowerCase() === 'global') return { isGlobal: true, target: 'ROOT' };
+      if (s === '__PAGE__') return { isGlobal: false, target: 'ROOT' };
+      return { isGlobal: false, target: s };
+    };
     try {
       if (category === 'component') {
         if (!control.targetComponent || !control.targetProp) return;
@@ -330,21 +362,39 @@ const ButtonComponent = ({
           });
         }
       } else if (category === 'userProps') {
-        const targetNode = control.targetUserNodeId || control.targetComponent; // component id or 'ROOT'
+  const desired = control.targetUserNodeId || control.targetComponent; // may be special token
+  const { isGlobal: isGlobalTarget, target: targetNode } = resolveScope(desired);
         const path = control.targetUserPropPath;
         if (!targetNode || !path) return;
-        const { setPrimitiveSmartAtPath, inferTypeFromString } = userPropsApi;
+        const { setPrimitiveSmartAtPath, inferTypeFromString, createGlobalPrimitive } = userPropsApi;
+        const coerceToPrimitive = (raw, inferred) => {
+          if (inferred === 'number') return typeof raw === 'number' ? raw : Number(raw);
+          if (inferred === 'boolean') {
+            if (typeof raw === 'boolean') return raw;
+            const s = String(raw).trim().toLowerCase();
+            return s === 'true' || s === '1';
+          }
+          return String(raw);
+        };
         if (isToggle) {
           const currentState = toggleStates[control.id] || 0;
           const nextState = control.loop ? (currentState + 1) % control.toggleValues.length : Math.min(currentState + 1, control.toggleValues.length - 1);
           setToggleStates(prev => ({ ...prev, [control.id]: nextState }));
           const raw = control.toggleValues[nextState];
           const inferred = inferTypeFromString(String(raw));
-          setPrimitiveSmartAtPath(path, raw, { explicitType: undefined, respectExistingType: true, inferredType: inferred }, targetNode);
+          if (isGlobalTarget) {
+            try { createGlobalPrimitive(path, inferred, coerceToPrimitive(raw, inferred)); } catch (e) { console.warn('createGlobalPrimitive failed', e); }
+          } else {
+            setPrimitiveSmartAtPath(path, raw, { explicitType: undefined, respectExistingType: true, inferredType: inferred }, targetNode);
+          }
         } else {
           const raw = control.values?.[0];
           const inferred = inferTypeFromString(String(raw ?? ''));
-          setPrimitiveSmartAtPath(path, raw, { explicitType: undefined, respectExistingType: true, inferredType: inferred }, targetNode);
+          if (isGlobalTarget) {
+            try { createGlobalPrimitive(path, inferred, coerceToPrimitive(raw, inferred)); } catch (e) { console.warn('createGlobalPrimitive failed', e); }
+          } else {
+            setPrimitiveSmartAtPath(path, raw, { explicitType: undefined, respectExistingType: true, inferredType: inferred }, targetNode);
+          }
         }
       }
     } catch (error) {
@@ -409,16 +459,30 @@ const ButtonComponent = ({
     // User prop binding with smart coercion
     try {
       if (props.userPropBindingPath && props.userPropBindingPath.trim()) {
-        const { setPrimitiveSmartAtPath, inferTypeFromString } = userPropsApi;
-        const targetNode = props.userPropBindingTarget || nodeId;
+        const { setPrimitiveSmartAtPath, inferTypeFromString, createGlobalPrimitive } = userPropsApi;
+        const desired = props.userPropBindingTarget || nodeId;
+        const { isGlobal: isGlobalTarget, target: targetNode } = resolveScope(desired);
         const raw = props.userPropBindingValue !== undefined ? props.userPropBindingValue : '';
         const explicitType = props.userPropBindingType || undefined;
         const inferred = inferTypeFromString(String(raw));
-        setPrimitiveSmartAtPath(props.userPropBindingPath, raw, {
-          explicitType: explicitType || undefined,
-          respectExistingType: !explicitType,
-          inferredType: inferred
-        }, targetNode);
+        const coerceToPrimitive = (val, inferredType) => {
+          if (explicitType === 'number' || inferredType === 'number') return typeof val === 'number' ? val : Number(val);
+          if (explicitType === 'boolean' || inferredType === 'boolean') {
+            if (typeof val === 'boolean') return val;
+            const s = String(val).trim().toLowerCase();
+            return s === 'true' || s === '1';
+          }
+          return String(val);
+        };
+        if (isGlobalTarget) {
+          try { createGlobalPrimitive(props.userPropBindingPath, explicitType || inferred, coerceToPrimitive(raw, inferred)); } catch (e) { console.warn('createGlobalPrimitive failed', e); }
+        } else {
+          setPrimitiveSmartAtPath(props.userPropBindingPath, raw, {
+            explicitType: explicitType || undefined,
+            respectExistingType: !explicitType,
+            inferredType: inferred
+          }, targetNode);
+        }
       }
     } catch (err) {
       console.warn('User prop binding failed:', err);

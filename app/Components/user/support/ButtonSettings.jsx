@@ -18,7 +18,11 @@ import {
   Alert,
   Tooltip,
   Row,
-  Col
+  Col,
+  Cascader,
+  Form,
+  Segmented,
+  theme
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -34,6 +38,7 @@ import { useEditor } from '@craftjs/core';
 import dynamic from 'next/dynamic';
 import { getAllComponentsWithProps } from './PropExtractor';
 import { useUserProps } from '../../utils/userprops/useUserProps';
+import BindSelector from './BindSelector';
 
 // Dynamically import Monaco Editor to avoid SSR issues
 const MonacoEditor = dynamic(
@@ -65,7 +70,38 @@ const ButtonSettings = ({
   onPropsChange 
 }) => {
   const { query, actions } = useEditor();
-  const { listUserPropPaths, getNodeMeta } = useUserProps();
+  const { listUserPropPaths, getNodeMeta, getUserPropsTree, getGlobalTree, ensureGlobalLoaded, createGlobalPrimitive } = useUserProps();
+  const { token } = theme.useToken();
+  
+  // Helper: choose the correct root tree for Local/Page/Site
+  const getScopedRoot = React.useCallback((scopeKey) => {
+    try {
+      if (!scopeKey) return null;
+      if (scopeKey === '__SITE__') return getGlobalTree();
+      if (scopeKey === '__PAGE__') return getUserPropsTree('ROOT');
+      return getUserPropsTree(scopeKey);
+    } catch { return null; }
+  }, [getUserPropsTree, getGlobalTree]);
+
+  // Helper: find node at dot path in a user-props style tree
+  const findNodeAtPath = React.useCallback((root, path) => {
+    if (!root || !path) return null;
+    const parts = path.split('.').filter(Boolean);
+    let cur = root;
+    for (const p of parts) {
+      if (!cur) return null;
+      if (cur.type === 'object') {
+        cur = (cur.children || {})[p];
+      } else if (cur.type === 'array') {
+        const idx = Number(p);
+        const items = cur.items || [];
+        cur = Number.isNaN(idx) ? null : items[idx];
+      } else {
+        return null;
+      }
+    }
+    return cur || null;
+  }, []);
   
   // Local state for settings
   const [activeTab, setActiveTab] = useState('appearance');
@@ -73,6 +109,12 @@ const ButtonSettings = ({
   const [availableComponents, setAvailableComponents] = useState([]);
   const [selectedControl, setSelectedControl] = useState(null);
   const [editingControlIndex, setEditingControlIndex] = useState(-1);
+  const [controlsLocal, setControlsLocal] = useState(() => currentProps.controls || []);
+
+  // Keep local controls in sync when props change or modal opens
+  useEffect(() => {
+    setControlsLocal(currentProps.controls || []);
+  }, [currentProps.controls, visible]);
 
   // Get all available components for control targeting
   useEffect(() => {
@@ -127,26 +169,27 @@ const ButtonSettings = ({
       toggleValues: ['', ''],
       loop: false
     };
-    
-    const updatedControls = [...(currentProps.controls || []), newControl];
+    const updatedControls = [...(controlsLocal || []), newControl];
+    setControlsLocal(updatedControls);
     updateProp('controls', updatedControls);
     setEditingControlIndex(updatedControls.length - 1);
   };
 
   const updateControl = (index, field, value) => {
-    const updatedControls = [...(currentProps.controls || [])];
+    const updatedControls = [...(controlsLocal || [])];
     updatedControls[index] = { ...updatedControls[index], [field]: value };
     
     // If changing to toggle, ensure we have at least 2 toggle values
     if (field === 'isToggle' && value && updatedControls[index].toggleValues.length < 2) {
       updatedControls[index].toggleValues = ['', ''];
     }
-    
+    setControlsLocal(updatedControls);
     updateProp('controls', updatedControls);
   };
 
   const removeControl = (index) => {
-    const updatedControls = currentProps.controls.filter((_, i) => i !== index);
+    const updatedControls = (controlsLocal || []).filter((_, i) => i !== index);
+    setControlsLocal(updatedControls);
     updateProp('controls', updatedControls);
     if (editingControlIndex === index) {
       setEditingControlIndex(-1);
@@ -163,8 +206,8 @@ const ButtonSettings = ({
 
   // Render property input based on type
   const renderPropertyInput = (control, valueIndex = null) => {
-    const category = control.targetCategory || 'component';
-    if (!control.targetComponent) return null;
+  const category = control.targetCategory || 'component';
+  if (category === 'component' && !control.targetComponent) return null;
 
     let property = null;
     if (category === 'component') {
@@ -175,12 +218,13 @@ const ButtonSettings = ({
       property = properties[control.targetProp];
       if (!property) return null;
     } else if (category === 'userProps') {
-      const nodeIdForUser = control.targetUserNodeId || control.targetComponent;
-      if (!nodeIdForUser || !control.targetUserPropPath) return null;
-      const meta = getNodeMeta(control.targetUserPropPath, nodeIdForUser);
-      if (!meta) return null;
+      const scopeKey = control.targetUserNodeId || nodeId;
+      if (!scopeKey || !control.targetUserPropPath) return null;
+      const root = getScopedRoot(scopeKey);
+      const n = findNodeAtPath(root, control.targetUserPropPath);
+      if (!n) return null;
       const typeMap = { string: 'text', number: 'number', boolean: 'boolean', object: 'object', array: 'array' };
-      property = { type: typeMap[meta.type] || 'text', label: control.targetUserPropPath };
+      property = { type: typeMap[n.type] || 'text', label: control.targetUserPropPath };
     }
 
     const isToggleValue = valueIndex !== null;
@@ -342,14 +386,34 @@ const ButtonSettings = ({
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Card title="Text & Icon" size="small">
         <Space direction="vertical" style={{ width: '100%' }}>
-          <div>
-            <Text strong>Button Text</Text>
-            <Input
-              value={currentProps.text || ''}
-              onChange={(e) => updateProp('text', e.target.value, { debounce: true })}
-              placeholder="Enter button text"
-              style={{ marginTop: 4 }}
-            />
+          <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, alignItems:'end' }}>
+            <div>
+              <Text strong>Button Text</Text>
+              <Input
+                value={currentProps.text || ''}
+                onChange={(e) => updateProp('text', e.target.value, { debounce: true })}
+                placeholder="Enter button text"
+                style={{ marginTop: 4 }}
+              />
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', paddingTop: 22 }}>
+              <BindSelector
+                nodeId={nodeId}
+                variant="toolbar"
+                showLabel={false}
+                label="Bind Text"
+                binding={(() => {
+                  const path = currentProps.textBindingPath || '';
+                  const scope = currentProps.textBindingScope || 'local';
+                  if (!path) return null;
+                  return { path, scope };
+                })()}
+                onChange={(b) => {
+                  updateProp('textBindingPath', b?.path || '');
+                  updateProp('textBindingScope', b?.scope || 'local');
+                }}
+              />
+            </div>
           </div>
 
           <div>
@@ -424,187 +488,277 @@ const ButtonSettings = ({
     </Space>
   );
 
+  // Build cascader options for user props tree (objects/arrays drill down to primitives)
+  const buildCascaderOptions = (root, basePath = '') => {
+    if (!root || root.type !== 'object') return [];
+    const options = [];
+    const entries = Object.entries(root.children || {});
+    for (const [key, node] of entries) {
+      const path = basePath ? `${basePath}.${key}` : key;
+      if (node.type === 'object') {
+        options.push({
+          value: path,
+          label: `${key} (object)`,
+          selectable: false,
+          children: buildCascaderOptions(node, path)
+        });
+      } else if (node.type === 'array') {
+        const children = (node.items || []).map((child, idx) => {
+          const cPath = `${path}.${idx}`;
+          if (child.type === 'object') {
+            return { value: cPath, label: `[${idx}] (object)`, selectable: false, children: buildCascaderOptions(child, cPath) };
+          } else if (child.type === 'array') {
+            // Nested arrays: one level preview, deeper handled recursively
+            const grand = (child.items || []).map((g, gi) => {
+              const gPath = `${cPath}.${gi}`;
+              const isLeaf = !['object','array'].includes(g.type);
+              return { value: gPath, label: `[${gi}] (${g.type})`, isLeaf, disabled: !isLeaf };
+            });
+            return { value: cPath, label: `[${idx}] (array)`, selectable: false, children: grand };
+          } else {
+            return { value: cPath, label: `[${idx}] (${child.type})`, isLeaf: true };
+          }
+        });
+        options.push({ value: path, label: `${key} (array)`, selectable: false, children });
+      } else {
+        options.push({ value: path, label: `${key} (${node.type})`, isLeaf: true });
+      }
+    }
+    return options;
+  };
+
   const ControlsTab = () => (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       <Card 
-        title="Component Controls" 
+        title={<span style={{ fontWeight: 600 }}>Component Controls</span>} 
         size="small"
         extra={
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={addControl}
-            size="small"
+            size="middle"
           >
             Add Control
           </Button>
         }
+        styles={{ body: { padding: 16 } }}
+        style={{
+          borderRadius: token.borderRadiusLG,
+          background: token.colorBgElevated,
+          boxShadow: token.boxShadowSecondary,
+          border: `1px solid ${token.colorBorderSecondary}`
+        }}
       >
-        {(!currentProps.controls || currentProps.controls.length === 0) ? (
+    {(!controlsLocal || controlsLocal.length === 0) ? (
           <Text type="secondary">No controls added yet. Click "Add Control" to get started.</Text>
         ) : (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            {currentProps.controls.map((control, index) => (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+      {controlsLocal.map((control, index) => (
               <Card
                 key={control.id}
                 size="small"
-                title={`Control ${index + 1}`}
+                title={<span style={{ fontWeight: 600 }}>{`Control ${index + 1}`}</span>}
                 extra={
                   <Button
                     danger
-                    size="small"
+                    size="middle"
                     icon={<DeleteOutlined />}
                     onClick={() => removeControl(index)}
                   />
                 }
                 style={{ 
-                  border: editingControlIndex === index ? '2px solid #1890ff' : undefined 
+                  borderRadius: token.borderRadiusLG,
+                  background: token.colorBgContainer,
+                  border: `1px solid ${editingControlIndex === index ? token.colorPrimaryBorder : token.colorBorderSecondary}`,
+                  boxShadow: token.boxShadowTertiary
                 }}
               >
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Text strong>Target Component</Text>
-                      <Select
-                        value={control.targetComponent}
-                        onChange={(value) => updateControl(index, 'targetComponent', value)}
-                        style={{ width: '100%', marginTop: 4 }}
-                        placeholder="Select component"
-                      >
-                        {availableComponents.map(comp => (
-                          <Option key={comp.id} value={comp.id}>
-                            {comp.name} ({comp.type})
-                          </Option>
-                        ))}
-                      </Select>
-                    </Col>
-                    <Col span={12}>
-                      <Text strong>Control Type</Text>
-                      <Select
-                        value={control.targetCategory || 'component'}
-                        onChange={(value) => {
-                          const patch = value === 'component'
-                            ? { targetCategory: value, targetProp: '', targetUserNodeId: '', targetUserPropPath: '' }
-                            : { targetCategory: value, targetProp: '', targetUserNodeId: control.targetComponent || '', targetUserPropPath: '' };
-                          const updated = { ...control, ...patch };
-                          const updatedControls = [...(currentProps.controls || [])];
-                          updatedControls[index] = updated;
-                          updateProp('controls', updatedControls);
-                        }}
-                        style={{ width: '100%', marginTop: 4 }}
-                      >
-                        <Option value="component">Component Props</Option>
-                        <Option value="userProps">User Props</Option>
-                      </Select>
-                    </Col>
-                  </Row>
+                <Form layout="vertical" size="middle" style={{ width: '100%' }}>
+                  {/* 1) What to control */}
+                  <Form.Item label={<Text strong>Control Type</Text>}>
+                    <div
+                      style={{ position: 'relative', zIndex: 3, pointerEvents: 'auto' }}
+                      onMouseDown={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => { e.stopPropagation(); }}
+                      onKeyDown={(e) => { e.stopPropagation(); }}
+                    >
+                    <Segmented
+                      options={[
+                        { label: 'Component Props', value: 'component' },
+                        { label: 'User Props', value: 'userProps' }
+                      ]}
+                      value={control.targetCategory || 'component'}
+                      onChange={(value) => {
+                        try { console.debug('[ButtonSettings] Control Type change', { index, from: control.targetCategory, to: value }); } catch {}
+                        const patch = value === 'component'
+                          ? { targetCategory: value, targetProp: '', targetUserNodeId: '', targetUserPropPath: '' }
+                          : { targetCategory: value, targetProp: '', targetUserNodeId: nodeId, targetUserPropPath: '' };
+                        const updated = { ...control, ...patch };
+                        const updatedControls = [...(controlsLocal || [])];
+                        updatedControls[index] = updated;
+                        setControlsLocal(updatedControls);
+                        // Defer persist slightly to prevent parent re-render swallowing local state update
+                        setTimeout(() => updateProp('controls', updatedControls), 0);
+                      }}
+                      size="middle"
+                      style={{ pointerEvents: 'auto', userSelect: 'none' }}
+                      onMouseDown={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => { e.stopPropagation(); }}
+                      onKeyDown={(e) => { e.stopPropagation(); }}
+                    />
+                    </div>
+                  </Form.Item>
 
                   {(control.targetCategory || 'component') === 'component' ? (
-                    <Row gutter={16}>
-                      <Col span={12}>
-                        <Text strong>Property to Control</Text>
+                    <>
+                      <Form.Item label={<Text strong>Target Component</Text>}>
+                        <Select
+                          value={control.targetComponent}
+                          onChange={(value) => updateControl(index, 'targetComponent', value)}
+                          placeholder="Select component"
+                          style={{ width: '100%' }}
+                          options={availableComponents.map(comp => ({ value: comp.id, label: `${comp.name} (${comp.type})` }))}
+                        />
+                      </Form.Item>
+                      <Form.Item label={<Text strong>Property to Control</Text>}>
                         <Select
                           value={control.targetProp}
                           onChange={(value) => updateControl(index, 'targetProp', value)}
-                          style={{ width: '100%', marginTop: 4 }}
                           placeholder="Select property"
                           disabled={!control.targetComponent}
-                        >
-                          {control.targetComponent && (() => {
+                          style={{ width: '100%' }}
+                          options={(() => {
+                            if (!control.targetComponent) return [];
                             const component = availableComponents.find(c => c.id === control.targetComponent);
-                            if (component) {
-                              const properties = getComponentProperties(component.type);
-                              return Object.entries(properties).map(([key, prop]) => (
-                                <Option key={key} value={key}>{prop.label}</Option>
-                              ));
-                            }
-                            return [];
+                            if (!component) return [];
+                            const properties = getComponentProperties(component.type);
+                            return Object.entries(properties).map(([key, prop]) => ({ value: key, label: prop.label }));
                           })()}
-                        </Select>
-                      </Col>
-                    </Row>
+                        />
+                      </Form.Item>
+                    </>
                   ) : (
                     <>
-                      <Row gutter={16}>
-                        <Col span={12}>
-                          <Text strong>User Prop Scope</Text>
-                          <Select
-                            value={control.targetUserNodeId || control.targetComponent || ''}
-                            onChange={(value) => updateControl(index, 'targetUserNodeId', value)}
-                            style={{ width: '100%', marginTop: 4 }}
-                            disabled={!control.targetComponent}
-                          >
-                            {!!control.targetComponent && <Option value={control.targetComponent}>Local (this component)</Option>}
-                            <Option value={'ROOT'}>Global</Option>
-                          </Select>
-                        </Col>
-                        <Col span={12}>
-                          <Text strong>User Prop Path</Text>
-                          <Select
-                            showSearch
-                            allowClear
-                            value={control.targetUserPropPath || undefined}
-                            onChange={(value) => updateControl(index, 'targetUserPropPath', value || '')}
-                            style={{ width: '100%', marginTop: 4 }}
-                            placeholder="Select user prop path"
-                            disabled={!control.targetUserNodeId && !control.targetComponent}
-                            options={( () => {
-                              const nodeIdForPaths = control.targetUserNodeId || control.targetComponent;
-                              if (!nodeIdForPaths) return [];
-                              const locals = listUserPropPaths({ leavesOnly: true }, nodeIdForPaths) || [];
-                              const globals = nodeIdForPaths !== 'ROOT' ? (listUserPropPaths({ leavesOnly: true }, 'ROOT') || []) : [];
-                              const isLocalBound = (p) => !!(getNodeMeta(p.path, nodeIdForPaths)?.meta?.ref);
-                              const isGlobalBound = (p) => !!(getNodeMeta(p.path, 'ROOT')?.meta?.ref);
-                              const localFree = locals.filter(p => !isLocalBound(p)).map(p => ({ label: p.path, value: p.path }));
-                              const localBound = locals.filter(p => isLocalBound(p)).map(p => ({ label: `${p.path} — bound to component prop`, value: `__bound__local__${p.path}` , disabled: true }));
-                              const globalFree = globals.filter(p => !isGlobalBound(p)).map(p => ({ label: `${p.path} (global)`, value: p.path }));
-                              const globalBound = globals.filter(p => isGlobalBound(p)).map(p => ({ label: `${p.path} (global) — bound to component prop`, value: `__bound__global__${p.path}`, disabled: true }));
-                              const groups = [];
-                              groups.push({ label: 'Local User Props', options: localFree });
-                              if (localBound.length) groups.push({ label: 'Local (bound - not selectable)', options: localBound });
-                              if (globalFree.length) groups.push({ label: 'Global User Props', options: globalFree });
-                              if (globalBound.length) groups.push({ label: 'Global (bound - not selectable)', options: globalBound });
-                              return groups;
-                            })()}
-                          />
-                          {(control.targetUserPropPath && (control.targetUserNodeId || control.targetComponent)) && (
-                            (() => {
-                              const meta = getNodeMeta(control.targetUserPropPath, control.targetUserNodeId || control.targetComponent);
-                              return meta ? (
-                                <div style={{ marginTop: 4 }}>
-                                  <Text type="secondary" style={{ fontSize: 12 }}>Type: {meta.type}{meta.global ? ' (global)' : ''}</Text>
-                                </div>
-                              ) : null;
-                            })()
-                          )}
-                        </Col>
-                      </Row>
+                      <Form.Item label={<Text strong>User Prop Scope</Text>}>
+                        <div
+                          style={{ position: 'relative', zIndex: 3, pointerEvents: 'auto' }}
+                          onMouseDown={(e) => { e.stopPropagation(); }}
+                          onClick={(e) => { e.stopPropagation(); }}
+                          onKeyDown={(e) => { e.stopPropagation(); }}
+                        >
+                        <Segmented
+                          size="middle"
+                          value={(() => {
+                            if (control.targetUserNodeId === '__SITE__') return '__SITE__';
+                            if (control.targetUserNodeId === '__PAGE__') return '__PAGE__';
+                            return '__LOCAL__';
+                          })()}
+                          onChange={(val) => {
+                            if (val === '__LOCAL__') updateControl(index, 'targetUserNodeId', nodeId);
+                            else updateControl(index, 'targetUserNodeId', val);
+                          }}
+                          options={[
+                            { label: 'Local', value: '__LOCAL__' },
+                            { label: 'Page', value: '__PAGE__' },
+                            { label: 'Site', value: '__SITE__' }
+                          ]}
+                          style={{ pointerEvents: 'auto', userSelect: 'none' }}
+                          onMouseDown={(e) => { e.stopPropagation(); }}
+                          onClick={(e) => { e.stopPropagation(); }}
+                          onKeyDown={(e) => { e.stopPropagation(); }}
+                        />
+                        </div>
+                        {(control.targetUserNodeId) === '__SITE__' && (
+                          <div style={{ marginTop: 8 }}>
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  const ok = await ensureGlobalLoaded();
+                                  if (!ok) return;
+                                  const path = window.prompt('Create Site Global at path (e.g. marketing.hero.title):');
+                                  if (!path) return;
+                                  const type = window.prompt('Type (string|number|boolean):', 'string');
+                                  if (!type) return;
+                                  let v = '';
+                                  if (type === 'string') v = window.prompt('Initial value:', '') ?? '';
+                                  else if (type === 'number') v = Number(window.prompt('Initial value (number):', '0') ?? 0);
+                                  else if (type === 'boolean') v = (window.prompt('Initial value (true/false):', 'true') ?? 'true') === 'true';
+                                  await createGlobalPrimitive(path, type, v);
+                                  updateControl(index, 'targetUserPropPath', path);
+                                } catch (e) {}
+                              }}
+                            >New Global</Button>
+                          </div>
+                        )}
+                      </Form.Item>
+
+                      <Form.Item label={<Text strong>User Prop Path</Text>}>
+                        {(() => {
+                          const scopeKey = control.targetUserNodeId || nodeId;
+                          let root = null;
+                          if (scopeKey === '__SITE__') {
+                            root = getGlobalTree();
+                          } else if (scopeKey === '__PAGE__') {
+                            root = getUserPropsTree('ROOT');
+                          } else if (scopeKey) {
+                            root = getUserPropsTree(scopeKey);
+                          }
+                          const options = root ? buildCascaderOptions(root) : [];
+                          return (
+                            <Cascader
+                              options={options}
+                              placeholder="Drill down to a primitive"
+                              changeOnSelect={false}
+                              onChange={(vals) => {
+                                const sel = Array.isArray(vals) && vals.length ? vals.join('.') : '';
+                                updateControl(index, 'targetUserPropPath', sel);
+                              }}
+                              value={control.targetUserPropPath ? control.targetUserPropPath.split('.') : []}
+                              showSearch
+                              style={{ width: '100%' }}
+                            />
+                          );
+                        })()}
+                        {(control.targetUserPropPath && (control.targetUserNodeId || control.targetComponent)) && (
+                          (() => {
+                            const scopeKey = control.targetUserNodeId || nodeId;
+                            const root = getScopedRoot(scopeKey);
+                            const n = findNodeAtPath(root, control.targetUserPropPath);
+                            return n ? (
+                              <div style={{ marginTop: 4 }}>
+                                <Text type="secondary" style={{ fontSize: 12 }}>Type: {n.type}</Text>
+                              </div>
+                            ) : null;
+                          })()
+                        )}
+                      </Form.Item>
                     </>
                   )}
 
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Text strong>Trigger</Text>
-                      <Select
-                        value={control.trigger}
-                        onChange={(value) => updateControl(index, 'trigger', value)}
-                        style={{ width: '100%', marginTop: 4 }}
-                      >
-                        <Option value="click">Click</Option>
-                        <Option value="hover">Hover</Option>
-                        <Option value="focus">Focus</Option>
-                      </Select>
-                    </Col>
-                    <Col span={12}>
-                      <Space style={{ marginTop: 24 }}>
-                        <Switch
-                          checked={control.isToggle}
-                          onChange={(value) => updateControl(index, 'isToggle', value)}
-                        />
-                        <Text strong>Toggle Mode</Text>
-                      </Space>
-                    </Col>
-                  </Row>
+                  {/* Removed duplicate legacy block for User Prop Path (now handled above) */}
+
+                  <Form.Item label={<Text strong>Trigger</Text>}>
+                    <Select
+                      value={control.trigger}
+                      onChange={(value) => updateControl(index, 'trigger', value)}
+                      options={[
+                        { value: 'click', label: 'Click' },
+                        { value: 'hover', label: 'Hover' },
+                        { value: 'focus', label: 'Focus' }
+                      ]}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                  <Form.Item>
+                    <Space>
+                      <Switch
+                        checked={control.isToggle}
+                        onChange={(value) => updateControl(index, 'isToggle', value)}
+                      />
+                      <Text strong>Toggle Mode</Text>
+                    </Space>
+                  </Form.Item>
 
                   {(() => {
                     const isUserProps = (control.targetCategory || 'component') === 'userProps';
@@ -667,7 +821,7 @@ const ButtonSettings = ({
                       </div>
                     );
                   })()}
-                </Space>
+                </Form>
               </Card>
             ))}
           </Space>

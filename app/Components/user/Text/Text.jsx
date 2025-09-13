@@ -255,6 +255,7 @@ export const Text = ({
   const { actions: editorActions, query } = useEditor();
   // User props API (must be after nodeId available)
   const userPropsApi = useUserProps(nodeId);
+  const { globalVersion } = userPropsApi || {}; // trigger reads on global store updates
   const userPropsApiRef = useRef(userPropsApi); // stable ref
   useEffect(() => { userPropsApiRef.current = userPropsApi; }, [userPropsApi]);
   
@@ -299,15 +300,22 @@ export const Text = ({
     try {
       const api = userPropsApiRef.current;
       const scopeNode = textBindingScope === 'global' ? 'ROOT' : nodeId;
-      const val = api.getValueAtPath(textBindingPath, scopeNode);
-      if (typeof val === 'string' && val !== text) {
-        setProp(p => { p.text = val; });
-        if (!isEditing) setLocalText(val);
+  let val = api.getValueAtPath(textBindingPath, scopeNode);
+      // If global scope and no local alias yet (undefined), attempt direct global lookup
+      if (textBindingScope === 'global' && (val === undefined || val === null)) {
+        if (api.getGlobalValue) {
+          const gv = api.getGlobalValue(textBindingPath);
+    // Coerce primitives to string for Text rendering
+    if (gv !== undefined && gv !== null) val = String(gv);
+        }
       }
-    } catch (e) {
-      // ignore errors during sync
-    }
-  }, [textBindingPath, textBindingScope, nodeId, isEditing, text, userPropsWatcherSnapshot, setProp]);
+  if (val !== undefined && val !== null && String(val) !== text) {
+    const s = String(val);
+    setProp(p => { p.text = s; });
+    if (!isEditing) setLocalText(s);
+      }
+    } catch {/* ignore */}
+  }, [textBindingPath, textBindingScope, nodeId, isEditing, text, userPropsWatcherSnapshot, globalVersion, setProp]);
 
   // When editing a bound text, push edits back to user prop path (live)
   useEffect(() => {
@@ -316,9 +324,13 @@ export const Text = ({
     const handle = setTimeout(() => {
       try {
         const api = userPropsApiRef.current;
-        const scopeNode = textBindingScope === 'global' ? 'ROOT' : nodeId;
-        // push localText to user prop path
-        api.setPrimitiveSmartAtPath(textBindingPath, localText, { respectExistingType: true }, scopeNode);
+        if (textBindingScope === 'global' && api.createGlobalPrimitive) {
+          // Write-through to global store when bound globally
+          api.createGlobalPrimitive(textBindingPath, 'string', localText);
+        } else {
+          const scopeNode = nodeId; // always write to this node's local tree otherwise
+          api.setPrimitiveSmartAtPath(textBindingPath, localText, { respectExistingType: true }, scopeNode);
+        }
       } catch {/* ignore */}
     }, 150); // debounce
     return () => clearTimeout(handle);
@@ -1378,10 +1390,17 @@ export const Text = ({
                       try {
                         const api = userPropsApiRef.current;
                         const scopeNode = b.scope === 'global' ? 'ROOT' : nodeId;
-                        const val = api.getValueAtPath(b.path, scopeNode);
+                        let val = api.getValueAtPath(b.path, scopeNode);
+                        if ((val === undefined || val === null) && b.scope === 'global' && api.getGlobalValue) {
+                          // Fallback direct global lookup when no local alias exists
+                          val = api.getGlobalValue(b.path);
+                        }
                         if (typeof val === 'string') {
                           setProp(p => { p.text = val; });
                           setLocalText(val);
+                        } else {
+                          // Debug logging to help diagnose mis-binding
+                          try { console.warn('[Text] Bound path resolved no string value', { path: b.path, scope: b.scope, resolved: val }); } catch {}
                         }
                       } catch {/* ignore */}
                     }

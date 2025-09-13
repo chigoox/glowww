@@ -8,7 +8,7 @@ import { Spin, message, Button, Space, Typography, Alert, Switch, Dropdown, Tool
 import { EyeOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined, HistoryOutlined, EditOutlined, 
          SaveOutlined, SettingOutlined, ImportOutlined, ExportOutlined, BgColorsOutlined, HeatMapOutlined,
          BoxPlotOutlined, MenuOutlined, EyeInvisibleOutlined, GlobalOutlined, ClockCircleOutlined, 
-         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined, SelectOutlined, DragOutlined } from '@ant-design/icons';
+         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined, SelectOutlined, DragOutlined, SlidersOutlined } from '@ant-design/icons';
 
 // Import existing editor components
 import { Toolbox } from '../../Components/editor/ToolBox';
@@ -42,6 +42,7 @@ import PageManager2 from '../../Components/editor/PageManager2';
 import PageLoadModal from '../../Components/editor/PageLoadModal';
 import { exportPageToGlow } from '../../../lib/pageExportImport';
 import pako from 'pako';
+import TopPropsManager from '../../Components/editor/TopPropsManager';
 
 const { Title, Text: AntText } = Typography;
 
@@ -68,6 +69,7 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   const [lastInitialized, setLastInitialized] = useState(null); // Track when last initialized
   const [hasLoadedFromFirebase, setHasLoadedFromFirebase] = useState(false); // Track if we've loaded real content
   const [settingsModalOpen, setSettingsModalOpen] = useState(false); // Settings modal state
+  const [propsModalOpen, setPropsModalOpen] = useState(false); // Props manager modal state
 
   // Full Photoshop-style history system (like TopBar.jsx)
   const [historyEntries, setHistoryEntries] = useState([]);
@@ -83,6 +85,15 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
   
   // Initialize container switching feedback system
   useContainerSwitchingFeedback();
+
+  // Listen for global open-props-manager requests (from TopBar/ContextMenu/Figma menu)
+  useEffect(() => {
+    const handler = () => {
+      try { setPropsModalOpen(true); } catch { /* no-op */ }
+    };
+    window.addEventListener('open-props-manager', handler);
+    return () => window.removeEventListener('open-props-manager', handler);
+  }, []);
 
   // Helper function to detect what changed between states (from TopBar.jsx)
   const detectChanges = (previousState, currentState) => {
@@ -1913,6 +1924,19 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
 
             <div className="w-px h-6 bg-gray-300 mx-2"></div>
 
+            {/* Props Manager */}
+            <Tooltip title="Props Manager">
+              <Button
+                icon={<SlidersOutlined className="text-lg" />}
+                disabled={!isInitialized || isLoadingPage}
+                onClick={() => setPropsModalOpen(true)}
+                className="h-10 w-10 bg-violet-600 text-white hover:bg-violet-700 border-violet-500"
+                size="large"
+              />
+            </Tooltip>
+
+            <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
             <Tooltip title="Toggle Style Menu">
               <Button
                 icon={useFigmaStyle ? <HeatMapOutlined className="text-lg" /> : <BoxPlotOutlined className="text-lg" />}
@@ -2163,6 +2187,9 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         onLoad={handleLoadPageData}
         mode="load"
       />
+
+  {/* Props Manager Modal */}
+  <TopPropsManager open={propsModalOpen} onClose={() => setPropsModalOpen(false)} />
 
       {/* Editor Settings Modal */}
       <EditorSettingsModal 

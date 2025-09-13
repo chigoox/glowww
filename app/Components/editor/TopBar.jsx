@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Switch, Button, Dropdown, Tooltip } from "antd";
-import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined, SettingOutlined } from "@ant-design/icons";
+import { UndoOutlined, RedoOutlined, HistoryOutlined, ClockCircleOutlined, SettingOutlined, SlidersOutlined } from "@ant-design/icons";
 import { useEditor } from "@craftjs/core";
 import LoadProject from "./LoadProject";
 import ExportManager from "./ExportManager";
@@ -11,6 +11,7 @@ import PreviewButton from "./PreviewButton";
 import SnapGridControls from "../utils/grid/SnapGridControls";
 import EditorSettingsModal from "../ui/EditorSettingsModal";
 import { useEditorSettings } from "../utils/context/EditorSettingsContext";
+import TopPropsManager from './TopPropsManager';
 
 export const TopBar = () => {
   const { actions, query, enabled, canUndo, canRedo, editorState } = useEditor((state, query) => ({
@@ -27,6 +28,15 @@ export const TopBar = () => {
   const [lastStateSnapshot, setLastStateSnapshot] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [propsModalOpen, setPropsModalOpen] = useState(false);
+  // Listen for global open-props-manager requests (from FigmaStyleMenu)
+  useEffect(() => {
+    const handler = (e) => {
+      try { setPropsModalOpen(true); } catch {/* ignore */}
+    };
+    window.addEventListener('open-props-manager', handler);
+    return () => window.removeEventListener('open-props-manager', handler);
+  }, []);
 
   // Helper function to detect what changed between states
   const detectChanges = (previousState, currentState) => {
@@ -454,6 +464,17 @@ export const TopBar = () => {
             <div className="flex items-center space-x-1.5 bg-white rounded-lg px-1.5 py-1 shadow-sm border border-slate-200">
               <LoadProject />
               <ExportManager />
+              <Tooltip title="Props Manager">
+                <Button
+                  icon={<SlidersOutlined />}
+                  size="middle"
+                  type="text"
+                  onClick={() => setPropsModalOpen(true)}
+                  className="h-6 flex items-center space-x-2 px-2.5 rounded-lg border-0 hover:bg-violet-50 hover:text-violet-600 hover:shadow-sm transition-all duration-200 text-slate-600"
+                >
+                  <span className="text-sm font-medium hidden sm:inline">Props</span>
+                </Button>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -465,6 +486,7 @@ export const TopBar = () => {
         visible={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
       />
+  <TopPropsManager open={propsModalOpen} onClose={() => setPropsModalOpen(false)} />
     </>
   );
 };

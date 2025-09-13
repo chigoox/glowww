@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Button, Input, InputNumber, Select, Space, Typography, Tag, Switch, Tooltip, Alert, Collapse, Badge, Popconfirm, Tabs, Segmented, Empty, Popover, Dropdown, theme, message } from 'antd';
-import { PlusOutlined, DeleteOutlined, SettingOutlined, GlobalOutlined, EyeOutlined, EyeInvisibleOutlined, ReloadOutlined, FunctionOutlined, UndoOutlined, RedoOutlined, ThunderboltOutlined, WarningOutlined, BarsOutlined, ArrowUpOutlined, ArrowDownOutlined, FilterOutlined, ClearOutlined, ExpandOutlined, CompressOutlined, CheckSquareOutlined, AppstoreOutlined, FontColorsOutlined, FieldNumberOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Modal, Button, Input, InputNumber, Select, Space, Typography, Tag, Switch, Tooltip, Alert, Collapse, Badge, Popconfirm, Tabs, Segmented, Empty, Popover, Dropdown, theme, message, Card } from 'antd';
+import { PlusOutlined, DeleteOutlined, SettingOutlined, GlobalOutlined, EyeOutlined, EyeInvisibleOutlined, ReloadOutlined, FunctionOutlined, UndoOutlined, RedoOutlined, ThunderboltOutlined, WarningOutlined, BarsOutlined, ArrowUpOutlined, ArrowDownOutlined, FilterOutlined, ClearOutlined, ExpandOutlined, CompressOutlined, CheckSquareOutlined, AppstoreOutlined, FontColorsOutlined, FieldNumberOutlined, CheckCircleOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { t } from './userprops.messages';
 import UserPropDetailDrawer from './components/UserPropDetailDrawer';
 import { useEditor } from '@craftjs/core';
@@ -13,7 +13,7 @@ import UserPropsTelemetryPanel from '../../userprops/UserPropsTelemetryPanel';
 const { Title, Text } = Typography;
 
 // Isolated editors to keep caret stable during parent re-renders
-const StringEditor = React.memo(function StringEditor({ value: external, onCommit, placeholder }) {
+const StringEditor = React.memo(function StringEditor({ value: external, onCommit, placeholder, disabled }) {
   const [val, setVal] = React.useState(external ?? '');
   const editingRef = React.useRef(false);
   React.useEffect(() => {
@@ -24,6 +24,7 @@ const StringEditor = React.memo(function StringEditor({ value: external, onCommi
       size="small"
       value={val}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(e) => { editingRef.current = true; setVal(e.target.value); }}
       onBlur={() => { editingRef.current = false; onCommit(val); }}
       onPressEnter={() => { editingRef.current = false; onCommit(val); }}
@@ -35,7 +36,7 @@ const StringEditor = React.memo(function StringEditor({ value: external, onCommi
   );
 });
 
-const NumberEditor = React.memo(function NumberEditor({ value: externalNum, onCommit }) {
+const NumberEditor = React.memo(function NumberEditor({ value: externalNum, onCommit, disabled }) {
   const [val, setVal] = React.useState(externalNum ?? null);
   const editingRef = React.useRef(false);
   React.useEffect(() => {
@@ -46,6 +47,7 @@ const NumberEditor = React.memo(function NumberEditor({ value: externalNum, onCo
     <InputNumber
       size="small"
       value={val}
+      disabled={disabled}
       onChange={(v) => { editingRef.current = true; setVal(v); }}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === 'Enter') commit(); e.stopPropagation(); }}
@@ -119,12 +121,12 @@ const AddArrayItemRow = React.memo(function AddArrayItemRow({ indent, onPush }) 
  * - onClose: function - Called when modal closes
  * - nodeId: string - The node ID to manage props for ('ROOT' for global)
  */
-export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprops.title') }) => {
+export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprops.title'), forceLocalRoot = false, viewerNodeId = null, inline = false, simple = false, fitModal = false }) => {
   const { token } = theme.useToken();
   // --- Hook integration ---
   const { query } = useEditor();
   const hook = useUserProps(nodeId);
-  const { getUserPropsTree, addObjectChild, pushArrayItem, setPrimitiveAtPath, setPrimitiveSmartAtPath, deletePath, toggleGlobalFlag, getNodeMeta, bindUserPropToProp, unbindUserPropPath, syncBoundUserProps } = hook;
+  const { getUserPropsTree, getGlobalTree, addObjectChild, pushArrayItem, setPrimitiveAtPath, setPrimitiveSmartAtPath, deletePath, toggleGlobalFlag, getNodeMeta, bindUserPropToProp, unbindUserPropPath, syncBoundUserProps, promoteLocalToGlobal, createAliasToGlobalPath, listSiteGlobalPropPaths, ensureGlobalLoaded, syncAliasesNow, renameGlobalPath, deleteGlobalPath, undoGlobalUserProps, redoGlobalUserProps, countAliasesReferencing, detachAlias, createGlobalPrimitive, updateNodeMeta } = hook;
   const { undoUserProps, redoUserProps, evaluateAll } = hook;
   const { applyExpressionTemplate, applyWatcherTemplate, bulkApplyExpressionTemplate, reorderArray } = hook;
   const expressionTemplates = React.useMemo(()=> userPropTemplates.listExpressionTemplates(), []);
@@ -139,6 +141,7 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
   const [arrayNewItemCache, setArrayNewItemCache] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState([]);
+  const [promotingMap, setPromotingMap] = useState({});
   const [namespaceFilter, setNamespaceFilter] = useState([]);
   const [errorsOnly, setErrorsOnly] = useState(false);
   // Inline bind dropdown (no drawer)
@@ -150,8 +153,15 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
   const [useVirtual, setUseVirtual] = useState(false);
   const [activeTab, setActiveTab] = useState('tree'); // templates tab removed after migration
   const [bulkTplOpen, setBulkTplOpen] = useState(false);
-  const isGlobal = nodeId === 'ROOT';
+  const isGlobal = nodeId === 'ROOT' && !forceLocalRoot;
   const [editBuffer, setEditBuffer] = useState({}); // { [path]: { type, value } }
+  const [renamingPath, setRenamingPath] = useState(null);
+  const [renameInput, setRenameInput] = useState('');
+  const [flashRenamedAt, setFlashRenamedAt] = useState(0);
+  React.useEffect(()=>{
+    const id = setInterval(()=>{ /* trigger re-render for fading effect */ if(flashRenamedAt) setTreeVersion(v=>v); }, 1000);
+    return ()=>clearInterval(id);
+  },[flashRenamedAt]);
 
   // Debounced refresh to avoid caret jumps on rapid typing
   const refreshDebounceRef = React.useRef(null);
@@ -172,7 +182,12 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
   const clearSelection = () => setSelectedPaths(new Set());
 
   // --- Data ---
-  const tree = visible ? getUserPropsTree(nodeId) : null;
+  // For nodeId === 'ROOT':
+  // - Default: show Site Globals (actual global store tree)
+  // - When forceLocalRoot is true: show the ROOT node's local userPropsTree (Page Globals)
+  const tree = (inline || visible)
+    ? ((nodeId === 'ROOT' && !forceLocalRoot) ? getGlobalTree() : getUserPropsTree(nodeId))
+    : null;
   const namespaceOptions = React.useMemo(() => {
     if (!tree) return [];
     const set = new Set();
@@ -282,12 +297,14 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
       }
     } catch {/* ignore */}
 
-    const onClick = ({ key }) => {
+  const onClick = async ({ key }) => {
       if (!key || !key.startsWith('bind::')) return;
       const [, sourceNodeId, propName] = key.split('::');
       try {
-        bindUserPropToProp(targetPath, sourceNodeId, propName);
-        syncBoundUserProps();
+    const r1 = bindUserPropToProp(targetPath, sourceNodeId, propName);
+    if (r1 && typeof r1.then === 'function') await r1;
+    const r2 = syncBoundUserProps();
+    if (r2 && typeof r2.then === 'function') await r2;
         refresh();
         message.success('Bound to ' + sourceNodeId + '.' + propName);
       } catch (e) {
@@ -323,35 +340,65 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
     );
   };
 
-  const commitAddChild = (parentPath) => {
-    const cfg = newChildCache[parentPath] || {};
+  const commitAddChild = async (parentPath, cfgOverride = null) => {
+    const cfg = cfgOverride || newChildCache[parentPath] || {};
     if (!cfg.key || !cfg.type) return;
-    try { addObjectChild(parentPath, cfg.key, cfg.type, cfg.value, cfg.global); updateNewChildCache(parentPath, { key: '', value: '' }); refresh(); } catch (e) { console.warn('Add child failed', e); }
+    try {
+      const res = addObjectChild(parentPath, cfg.key, cfg.type, cfg.value, cfg.global);
+      if (res && typeof res.then === 'function') {
+        await res;
+      }
+      const createdPath = parentPath ? `${parentPath}.${cfg.key}` : cfg.key;
+      // Default ownership & access
+      try { updateNodeMeta(createdPath, { ownerNodeId: nodeId, access: 'ro' }); } catch {/* ignore */}
+      updateNewChildCache(parentPath, { key: '', value: '' });
+      refresh();
+    } catch (e) { console.warn('Add child failed', e); }
   };
-  const commitAddArrayItem = (arrayPath) => {
-    const cfg = arrayNewItemCache[arrayPath] || {};
-    try { pushArrayItem(arrayPath, cfg.type, cfg.value, cfg.global); updateArrayNewItemCache(arrayPath, { value: '' }); refresh(); } catch (e) { console.warn('Add array item failed', e); }
+  const commitAddArrayItem = async (arrayPath, cfgOverride = null) => {
+    const cfg = cfgOverride || arrayNewItemCache[arrayPath] || {};
+    try {
+      const idxOrPromise = pushArrayItem(arrayPath, cfg.type, cfg.value, cfg.global);
+      let idx = idxOrPromise;
+      if (idxOrPromise && typeof idxOrPromise.then === 'function') {
+        idx = await idxOrPromise;
+      }
+      const createdPath = `${arrayPath}.${idx}`;
+      try { updateNodeMeta(createdPath, { ownerNodeId: nodeId, access: 'ro' }); } catch {/* ignore */}
+      updateArrayNewItemCache(arrayPath, { value: '' });
+      refresh();
+    } catch (e) { console.warn('Add array item failed', e); }
   };
 
   const onPrimitiveChange = (path, type, raw) => {
     if (type === 'boolean') {
-      setPrimitiveAtPath(path, !!raw, 'boolean');
+      if (isGlobal) {
+        try { createGlobalPrimitive(path, 'boolean', !!raw); } catch {/* ignore */}
+      } else setPrimitiveAtPath(path, !!raw, 'boolean');
     } else if (type === 'number') {
       if (raw === null || raw === '' || typeof raw === 'undefined') {
-        setPrimitiveAtPath(path, '', 'number');
+        if (isGlobal) { try { createGlobalPrimitive(path, 'number', 0); } catch {/* ignore */} }
+        else setPrimitiveAtPath(path, '', 'number');
       } else {
         const n = Number(raw);
-        if (!Number.isNaN(n)) setPrimitiveAtPath(path, n, 'number');
+        if (!Number.isNaN(n)) {
+          if (isGlobal) { try { createGlobalPrimitive(path, 'number', n); } catch {/* ignore */} }
+          else setPrimitiveAtPath(path, n, 'number');
+        }
       }
     } else {
-      setPrimitiveAtPath(path, raw, 'string');
+      if (isGlobal) { try { createGlobalPrimitive(path, 'string', raw); } catch {/* ignore */} }
+      else setPrimitiveAtPath(path, raw, 'string');
     }
     scheduleRefresh();
   };
-  const onPrimitiveTypeSwitch = (path, currentNode, newType) => {
+  const onPrimitiveTypeSwitch = async (path, currentNode, newType) => {
     if (!currentNode) return; let raw = currentNode.value; if (typeof raw === 'object') raw = JSON.stringify(raw);
     try {
-      setPrimitiveSmartAtPath(path, raw, { explicitType: newType, respectExistingType: false });
+      const maybe = setPrimitiveSmartAtPath(path, raw, { explicitType: newType, respectExistingType: false });
+      if (maybe && typeof maybe.then === 'function') {
+        await maybe;
+      }
       setEditBuffer(prev => { const n = { ...prev }; delete n[path]; return n; });
       refresh();
     } catch { /* ignore */ }
@@ -359,14 +406,25 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
   const toggleExpand = (path) => setExpandedPaths(prev => { const next = new Set(prev); if (next.has(path)) next.delete(path); else next.add(path); return next; });
 
   const renderPrimitiveEditor = (path, node) => {
+    // Access control: disable edits if viewing another component's props and access is read-only
+    let disableEdit = false;
+    try {
+      const metaInfo = getNodeMeta(path);
+      const explicitOwnerId = metaInfo?.meta?.ownerNodeId;
+      const access = metaInfo?.meta?.access || 'ro';
+      const isComponentScope = !isGlobal && !forceLocalRoot;
+      const viewer = viewerNodeId || nodeId; // who is attempting edit
+      const effectiveOwner = explicitOwnerId || nodeId; // default owner is the component whose tree this is
+      if (isComponentScope && viewer && effectiveOwner && viewer !== effectiveOwner && access !== 'rw') disableEdit = true;
+    } catch {/* ignore */}
     const typeSwitcher = (
-      <Select size="small" value={node.type} onChange={(t) => onPrimitiveTypeSwitch(path, node, t)} style={{ width: 90 }} options={['string', 'number', 'boolean'].map(t => ({ label: t, value: t }))} />
+      <Select size="small" value={node.type} onChange={(t) => onPrimitiveTypeSwitch(path, node, t)} style={{ width: 90 }} options={['string', 'number', 'boolean'].map(t => ({ label: t, value: t }))} disabled={disableEdit} />
     );
     if (node.type === 'boolean') {
       return (
         <Space size={4}>
           {typeSwitcher}
-          <Switch checked={!!node.value} onChange={(v) => onPrimitiveChange(path, 'boolean', v)} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} size="small" />
+          <Switch checked={!!node.value} onChange={(v) => onPrimitiveChange(path, 'boolean', v)} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} size="small" disabled={disableEdit} />
         </Space>
       );
     }
@@ -381,6 +439,7 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
               else if (!Number.isNaN(Number(v))) setPrimitiveAtPath(path, Number(v), 'number');
               scheduleRefresh();
             }}
+            disabled={disableEdit}
           />
         </Space>
       );
@@ -392,6 +451,7 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
           value={node.value ?? ''}
           placeholder={node.type}
           onCommit={(v) => { setPrimitiveAtPath(path, v, 'string'); scheduleRefresh(); }}
+          disabled={disableEdit}
         />
       </Space>
     );
@@ -429,6 +489,18 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
       baseRowStyle.border = 'none';
       baseRowStyle.padding = '4px 6px';
     }
+    // Access control for destructive actions when in component scope
+    let disableForeignDestructive = false;
+    try {
+      const metaInfo = getNodeMeta(path);
+      const explicitOwnerId = metaInfo?.meta?.ownerNodeId;
+      const access = metaInfo?.meta?.access || 'ro';
+      const isComponentScope = !isGlobal && !forceLocalRoot;
+      const viewer = viewerNodeId || nodeId;
+      const effectiveOwner = explicitOwnerId || nodeId;
+      if (isComponentScope && viewer && effectiveOwner && viewer !== effectiveOwner && access !== 'rw') disableForeignDestructive = true;
+    } catch {/* ignore */}
+
     return (
       <div style={{ marginBottom: virtual ? 0 : 6 }}>
         <div
@@ -445,23 +517,97 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
           {isContainer ? (
             <Button type="text" size="small" onClick={() => toggleExpand(path)} style={{ width: 24 }}>{expanded ? '-' : '+'}</Button>
           ) : <span style={{ width: 24 }} />}
-          <Typography.Text strong style={highlightPath === path ? { outline: `2px solid ${token.colorPrimary}`, outlineOffset: 2, padding: '0 2px', borderRadius: 4 } : {}}>{label}</Typography.Text>
+          {renamingPath === path ? (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+              <Input size="small" value={renameInput} autoFocus style={{ width:140 }} onChange={(e)=>setRenameInput(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ if(renameInput && renameInput!==label){ renameGlobalPath(path, renameInput).then(()=>{ setRenamingPath(null); refresh(); }).catch(()=> message.error('Rename failed')); } else { setRenamingPath(null);} } if(e.key==='Escape'){ setRenamingPath(null);} e.stopPropagation(); }} />
+              <Button size="small" type="primary" onClick={(e)=>{ e.stopPropagation(); if(renameInput && renameInput!==label){ renameGlobalPath(path, renameInput).then(()=>{ setRenamingPath(null); refresh(); }).catch(()=> message.error('Rename failed')); } else { setRenamingPath(null);} }}>Save</Button>
+              <Button size="small" onClick={(e)=>{ e.stopPropagation(); setRenamingPath(null); }}>Cancel</Button>
+            </span>
+          ) : (
+            <Typography.Text strong style={(() => { const base = (highlightPath === path ? { outline: `2px solid ${token.colorPrimary}`, outlineOffset: 2, padding: '0 2px', borderRadius: 4 } : {}); const metaNode = node.meta||{}; if(metaNode.lastRenamedAt && Date.now()-metaNode.lastRenamedAt < 5000){ base.background = 'rgba(250,204,21,0.35)'; base.borderRadius = 4; } if(metaNode.detachedDueToDelete && Date.now()-metaNode.detachedDueToDelete < 8000){ base.background = 'rgba(248,113,113,0.35)'; base.borderRadius = 4; } if(metaNode.detachedManually && Date.now()-metaNode.detachedManually < 5000){ base.background = 'rgba(96,165,250,0.35)'; base.borderRadius = 4; } return base; })()}>{label}</Typography.Text>
+          )}
           <Tag color={node.type === 'string' ? 'blue' : node.type === 'number' ? 'green' : node.type === 'boolean' ? 'orange' : node.type === 'object' ? 'purple' : 'magenta'}>{node.type}</Tag>
+          {/* Access control (component scope): default read-only, can switch to read/write */}
+          {!isRoot && !isGlobal && (
+            <Tooltip title="Access">
+              <Select
+                size="small"
+                value={(node.meta && node.meta.access) || 'ro'}
+                style={{ width: 92 }}
+                onChange={(v) => { updateNodeMeta(path, { access: v, ownerNodeId: (node.meta && node.meta.ownerNodeId) || nodeId }); refresh(); }}
+                options={[{ label: 'Read-only', value: 'ro' }, { label: 'Read/Write', value: 'rw' }]} />
+            </Tooltip>
+          )}
           {meta.global && <Tag color="gold" icon={<GlobalOutlined />}>G</Tag>}
+          {node.meta?.aliasGlobalId && <Tag color="geekblue">Alias</Tag>}
           {node.meta?.expression && <Tooltip title="Computed"><FunctionOutlined style={{ fontSize: 12, color: '#1677ff' }} /></Tooltip>}
           {node.meta?.expressionError && <Tooltip title={node.meta.expressionError}><WarningOutlined style={{ fontSize: 12, color: '#faad14' }} /></Tooltip>}
           {Array.isArray(node.meta?.watchers) && node.meta.watchers.length > 0 && <Tooltip title={`${node.meta.watchers.length} ${t('userprops.watchers.count')}`}><EyeOutlined style={{ fontSize: 12, color: '#52c41a' }} /></Tooltip>}
           {validationErrors[path] && <Tooltip title={validationErrors[path].join('\n')}><Badge count={validationErrors[path].length} size="small" style={{ background: '#ff4d4f' }} /></Tooltip>}
           {!isContainer && renderPrimitiveEditor(path, node)}
-          {!isRoot && (
-            <Tooltip title={meta.global ? 'Unset global' : 'Set global'}>
-              <Button size="small" icon={meta.global ? <EyeInvisibleOutlined /> : <GlobalOutlined />} onClick={() => { toggleGlobalFlag(path, !meta.global); refresh(); }} />
+          {!isRoot && !node.meta?.aliasGlobalId && (
+            <Tooltip title="Promote to Global (creates site-wide value and converts this to alias)">
+              <Button size="small" icon={<GlobalOutlined />} onClick={async ()=>{
+                if(promotingMap[path]) return;
+                setPromotingMap(m=>({...m,[path]:true}));
+                const start = Date.now();
+                try {
+                  const loaded = await ensureGlobalLoaded();
+                  if(!loaded){
+                    message.warning('Global store unavailable (missing user/site id)');
+                    console.warn('[UserProps] ensureGlobalLoaded returned false. root props missing currentUserId/currentSiteId?');
+                    setPromotingMap(m=>{ const c={...m}; delete c[path]; return c; });
+                    return;                    
+                  }
+                  console.log('[UserProps] Promoting path', path);
+                  const beforeMeta = JSON.parse(JSON.stringify(node.meta||{}));
+                  const res = await promoteLocalToGlobal(path, path);
+                  const ms = Date.now()-start;
+                  // Re-fetch meta after potential mutation
+                  const afterMeta = node.meta || {};
+                  if(res && res.globalPath && afterMeta.aliasGlobalId){
+                    message.success(`Promoted: ${res.globalPath} (${ms}ms)`);
+                  } else if(res && res.globalPath && !afterMeta.aliasGlobalId){
+                    message.warning('Global created but alias not applied – applying fallback');
+                    try { toggleGlobalFlag(path, true); } catch {/* ignore */}
+                  } else if(!res){
+                    message.warning('Promotion returned no result; retrying fallback');
+                    try { toggleGlobalFlag(path, true); } catch {/* ignore */}
+                  }
+                  // Final verification
+                  if(!(node.meta && node.meta.aliasGlobalId)){
+                    console.warn('[UserProps] Promotion fallback did not set alias meta for', path, { beforeMeta, afterMeta });
+                  }
+                  refresh();
+                } catch(e){
+                  console.error('[UserProps] Promote failed', e);
+                  message.error('Promote failed: '+ (e?.message||'unknown'));
+                } finally {
+                  setPromotingMap(m=>{ const c={...m}; delete c[path]; return c; });
+                  setTreeVersion(v=>v+1);
+                }
+              }} disabled={!!promotingMap[path]} />
             </Tooltip>
+          )}
+          {!isRoot && node.meta?.aliasGlobalId && (
+            <Tooltip title="Alias of global path; use Detach to localize">
+              <Button size="small" icon={<GlobalOutlined />} disabled />
+            </Tooltip>
+          )}
+          {!isRoot && node.meta?.aliasGlobalId && (
+            <Space size={4}>
+              <Tooltip title="Alias synced from global">
+                <Button size="small" onClick={async ()=>{ const res = syncAliasesNow(); if (res && typeof res.then === 'function') await res; refresh(); }}>Sync</Button>
+              </Tooltip>
+              <Tooltip title="Detach alias (make local copy)">
+                <Button size="small" onClick={async ()=>{ const res = detachAlias(path); if (res && typeof res.then === 'function') await res; refresh(); }}>Detach</Button>
+              </Tooltip>
+            </Space>
           )}
           {!isRoot && (
             node.meta?.ref ? (
               <Tooltip title="Unbind from component prop">
-                <Button size="small" type="primary" onClick={() => { unbindUserPropPath(path); refresh(); }}>Bound</Button>
+                <Button size="small" type="primary" onClick={async () => { const r = unbindUserPropPath(path); if (r && typeof r.then === 'function') await r; refresh(); }}>Bound</Button>
               </Tooltip>
             ) : (
               isContainer ? (
@@ -473,9 +619,19 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
               )
             )
           )}
-          {!isRoot && (
-            <Tooltip title="Delete">
-              <Button danger size="small" icon={<DeleteOutlined />} onClick={() => { deletePath(path); refresh(); }} />
+          {!isRoot && !isGlobal && (
+            <Tooltip title={disableForeignDestructive ? 'Read-only (owner set this component as RO)' : 'Delete'}>
+              <Button danger size="small" icon={<DeleteOutlined />} disabled={disableForeignDestructive} onClick={async () => { if(disableForeignDestructive) return; try { const res = deletePath(path); if (res && typeof res.then === 'function') await res; } finally { refresh(); } }} />
+            </Tooltip>
+          )}
+          {!isRoot && isGlobal && renamingPath !== path && (
+            <Tooltip title={disableForeignDestructive ? 'Read-only (owner set this component as RO)' : 'Rename Global'}>
+              <Button size="small" icon={<EditOutlined />} disabled={disableForeignDestructive} onClick={(e)=>{ if(disableForeignDestructive) return; e.stopPropagation(); setRenamingPath(path); setRenameInput(label); }} />
+            </Tooltip>
+          )}
+          {!isRoot && isGlobal && (
+            <Tooltip title={disableForeignDestructive ? 'Read-only (owner set this component as RO)' : 'Demote (remove from Site Globals; aliases will detach)'}>
+              <Button danger size="small" icon={<DeleteOutlined />} disabled={disableForeignDestructive} onClick={async (e)=>{ if(disableForeignDestructive) return; e.stopPropagation(); try { const metaNode = node.meta||{}; const globalId = metaNode.globalId; let aliasCount = 0; try { aliasCount = countAliasesReferencing(globalId, getUserPropsTree(nodeId)); } catch {} const msg = aliasCount>0 ? `Demote global property ${path}? ${aliasCount} alias(es) will detach and stop updating. Continue?` : `Demote global property ${path}?`; if(!window.confirm(msg)) return; const res = deleteGlobalPath(path); if (res && typeof res.then === 'function') await res; refresh(); } catch(err){ message.error('Demote failed'); } }} />
             </Tooltip>
           )}
         </div>
@@ -484,13 +640,13 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
             {node.type === 'object' && (
               <AddObjectChildRow
                 indent={indent}
-                onAdd={(k, type, val) => { updateNewChildCache(path, { key: k, type, value: val }); commitAddChild(path); }}
+                onAdd={(k, type, val) => { commitAddChild(path, { key: k, type, value: val }); }}
               />
             )}
             {node.type === 'array' && (
               <AddArrayItemRow
                 indent={indent}
-                onPush={(type, val) => { updateArrayNewItemCache(path, { type, value: val }); commitAddArrayItem(path); }}
+                onPush={(type, val) => { commitAddArrayItem(path, { type, value: val }); }}
               />
             )}
             {node.type === 'object' && Object.entries(node.children || {}).map(([k, child]) => <NodeBlock key={k} node={child} path={path ? `${path}.${k}` : k} depth={depth + 1} />)}
@@ -599,8 +755,15 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
         <Space wrap>
           <Button size="small" aria-label={t('userprops.sync')} onClick={() => { syncBoundUserProps(); refresh(); }} icon={<ReloadOutlined />}>{t('userprops.sync')}</Button>
           <Button type="primary" size="small" aria-label={t('userprops.evaluate')} onClick={() => { evaluateAll(); refresh(); }} icon={<ThunderboltOutlined />}>{t('userprops.evaluate')}</Button>
-          <Tooltip title={t('userprops.undo')}><Button size="small" aria-label={t('userprops.undo')} icon={<UndoOutlined />} onClick={() => { undoUserProps(); refresh(); }} /></Tooltip>
-          <Tooltip title={t('userprops.redo')}><Button size="small" aria-label={t('userprops.redo')} icon={<RedoOutlined />} onClick={() => { redoUserProps(); refresh(); }} /></Tooltip>
+          <Tooltip title={isGlobal ? 'Global Undo' : t('userprops.undo')}><Button size="small" aria-label={isGlobal ? 'Global Undo' : t('userprops.undo')} icon={<UndoOutlined />} onClick={() => { const wasGlobal = isGlobal; if(wasGlobal){ const ok = undoGlobalUserProps(); if(ok) message.open({ key:'userprops-undo', type:'info', duration:4, content:<span style={{display:'flex',alignItems:'center',gap:8}}>Undid {wasGlobal?'global':'local'} change <Button size="small" onClick={()=>{ redoGlobalUserProps(); refresh(); message.destroy('userprops-undo'); }}>Redo</Button></span> }); } else { undoUserProps(); message.open({ key:'userprops-undo', type:'info', duration:4, content:<span style={{display:'flex',alignItems:'center',gap:8}}>Undid local change <Button size="small" onClick={()=>{ redoUserProps(); refresh(); message.destroy('userprops-undo'); }}>Redo</Button></span> }); } refresh(); }} /></Tooltip>
+          <Tooltip title={isGlobal ? 'Global Redo' : t('userprops.redo')}><Button size="small" aria-label={isGlobal ? 'Global Redo' : t('userprops.redo')} icon={<RedoOutlined />} onClick={() => { const wasGlobal = isGlobal; if(wasGlobal){ const ok = redoGlobalUserProps(); if(ok) message.open({ key:'userprops-redo', type:'info', duration:4, content:<span style={{display:'flex',alignItems:'center',gap:8}}>Redid global change <Button size="small" onClick={()=>{ undoGlobalUserProps(); refresh(); message.destroy('userprops-redo'); }}>Undo</Button></span> }); } else { redoUserProps(); message.open({ key:'userprops-redo', type:'info', duration:4, content:<span style={{display:'flex',alignItems:'center',gap:8}}>Redid local change <Button size="small" onClick={()=>{ undoUserProps(); refresh(); message.destroy('userprops-redo'); }}>Undo</Button></span> }); } refresh(); }} /></Tooltip>
+          <Popover placement="bottom" trigger={['hover','click']} content={<div style={{fontSize:11, maxWidth:240, lineHeight:1.4}}>
+            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}><span style={{background:'rgba(250,204,21,0.6)',width:14,height:14,borderRadius:3,display:'inline-block'}} /> Renamed alias (recent)</div>
+            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}><span style={{background:'rgba(248,113,113,0.6)',width:14,height:14,borderRadius:3,display:'inline-block'}} /> Detached (source deleted)</div>
+            <div style={{display:'flex',alignItems:'center',gap:6}}><span style={{background:'rgba(96,165,250,0.6)',width:14,height:14,borderRadius:3,display:'inline-block'}} /> Manually detached alias</div>
+          </div>}>
+            <Button size="small" icon={<InfoCircleOutlined />} aria-label="Legend" />
+          </Popover>
         </Space>
         <MetricsBar nodeId={nodeId} query={query} refreshTrigger={treeVersion} />
       </div>
@@ -656,8 +819,8 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
           >
             <Button size="small">Templates</Button>
           </Popover>
-          <Button size="small" onClick={() => { selectedPaths.forEach(p => { toggleGlobalFlag(p, true); }); refresh(); }}>Set Global</Button>
-          <Button size="small" onClick={() => { selectedPaths.forEach(p => { toggleGlobalFlag(p, false); }); refresh(); }}>Unset Global</Button>
+          <Button size="small" onClick={async () => { for (const p of selectedPaths) { try { await promoteLocalToGlobal(p, p); } catch {/* ignore */} } refresh(); }}>Set Global</Button>
+          <Button size="small" onClick={async () => { for (const p of selectedPaths) { const meta = getNodeMeta(p); try { if (meta?.meta?.aliasGlobalId) { const r = detachAlias(p); if (r && typeof r.then === 'function') await r; } else { const r2 = toggleGlobalFlag(p, false); if (r2 && typeof r2.then === 'function') await r2; } } catch {/* ignore */} } refresh(); }}>Unset Global</Button>
           <Popconfirm title="Clear all expressions on selected?" okText="Yes" onConfirm={() => { selectedPaths.forEach(p => { const meta = getNodeMeta(p); if (meta?.meta?.expression) { hook.clearExpression(p); } }); refresh(); }}><Button size="small">Clear Expressions</Button></Popconfirm>
           <Popconfirm title="Clear all validation rules on selected?" okText="Yes" onConfirm={() => { selectedPaths.forEach(p => { hook.clearValidation(p); }); refresh(); }}><Button size="small">Clear Validation</Button></Popconfirm>
           <Button size="small" onClick={clearSelection}>Clear Selection</Button>
@@ -674,6 +837,45 @@ export const UserPropsManager = ({ visible, onClose, nodeId, title = t('userprop
     </div>
   );
 
+  // Inline panel rendering (no modal)
+  if (inline) {
+    return (
+      <>
+        {simple ? (
+          <div style={{ padding: fitModal ? 0 : undefined }}>
+            {renderTreeTab()}
+          </div>
+        ) : (
+          <Card bordered={false} bodyStyle={{ padding: fitModal ? 0 : 0 }} styles={{ body: { background: token.colorBgContainer } }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <SettingOutlined />
+              <span style={{ fontWeight: 600 }}>{title}</span>
+              {isGlobal && <Tag color="gold" icon={<GlobalOutlined />}>Global</Tag>}
+            </div>
+            <Tabs activeKey={activeTab} onChange={setActiveTab} size="small" style={{ marginBottom: 12 }} items={[{ key: 'tree', label: t('userprops.tab.tree') }, { key: 'telemetry', label: t('userprops.tab.telemetry') }]} />
+            {activeTab === 'tree' && renderTreeTab()}
+            {activeTab === 'telemetry' && renderTelemetryTab()}
+          </Card>
+        )}
+        <UserPropDetailDrawer
+          open={detailOpen}
+          path={detailPath}
+          onClose={() => { setDetailOpen(false); setDetailPath(null); }}
+          hookApis={hook}
+          nodeMeta={detailPath ? getNodeMeta(detailPath) : null}
+          validationErrors={validationErrors}
+          onDependencyClick={(dep) => {
+            setHighlightPath(dep);
+            const parts = dep.split('.'); let current = ''; parts.forEach(part => { current = current ? current + '.' + part : part; setExpandedPaths(prev => new Set(prev).add(current)); });
+            setTimeout(() => { setHighlightPath(null); }, 3000);
+          }}
+          onRequestPathChange={(p) => { if (!p) return; setDetailPath(p); setDetailOpen(true); setHighlightPath(p); setTimeout(() => setHighlightPath(null), 2500); const parts = p.split('.'); let cur = ''; parts.forEach(part => { cur = cur ? cur + '.' + part : part; setExpandedPaths(prev => new Set(prev).add(cur)); }); }}
+        />
+      </>
+    );
+  }
+
+  // Default modal rendering (legacy)
   return (
     <>
       <Modal

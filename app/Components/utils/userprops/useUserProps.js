@@ -4,6 +4,26 @@ import React, { createContext, useContext, useCallback } from 'react';
 // Phase 2 template & reorder support
 import * as userPropTemplates from './userPropTemplates.js';
 import { reorderArrayItem, setExpressionAtPath as engineSetExpressionAtPath, createNode } from './userPropsEngine';
+// Global + alias support
+import {
+  loadGlobalUserProps,
+  listGlobalPropPaths,
+  createOrSetGlobalPrimitive,
+  promoteLocalNodeToGlobal,
+  createAliasToGlobal,
+  syncAliasNodes,
+  isGlobalLoaded,
+  getGlobalRoot,
+  subscribeGlobalUserProps
+} from './globalUserPropsStore';
+import {
+  renameGlobalPath,
+  deleteGlobalPath,
+  undoGlobalUserProps,
+  redoGlobalUserProps,
+  countAliasesReferencing
+} from './globalUserPropsStore';
+import { detachAliasNode } from './globalUserPropsStore';
 import { useEditor } from '@craftjs/core';
 import {
   ensureTree,
@@ -44,6 +64,130 @@ export const UserPropsProvider = ({ children }) => {
  */
 export const useUserProps = (nodeId = null) => {
   const { actions, query } = useEditor();
+  const [globalVersion, setGlobalVersion] = React.useState(0);
+  // Placeholder for site / user context (Phase 1 assumption: provided on window or ROOT props)
+  // Attempt to derive userId & siteId from ROOT node props if present
+  const deriveIds = () => {
+    try {
+      const root = query.node('ROOT').get();
+      const rProps = root?.data?.props || {};
+      const userId = rProps.currentUserId || (typeof window !== 'undefined' && window.__editorUserId) || null;
+      const siteId = rProps.currentSiteId || (typeof window !== 'undefined' && window.__editorSiteId) || null;
+      return { userId, siteId };
+    } catch { return { userId: null, siteId: null }; }
+  };
+
+  const ensureGlobalLoaded = useCallback(async () => {
+    if (isGlobalLoaded()) return true;
+    const { userId, siteId } = deriveIds();
+    if (!userId || !siteId) {
+      // Attempt dev fallback: try to read from window fallback stash or environment
+      try {
+        if (typeof window !== 'undefined') {
+          const w = window;
+          if (!userId && w.__editorUserIdFallback) w.__editorUserId = w.__editorUserIdFallback;
+          if (!siteId && w.__editorSiteIdFallback) w.__editorSiteId = w.__editorSiteIdFallback;
+        }
+      } catch {/* ignore */}
+      const retry = deriveIds();
+      if (!retry.userId || !retry.siteId) {
+        // Auto-bootstrap ephemeral IDs in dev so UI can function
+        try {
+          if (typeof window !== 'undefined') {
+            const host = window.location?.host || '';
+            const isDevHost = /localhost|127\.0\.0\.1/.test(host);
+            const isDevEnv = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production');
+            if (isDevHost || isDevEnv) {
+              window.__editorUserId = 'devUser';
+              window.__editorSiteId = 'devSite';
+              console.warn('[UserProps] Using ephemeral devUser/devSite. Provide currentUserId/currentSiteId on ROOT for persistence.');
+              await loadGlobalUserProps('devUser','devSite');
+              return true;
+            }
+          }
+        } catch {/* ignore */}
+        return false;
+      }
+      try { await loadGlobalUserProps(retry.userId, retry.siteId); return true; } catch { return false; }
+    }
+    try { await loadGlobalUserProps(userId, siteId); return true; } catch { return false; }
+  }, [query]);
+
+  // Subscribe to remote global updates to sync aliases & evaluate
+  // (moved subscription effect below scheduleEvaluation definition)
+
+  // scheduleEvaluation moved earlier to avoid TDZ in dependency arrays
+  const scheduleEvaluation = useCallback((targetNodeId = nodeId) => {
+    setTimeout(async () => {
+      try {
+  if (!targetNodeId) return; // silently ignore when no node context
+  let craftNode;
+  try { craftNode = query.node(targetNodeId).get(); } catch { return; }
+        const props = craftNode.data.props;
+        const tree = props.userPropsTree;
+        if (!tree) return;
+        try { syncAliasNodes(tree); } catch {/* ignore alias sync errors */}
+        const cloned = JSON.parse(JSON.stringify(tree));
+        const prevSnap = props.userPropsWatcherSnapshot || null;
+        const { exprChanges, validationErrors, watcherResult, metrics } = await evaluatePipeline(cloned, prevSnap);
+        actions.setProp(targetNodeId, (p) => {
+          const liveTree = ensureTree(p);
+          exprChanges.forEach(pt => {
+            try {
+              const src = getNodeAtPath(cloned, pt);
+              const dst = getNodeAtPath(liveTree, pt);
+              if (src && dst) {
+                dst.type = src.type;
+                if (dst.hasOwnProperty('value')) dst.value = src.value;
+                if (dst.meta && dst.meta.expressionError) delete dst.meta.expressionError;
+                if (src.meta && src.meta.expressionError) {
+                  dst.meta = dst.meta || {}; dst.meta.expressionError = src.meta.expressionError;
+                }
+              }
+            } catch {/* ignore individual path errors */}
+          });
+          function propagateErrors(node, path='') {
+            if (!node) return;
+            if (node.meta && node.meta.expression && node.meta.expressionError) {
+              const dst = getNodeAtPath(liveTree, path);
+              if (dst) { dst.meta = dst.meta || {}; dst.meta.expressionError = node.meta.expressionError; }
+            } else if (node.meta && node.meta && node.meta.expression && !node.meta.expressionError) {
+              const dst = getNodeAtPath(liveTree, path); if (dst && dst.meta && dst.meta.expressionError) delete dst.meta.expressionError;
+            }
+            if (node.type === 'object') Object.entries(node.children||{}).forEach(([k,c])=>propagateErrors(c, path? path+'.'+k : k));
+            else if (node.type === 'array') (node.items||[]).forEach((c,i)=>propagateErrors(c, path? path+'.'+i : String(i)));
+          }
+          propagateErrors(cloned);
+          p.userPropsValidationErrors = validationErrors;
+          p.userPropsWatcherSnapshot = watcherResult.snapshot;
+          p.userPropsLastMetrics = metrics;
+          if (watcherResult.logs && watcherResult.logs.length) {
+            p.userPropsWatcherLogs = (p.userPropsWatcherLogs || []).concat(watcherResult.logs).slice(-200);
+          }
+          p.userPropsUndoStack = (p.userPropsUndoStack || []).slice(-19);
+          p.userPropsUndoStack.push(JSON.stringify(liveTree));
+          p.userPropsRedoStack = [];
+          touchLegacyMap(p);
+        });
+      } catch (e) {
+        console.warn('Deferred evaluation failed', e);
+      }
+    }, 0);
+  }, [actions, query, nodeId]);
+
+  // Define syncAliasesNow early to avoid TDZ when used in subscription effect deps
+  const syncAliasesNow = useCallback((targetNodeId = nodeId) => {
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const changed = syncAliasNodes(tree);
+      if (changed) {
+        touchLegacyMap(props);
+        props.userPropsUndoStack = (props.userPropsUndoStack || []).slice(-19);
+        props.userPropsUndoStack.push(JSON.stringify(tree));
+        props.userPropsRedoStack = [];
+      }
+    });
+  }, [actions, nodeId]);
 
   // Get user props for a specific node
   const getUserProps = useCallback((targetNodeId = nodeId) => {
@@ -84,6 +228,11 @@ export const useUserProps = (nodeId = null) => {
   const getGlobalUserProps = useCallback(() => {
     return getUserProps('ROOT');
   }, [getUserProps]);
+
+  // Direct access to global store tree (distinct from ROOT local props)
+  const getGlobalTree = useCallback(() => {
+    try { return getGlobalRoot(); } catch { return null; }
+  }, []);
 
   // Get all available user props (local + global)
   const getAllUserProps = useCallback((targetNodeId = nodeId) => {
@@ -215,69 +364,38 @@ export const useUserProps = (nodeId = null) => {
     if (!tree) return undefined;
     const node = getNodeAtPath(tree, path);
     if (!node) return undefined;
+    // If this node is an alias to a Site Global, read the live global value directly to avoid staleness
+    try {
+      if (node.meta && (node.meta.aliasGlobalPath || node.meta.aliasGlobalId)) {
+        if (isGlobalLoaded()) {
+          const globalRoot = getGlobalRoot();
+          const gPath = node.meta.aliasGlobalPath;
+          if (gPath) {
+            const gNode = getNodeAtPath(globalRoot, gPath);
+            if (gNode && gNode.type !== 'object' && gNode.type !== 'array') return gNode.value;
+          }
+        }
+      }
+    } catch {/* ignore */}
     // primitives -> value; containers -> structured JS
     if (node.type === 'object' || node.type === 'array') return undefined; // explicit: container has no direct value
     return node.value;
   }, [getUserPropsTree, nodeId]);
 
-  const scheduleEvaluation = useCallback((targetNodeId = nodeId) => {
-    // Defer so we run outside Immer draft lifecycle
-    setTimeout(async () => {
-      try {
-        const craftNode = query.node(targetNodeId).get();
-        const props = craftNode.data.props;
-        const tree = props.userPropsTree;
-        if (!tree) return;
-        const cloned = JSON.parse(JSON.stringify(tree));
-        const prevSnap = props.userPropsWatcherSnapshot || null;
-        const { exprChanges, validationErrors, watcherResult, metrics } = await evaluatePipeline(cloned, prevSnap);
-        actions.setProp(targetNodeId, (p) => {
-          const liveTree = ensureTree(p);
-          // Apply changed expression node values & error states
-          exprChanges.forEach(pt => {
-            try {
-              const src = getNodeAtPath(cloned, pt);
-              const dst = getNodeAtPath(liveTree, pt);
-              if (src && dst) {
-                dst.type = src.type;
-                if (dst.hasOwnProperty('value')) dst.value = src.value;
-                if (dst.meta && dst.meta.expressionError) delete dst.meta.expressionError;
-                if (src.meta && src.meta.expressionError) {
-                  dst.meta = dst.meta || {}; dst.meta.expressionError = src.meta.expressionError;
-                }
-              }
-            } catch {/* ignore individual path errors */}
-          });
-          // Copy expression errors for nodes without value changes
-          // (light pass: traverse cloned for meta.expressionError)
-          function propagateErrors(node, path='') {
-            if (!node) return;
-            if (node.meta && node.meta.expression && node.meta.expressionError) {
-              const dst = getNodeAtPath(liveTree, path);
-              if (dst) { dst.meta = dst.meta || {}; dst.meta.expressionError = node.meta.expressionError; }
-            } else if (node.meta && node.meta && node.meta.expression && !node.meta.expressionError) {
-              const dst = getNodeAtPath(liveTree, path); if (dst && dst.meta && dst.meta.expressionError) delete dst.meta.expressionError;
-            }
-            if (node.type === 'object') Object.entries(node.children||{}).forEach(([k,c])=>propagateErrors(c, path? path+'.'+k : k));
-            else if (node.type === 'array') (node.items||[]).forEach((c,i)=>propagateErrors(c, path? path+'.'+i : String(i)));
-          }
-          propagateErrors(cloned);
-          p.userPropsValidationErrors = validationErrors;
-          p.userPropsWatcherSnapshot = watcherResult.snapshot;
-          p.userPropsLastMetrics = metrics;
-          if (watcherResult.logs && watcherResult.logs.length) {
-            p.userPropsWatcherLogs = (p.userPropsWatcherLogs || []).concat(watcherResult.logs).slice(-200);
-          }
-          p.userPropsUndoStack = (p.userPropsUndoStack || []).slice(-19);
-          p.userPropsUndoStack.push(JSON.stringify(liveTree));
-          p.userPropsRedoStack = [];
-          touchLegacyMap(p);
-        });
-      } catch (e) {
-        console.warn('Deferred evaluation failed', e);
-      }
-    }, 0);
-  }, [actions, query, nodeId]);
+  // Explicit global value lookup (bypasses local tree) for components that have not yet created an alias
+  const getGlobalValue = useCallback((path) => {
+    try {
+      if (!path) return undefined;
+      // Use actual global store root (bug fix: previously used getUserProps('ROOT') which is editor root props, not global store)
+      if (!isGlobalLoaded()) return undefined;
+      const globalRoot = getGlobalRoot();
+      const node = getNodeAtPath(globalRoot, path);
+      if (!node) return undefined;
+      if (node.type === 'object' || node.type === 'array') return undefined;
+      return node.value;
+    } catch { return undefined; }
+  }, []);
+
 
   const setPrimitiveAtPath = useCallback((path, value, typeHint, targetNodeId = nodeId) => {
     if (!path) return;
@@ -290,6 +408,26 @@ export const useUserProps = (nodeId = null) => {
     });
     scheduleEvaluation(targetNodeId);
   }, [actions, nodeId, scheduleEvaluation]);
+
+  // Subscription to global store events (placed after scheduleEvaluation to avoid temporal dead zone)
+  React.useEffect(() => {
+    let unsub = subscribeGlobalUserProps((evt) => {
+      if (!evt) return;
+  setGlobalVersion(v => v + 1);
+      if (evt.type === 'remote-update' || evt.type === 'undo' || evt.type === 'redo') {
+        try { syncAliasesNow(nodeId); } catch {/* ignore */}
+        scheduleEvaluation(nodeId);
+      } else if (evt.type === 'rename') {
+        actions.setProp(nodeId, (props) => { try { syncAliasesNow(nodeId); touchLegacyMap(props); } catch {/* ignore */} });
+        scheduleEvaluation(nodeId);
+      } else if (evt.type === 'delete') {
+        // On delete: sync aliases (some may now point to missing node) then evaluate
+        actions.setProp(nodeId, (props) => { try { syncAliasesNow(nodeId); touchLegacyMap(props); } catch {/* ignore */} });
+        scheduleEvaluation(nodeId);
+      }
+    });
+    return () => { try { unsub && unsub(); } catch {/* ignore */} };
+  }, [nodeId, scheduleEvaluation, syncAliasesNow, actions]);
 
   const setPrimitiveSmartAtPath = useCallback((path, rawValue, options = {}, targetNodeId = nodeId) => {
     if (!path) return;
@@ -331,13 +469,74 @@ export const useUserProps = (nodeId = null) => {
     return index;
   }, [actions, nodeId]);
 
-  const toggleGlobalFlag = useCallback((path, isGlobal, targetNodeId = nodeId) => {
+  const toggleGlobalFlag = useCallback((path, makeGlobal, targetNodeId = nodeId) => {
+    if (!path) return;
     actions.setProp(targetNodeId, (props) => {
       const tree = ensureTree(props);
-      setGlobalFlag(tree, path, isGlobal);
+      const node = getNodeAtPath(tree, path);
+      if (!node) return;
+      if (makeGlobal) {
+        // If already an alias, nothing to do
+        if (node.meta && node.meta.aliasGlobalId) return;
+        try {
+          // Promote inline (reuse underlying promote util)
+          const result = promoteLocalNodeToGlobal(tree, path, path);
+          if (result && node.meta) {
+            // node meta now includes alias markers; clear legacy flag
+            if (node.global) delete node.global;
+          }
+        } catch (e) {
+          // fallback: mark legacy flag so user sees something (will not sync though)
+          setGlobalFlag(tree, path, true);
+        }
+      } else {
+        // Unset global: if alias -> detach to local copy
+        if (node.meta && node.meta.aliasGlobalId) {
+          delete node.meta.aliasGlobalId; delete node.meta.aliasGlobalPath; node.meta.detachedManually = Date.now();
+        }
+        if (node.global) delete node.global; // remove legacy flag
+      }
       touchLegacyMap(props);
     });
-  }, [actions, nodeId]);
+    // After promotion or detach, evaluate to pull current global value or finalize local
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
+
+  // ---- Global & Alias APIs (Phase 1) ----
+  const listSiteGlobalPropPaths = useCallback(async (options = {}) => {
+    const ok = await ensureGlobalLoaded(); if (!ok) return [];
+    return listGlobalPropPaths(options);
+  }, [ensureGlobalLoaded]);
+
+  const createGlobalPrimitive = useCallback(async (path, type, value) => {
+    const ok = await ensureGlobalLoaded(); if (!ok) throw new Error('Global store not loaded');
+    createOrSetGlobalPrimitive(path, type, value);
+  }, [ensureGlobalLoaded]);
+
+  const promoteLocalToGlobal = useCallback(async (localPath, desiredGlobalPath, targetNodeId = nodeId) => {
+    if (!localPath || !desiredGlobalPath) return null;
+    const ok = await ensureGlobalLoaded(); if (!ok) throw new Error('Global store not loaded');
+    let result = null;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      try { result = promoteLocalNodeToGlobal(tree, localPath, desiredGlobalPath); touchLegacyMap(props); } catch (e) { /* eslint-disable-next-line no-console */ console.warn('promoteLocalToGlobal failed', e); }
+    });
+    scheduleEvaluation(targetNodeId);
+    return result;
+  }, [actions, nodeId, ensureGlobalLoaded, scheduleEvaluation]);
+
+  const createAliasToGlobalPath = useCallback(async (localPath, globalPathOrId, targetNodeId = nodeId) => {
+    if (!localPath || !globalPathOrId) return null;
+    const ok = await ensureGlobalLoaded(); if (!ok) throw new Error('Global store not loaded');
+    let result = null;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      try { result = createAliasToGlobal(tree, localPath, globalPathOrId); touchLegacyMap(props); } catch (e) { /* eslint-disable-next-line no-console */ console.warn('createAliasToGlobal failed', e); }
+    });
+    scheduleEvaluation(targetNodeId);
+    return result;
+  }, [actions, nodeId, ensureGlobalLoaded, scheduleEvaluation]);
+
 
   const getNodeMeta = useCallback((path, targetNodeId = nodeId) => {
     const tree = getUserPropsTree(targetNodeId);
@@ -346,6 +545,20 @@ export const useUserProps = (nodeId = null) => {
     if (!node) return null;
     return { type: node.type, global: !!node.global, isLeaf: !['object','array'].includes(node.type), meta: node.meta || {} };
   }, [getUserPropsTree, nodeId]);
+
+  const detachAlias = useCallback((path, targetNodeId = nodeId) => {
+    if (!path) return;
+    actions.setProp(targetNodeId, (props) => {
+      const tree = ensureTree(props);
+      const node = getNodeAtPath(tree, path);
+      if (node && node.meta && node.meta.aliasGlobalId) {
+        detachAliasNode(node);
+        node.meta.detachedManually = Date.now();
+        touchLegacyMap(props);
+      }
+    });
+    scheduleEvaluation(targetNodeId);
+  }, [actions, nodeId, scheduleEvaluation]);
 
   const updateNodeMeta = useCallback((path, metaPatch, targetNodeId = nodeId) => {
     if (!path) return;
@@ -414,7 +627,9 @@ export const useUserProps = (nodeId = null) => {
         } catch { return undefined; }
       });
       const prevSnap = props.userPropsWatcherSnapshot || null;
-      const { exprChanges, validationErrors, watcherResult, metrics } = await evaluatePipeline(tree, prevSnap);
+  // Clone before async evaluation to avoid working on a revoked proxy
+  const cloned = JSON.parse(JSON.stringify(tree));
+  const { exprChanges, validationErrors, watcherResult, metrics } = await evaluatePipeline(cloned, prevSnap);
       props.userPropsValidationErrors = validationErrors;
       props.userPropsWatcherSnapshot = watcherResult.snapshot;
       props.userPropsLastMetrics = metrics;
@@ -450,7 +665,7 @@ export const useUserProps = (nodeId = null) => {
         node.meta.watchers = Array.isArray(node.meta.watchers) ? node.meta.watchers : [];
         node.meta.watchers.push({ script });
       }
-    });
+    }, [actions, nodeId]);
   }, [actions, nodeId]);
 
   const removeWatcher = useCallback((path, index, targetNodeId = nodeId) => {
@@ -460,7 +675,7 @@ export const useUserProps = (nodeId = null) => {
       if (node && node.meta && Array.isArray(node.meta.watchers)) {
         node.meta.watchers.splice(index,1);
       }
-    });
+    }, [actions, nodeId]);
   }, [actions, nodeId]);
 
   const updateWatcher = useCallback((path, index, script, targetNodeId = nodeId) => {
@@ -470,7 +685,7 @@ export const useUserProps = (nodeId = null) => {
       if (node && node.meta && Array.isArray(node.meta.watchers) && node.meta.watchers[index]) {
         node.meta.watchers[index].script = script;
       }
-    });
+    }, [actions, nodeId]);
   }, [actions, nodeId]);
 
   const listWatchers = useCallback((path, targetNodeId = nodeId) => {
@@ -703,7 +918,9 @@ export const useUserProps = (nodeId = null) => {
     // Core functions
     getUserProps,
     getGlobalUserProps,
+  getGlobalTree,
     getAllUserProps,
+  globalVersion,
     setUserProps,
     updateUserProp,
     
@@ -719,6 +936,7 @@ export const useUserProps = (nodeId = null) => {
   listUserPropPaths,
   searchUserPropPaths,
   getValueAtPath,
+  getGlobalValue,
   setPrimitiveAtPath,
   setPrimitiveSmartAtPath,
   deletePath,
@@ -756,6 +974,19 @@ export const useUserProps = (nodeId = null) => {
   ,applyWatcherTemplate
   ,bulkApplyExpressionTemplate
   ,reorderArray
+  // Global & alias
+  ,listSiteGlobalPropPaths
+  ,createGlobalPrimitive
+  ,promoteLocalToGlobal
+  ,createAliasToGlobalPath
+  ,syncAliasesNow
+  ,ensureGlobalLoaded
+  ,renameGlobalPath
+  ,deleteGlobalPath
+  ,undoGlobalUserProps
+  ,redoGlobalUserProps
+  ,countAliasesReferencing
+  ,detachAlias
   };
 };
 
