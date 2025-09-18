@@ -9,6 +9,7 @@ import { useCraftSnap } from "../../utils/craft/useCraftSnap";
 import PortalControls from "../support/PortalControls";
 import { useUserProps } from '../../utils/userprops/useUserProps';
 import BindSelector from '../support/BindSelector';
+import { positionalStyles, sizeStyles, normalizeUnit, shouldSkipPositionReset } from '../../utils/style/positioning';
 
 export const Text = ({
   // Content
@@ -526,26 +527,22 @@ export const Text = ({
   useEffect(() => {
     // Skip the initial render (when prevParentRef.current is first set)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
-      // Parent has changed - element was moved to a different container
-      console.log(`📦 Text ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
-      
-      // Reset position properties to default
-      setProp((props) => {
-        // Only reset if position properties were actually set
-        if (props.top !== undefined || props.left !== undefined || 
-            props.right !== undefined || props.bottom !== undefined) {
-          console.log('🔄 Resetting position properties after container move');
-          props.top = undefined;
-          props.left = undefined;
-          props.right = undefined;
-          props.bottom = undefined;
-          // Keep position as relative for normal flow
-          props.position = "relative";
-        }
-      });
+      if (shouldSkipPositionReset(nodeId)) {
+        console.log('⏭️ Text position reset skipped (POS drag active or recent commit)', nodeId);
+      } else {
+        console.log(`📦 Text ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - resetting position`);
+        setProp((props) => {
+          if (props.top !== undefined || props.left !== undefined || props.right !== undefined || props.bottom !== undefined) {
+            if (!(props.position === 'absolute' && (props.left !== undefined || props.top !== undefined))) {
+              props.top = undefined; props.left = undefined; props.right = undefined; props.bottom = undefined;
+              if (props.position !== 'absolute') props.position = 'relative';
+            } else {
+              console.log('🎯 Text already absolutely positioned; skip reset');
+            }
+          }
+        });
+      }
     }
-    
-    // Update the ref for next comparison
     prevParentRef.current = parent;
   }, [parent, nodeId, setProp]);
 
@@ -748,178 +745,57 @@ export const Text = ({
   Object.entries(dataAttributes).forEach(([key, value]) => {
     dataAttrs[`data-${key}`] = value;
   });
-  const processValue = (value, property) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight', 'order', 'flexGrow', 'flexShrink'].includes(property)) {
-      return `${value}px`;
-    }
-    return value;
-  };
 
   // Build computed styles
   const computedStyles = {
-    // Layout & Position
-    width: processValue(width, 'width'),
-    height: processValue(height, 'height'),
-    minWidth: processValue(minWidth, 'minWidth'),
-    maxWidth: processValue(maxWidth, 'maxWidth'),
-    minHeight: processValue(minHeight, 'minHeight'),
-    maxHeight: processValue(maxHeight, 'maxHeight'),
+    ...sizeStyles({ width, height, minWidth, minHeight, maxWidth, maxHeight }),
     display,
-    position,
-    top: processValue(top, 'top'),
-    right: processValue(right, 'right'),
-    bottom: processValue(bottom, 'bottom'),
-    left: processValue(left, 'left'),
+    ...positionalStyles({ position, top, right, bottom, left }),
     zIndex,
     visibility,
     float,
     clear,
     boxSizing,
-    
-    // Overflow
-    overflow,
-    overflowX,
-    overflowY,
-    resize,
-    scrollBehavior,
-    
-    // Spacing - handle individual sides or combined values
-    margin: marginTop || marginRight || marginBottom || marginLeft || marginX || marginY 
-      ? `${processValue(marginTop, 'marginTop') || 0} ${processValue(marginRight, 'marginRight') || 0} ${processValue(marginBottom, 'marginBottom') || 0} ${processValue(marginLeft, 'marginLeft') || 0}`
-      : processValue(margin, 'margin'),
-    padding: paddingTop || paddingRight || paddingBottom || paddingLeft || paddingX || paddingY
-      ? `${processValue(paddingTop, 'paddingTop') || 0} ${processValue(paddingRight, 'paddingRight') || 0} ${processValue(paddingBottom, 'paddingBottom') || 0} ${processValue(paddingLeft, 'paddingLeft') || 0}`
-      : processValue(padding, 'padding'),
-    
-    // Border - use individual values if set, otherwise use combined
-    borderWidth: borderTopWidth !== undefined || borderRightWidth !== undefined || borderBottomWidth !== undefined || borderLeftWidth !== undefined
-      ? `${processValue(borderTopWidth || borderWidth, 'borderWidth')} ${processValue(borderRightWidth || borderWidth, 'borderWidth')} ${processValue(borderBottomWidth || borderWidth, 'borderWidth')} ${processValue(borderLeftWidth || borderWidth, 'borderWidth')}`
-      : processValue(borderWidth, 'borderWidth'),
-    borderStyle: borderTopStyle || borderRightStyle || borderBottomStyle || borderLeftStyle
-      ? `${borderTopStyle || borderStyle} ${borderRightStyle || borderStyle} ${borderBottomStyle || borderStyle} ${borderLeftStyle || borderStyle}`
-      : borderStyle,
-    borderColor: borderTopColor || borderRightColor || borderBottomColor || borderLeftColor
-      ? `${borderTopColor || borderColor} ${borderRightColor || borderColor} ${borderBottomColor || borderColor} ${borderLeftColor || borderColor}`
-      : borderColor,
-    border: border !== "none" ? border : undefined,
+    overflow, overflowX, overflowY, resize, scrollBehavior,
+    margin: (marginTop || marginRight || marginBottom || marginLeft || marginX || marginY) ? `${normalizeUnit(marginTop,'marginTop')||0} ${normalizeUnit(marginRight,'marginRight')||0} ${normalizeUnit(marginBottom,'marginBottom')||0} ${normalizeUnit(marginLeft,'marginLeft')||0}` : normalizeUnit(margin,'margin'),
+    padding: (paddingTop || paddingRight || paddingBottom || paddingLeft || paddingX || paddingY) ? `${normalizeUnit(paddingTop,'paddingTop')||0} ${normalizeUnit(paddingRight,'paddingRight')||0} ${normalizeUnit(paddingBottom,'paddingBottom')||0} ${normalizeUnit(paddingLeft,'paddingLeft')||0}` : normalizeUnit(padding,'padding'),
+    // borders simplified remain as existing code below (unchanged) ...
+    borderWidth: (borderTopWidth!==undefined||borderRightWidth!==undefined||borderBottomWidth!==undefined||borderLeftWidth!==undefined) ? `${normalizeUnit(borderTopWidth||borderWidth,'borderWidth')} ${normalizeUnit(borderRightWidth||borderWidth,'borderWidth')} ${normalizeUnit(borderBottomWidth||borderWidth,'borderWidth')} ${normalizeUnit(borderLeftWidth||borderWidth,'borderWidth')}` : normalizeUnit(borderWidth,'borderWidth'),
+    borderStyle: (borderTopStyle||borderRightStyle||borderBottomStyle||borderLeftStyle) ? `${borderTopStyle||borderStyle} ${borderRightStyle||borderStyle} ${borderBottomStyle||borderStyle} ${borderLeftStyle||borderStyle}` : borderStyle,
+    borderColor: (borderTopColor||borderRightColor||borderBottomColor||borderLeftColor) ? `${borderTopColor||borderColor} ${borderRightColor||borderColor} ${borderBottomColor||borderColor} ${borderLeftColor||borderColor}` : borderColor,
+    border: border !== 'none' ? border : undefined,
     borderCollapse,
     borderSpacing,
-    
-    // Border Radius
-    borderRadius: borderTopLeftRadius !== undefined || borderTopRightRadius !== undefined || borderBottomLeftRadius !== undefined || borderBottomRightRadius !== undefined
-      ? `${processValue(borderTopLeftRadius || borderRadius, 'borderRadius')} ${processValue(borderTopRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomLeftRadius || borderRadius, 'borderRadius')}`
-      : processValue(borderRadius, 'borderRadius'),
-    
-  // Typography (moved to inner content span to avoid leaking into editor UI)
-  fontVariant,
-  fontStretch,
-  lineHeight,
-  letterSpacing: processValue(letterSpacing, 'letterSpacing'),
-  wordSpacing: processValue(wordSpacing, 'wordSpacing'),
-  textAlign,
-  textDecoration,
-  textTransform,
-  textIndent: processValue(textIndent, 'textIndent'),
-  verticalAlign,
-  whiteSpace,
-  wordBreak,
-  wordWrap,
-    
-  // Colors & Backgrounds (color moved to inner content to avoid UI leakage)
-  backgroundColor: backgroundColor !== "transparent" ? backgroundColor : (background ? background : undefined),
+    borderRadius: (borderTopLeftRadius!==undefined||borderTopRightRadius!==undefined||borderBottomLeftRadius!==undefined||borderBottomRightRadius!==undefined) ? `${normalizeUnit(borderTopLeftRadius||borderRadius,'borderRadius')} ${normalizeUnit(borderTopRightRadius||borderRadius,'borderRadius')} ${normalizeUnit(borderBottomRightRadius||borderRadius,'borderRadius')} ${normalizeUnit(borderBottomLeftRadius||borderRadius,'borderRadius')}` : normalizeUnit(borderRadius,'borderRadius'),
+    fontVariant, fontStretch, lineHeight,
+    letterSpacing: normalizeUnit(letterSpacing,'letterSpacing'),
+    wordSpacing: normalizeUnit(wordSpacing,'wordSpacing'),
+    textAlign, textDecoration, textTransform, textIndent: normalizeUnit(textIndent,'textIndent'), verticalAlign, whiteSpace, wordBreak, wordWrap,
+    backgroundColor: backgroundColor !== 'transparent' ? backgroundColor : (background ? background : undefined),
     backgroundImage: backgroundImage || undefined,
-    backgroundSize,
-    backgroundRepeat,
-    backgroundPosition,
-    backgroundAttachment,
-    backgroundClip,
-    backgroundOrigin,
-    
-    // Flexbox Container
-    flexDirection,
-    flexWrap,
-    alignItems,
-    justifyContent,
-    alignContent,
-    gap: processValue(gap, 'gap'),
-    rowGap: processValue(rowGap, 'gap'),
-    columnGap: processValue(columnGap, 'gap'),
-    
-    // Flexbox Item Properties  
-    flex,
-    flexGrow,
-    flexShrink,
-    flexBasis: processValue(flexBasis, 'flexBasis'),
-    alignSelf,
-    order,
-    
-    // CSS Grid Container
-    gridTemplateColumns,
-    gridTemplateRows,
-    gridTemplateAreas,
-    gridAutoFlow,
-    gridAutoColumns,
-    gridAutoRows,
-    justifyItems,
-    placeItems,
-    placeContent,
-    
-    // CSS Grid Item
-    gridColumn,
-    gridRow,
-    gridColumnStart,
-    gridColumnEnd,
-    gridRowStart,
-    gridRowEnd,
-    gridArea,
-    justifySelf,
-    placeSelf,
-    
-    // List Properties
-    listStyleType,
-    listStylePosition,
-    listStyleImage: listStyleImage !== "none" ? listStyleImage : undefined,
-    
-    // Table Properties
-    tableLayout,
-    captionSide,
-    emptyCells,
-    
-    // Transform & Animation
-    transform: transform !== "none" ? transform : undefined,
+    backgroundSize, backgroundRepeat, backgroundPosition, backgroundAttachment, backgroundClip, backgroundOrigin,
+    flexDirection, flexWrap, alignItems, justifyContent, alignContent,
+    gap: normalizeUnit(gap,'gap'), rowGap: normalizeUnit(rowGap,'rowGap'), columnGap: normalizeUnit(columnGap,'columnGap'),
+    flex, flexGrow, flexShrink, flexBasis: normalizeUnit(flexBasis,'flexBasis'), alignSelf, order,
+    gridTemplateColumns, gridTemplateRows, gridTemplateAreas, gridAutoFlow, gridAutoColumns, gridAutoRows, justifyItems, placeItems, placeContent,
+    gridColumn, gridRow, gridColumnStart, gridColumnEnd, gridRowStart, gridRowEnd, gridArea, justifySelf, placeSelf,
+    listStyleType, listStylePosition, listStyleImage: listStyleImage !== 'none' ? listStyleImage : undefined,
+    tableLayout, captionSide, emptyCells,
+    transform: transform !== 'none' ? transform : undefined,
     transformOrigin,
     transition: transition || undefined,
     animation: animation || undefined,
-    
-  // Effects & Filters (boxShadow moved to content to avoid affecting toolbar)
-  opacity,
-  filter: filter || undefined,
-  backdropFilter: backdropFilter || undefined,
+    opacity,
+    filter: filter || undefined,
+    backdropFilter: backdropFilter || undefined,
     clipPath: clipPath || undefined,
     mask: mask || undefined,
     mixBlendMode,
     backgroundBlendMode,
-    
-    // Interaction
-    cursor,
-    pointerEvents,
-    userSelect,
-    touchAction,
-    
-    // Content (for pseudo elements)
-    content: content || undefined,
-    quotes: quotes || undefined,
-    counterReset: counterReset || undefined,
-    counterIncrement: counterIncrement || undefined,
-    
-    // Object Properties
-    objectFit,
-    objectPosition,
-    
-    // Scroll Properties
-    scrollSnapType,
-    scrollSnapAlign,
+    cursor, pointerEvents, userSelect, touchAction,
+    content: content || undefined, quotes: quotes || undefined, counterReset: counterReset || undefined, counterIncrement: counterIncrement || undefined,
+    objectFit, objectPosition,
+    scrollSnapType, scrollSnapAlign
   };
 
   // Remove undefined values
@@ -932,7 +808,7 @@ export const Text = ({
   // Styles to apply specifically to the inner text element so toolbar won't inherit them
   const contentStyles = {
     fontFamily,
-    fontSize: processValue(fontSize, 'fontSize'),
+    fontSize: normalizeUnit(fontSize, 'fontSize'),
     fontWeight,
     fontStyle,
     color,
@@ -946,7 +822,7 @@ export const Text = ({
       ref={wrapperRef}
       style={{
         ...computedStyles,
-        position: 'relative',
+        // removed forced position override; keep cursor logic only
         cursor: isEditing ? 'text' : 'default'
       }}
       id={id}
@@ -1440,251 +1316,37 @@ export const Text = ({
 
 // Define all supported props for the Text component
 Text.craft = {
-  displayName: "Text",
+  displayName: 'Text',
   props: {
-    // Content
-    text: "Edit this text",
-    
-    // Layout & Position
-    width: "16rem",
-    height: "auto",
-    minWidth: "",
-    maxWidth: "",
-    minHeight: "",
-    maxHeight: "",
-    display: "block",
-    position: "relative",
-    top: "",
-    right: "",
-    bottom: "",
-    left: "",
+    text: 'Edit this text',
+    width: '16rem',
+    height: 'auto',
+    display: 'block',
+    position: 'relative',
+    // removed default top/left so undefined distinguishes untouched
     zIndex: 1,
-    visibility: "visible",
-    float: "none",
-    clear: "none",
-    boxSizing: "content-box",
-    
-    // Overflow & Scroll
-    overflow: "visible",
-    overflowX: "visible",
-    overflowY: "visible",
-    resize: "none",
-    scrollBehavior: "auto",
-    
-    // Spacing
-    margin: "5px 0",
-    marginTop: "",
-    marginRight: "",
-    marginBottom: "",
-    marginLeft: "",
-    marginX: "",
-    marginY: "",
-    padding: "10px",
-    paddingTop: "",
-    paddingRight: "",
-    paddingBottom: "",
-    paddingLeft: "",
-    paddingX: "",
-    paddingY: "",
-    
-    // Border
-    border: "none",
-    borderWidth: 0,
-    borderStyle: "solid",
-    borderColor: "#000000",
-    borderTopWidth: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: "#000000",
-    borderRightColor: "#000000",
-    borderBottomColor: "#000000",
-    borderLeftColor: "#000000",
-    borderCollapse: "separate",
-    borderSpacing: "0",
-    
-    // Border Radius
-    borderRadius: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    
-    // Typography
-    fontFamily: "Arial",
-    fontSize: 16,
-    fontWeight: "400",
-    fontStyle: "normal",
-    fontVariant: "normal",
-    fontStretch: "normal",
-    lineHeight: 1.4,
-    letterSpacing: 0,
-    wordSpacing: 0,
-    textAlign: "left",
-    textDecoration: "none",
-    textTransform: "none",
-    textIndent: 0,
-  textShadow: "",
-  textShadowColor: '#000000',
-  textShadowOffsetX: 0,
-  textShadowOffsetY: 0,
-  // Glyph stroke (text border)
-  textStrokeEnabled: false,
-  textStrokeWidth: 0,
-  textStrokeColor: '#000000',
-    boxShadowColor: '#000000',
-    boxShadowOffsetX: 0,
-    boxShadowOffsetY: 0,
-    verticalAlign: "baseline",
-    whiteSpace: "normal",
-    wordBreak: "normal",
-    wordWrap: "normal",
-    
-    // Colors & Backgrounds
-    color: "#000000",
-    backgroundColor: "transparent",
-    background: "",
-    backgroundImage: "",
-    backgroundSize: "auto",
-    backgroundRepeat: "repeat",
-    backgroundPosition: "0% 0%",
-    backgroundAttachment: "scroll",
-    backgroundClip: "border-box",
-    backgroundOrigin: "padding-box",
-    
-    // Flexbox Container
-    flexDirection: "row",
-    flexWrap: "nowrap",
-    alignItems: "stretch",
-    alignContent: "stretch",
-    justifyContent: "flex-start",
-    gap: 0,
-    rowGap: 0,
-    columnGap: 0,
-    
-    // Flexbox Item Properties
-    flex: "",
-    flexGrow: 0,
-    flexShrink: 1,
-    flexBasis: "auto",
-    alignSelf: "auto",
-    order: 0,
-    
-    // CSS Grid Container Properties
-    gridTemplateColumns: "",
-    gridTemplateRows: "",
-    gridTemplateAreas: "",
-    gridAutoFlow: "row",
-    gridAutoColumns: "",
-    gridAutoRows: "",
-    justifyItems: "stretch",
-    placeItems: "auto",
-    placeContent: "auto",
-    
-    // CSS Grid Item Properties
-    gridColumn: "",
-    gridRow: "",
-    gridColumnStart: "",
-    gridColumnEnd: "",
-    gridRowStart: "",
-    gridRowEnd: "",
-    gridArea: "",
-    justifySelf: "auto",
-    placeSelf: "auto",
-    
-    // List Properties
-    listStyleType: "disc",
-    listStylePosition: "outside",
-    listStyleImage: "none",
-    
-    // Table Properties
-    tableLayout: "auto",
-    captionSide: "top",
-    emptyCells: "show",
-    
-    // Transform & Animation
-    transform: "none",
-    transformOrigin: "50% 50%",
-    transition: "",
-    animation: "",
-    
-    // Effects & Filters
-    opacity: 1,
-    filter: "",
-    backdropFilter: "",
-    boxShadow: "none",
-    clipPath: "",
-    mask: "",
-    mixBlendMode: "normal",
-    backgroundBlendMode: "normal",
-    
-    // Interaction
-    cursor: "auto",
-    pointerEvents: "auto",
-    userSelect: "auto",
-    touchAction: "auto",
-    
-    // Content & Generated Content
-    content: "",
-    quotes: "",
-    counterReset: "",
-    counterIncrement: "",
-    
-    // Object Fitting
-    objectFit: "fill",
-    objectPosition: "50% 50%",
-    
-    // Scroll Properties
-    scrollSnapType: "none",
-    scrollSnapAlign: "none",
-    
-    // Basic HTML Properties
-    src: "",
-    alt: "",
-    href: "",
-    placeholder: "",
-    title: "",
-    id: "",
-    className: "",
-    target: "",
-    rel: "",
-    type: "",
-    value: "",
-    name: "",
-    
-    // Boolean Attributes
-    disabled: false,
-    required: false,
-    readonly: false,
-    multiple: false,
-    checked: false,
-    selected: false,
-    hidden: false,
-    contentEditable: false,
-    draggable: false,
-    spellCheck: true,
-    translate: true,
-    
-    // Other Attributes
-    tabIndex: 0,
-    accessKey: "",
-    dir: "auto",
-    lang: "",
-    role: "",
-    ariaLabel: "",
-    ariaDescribedBy: "",
-    ariaLabelledBy: "",
-    
-    // Data Attributes
-  dataAttributes: {},
-
-  // Binding
-  textBindingPath: '',
-  textBindingScope: 'local'
+    visibility: 'visible',
+    float: 'none',
+    clear: 'none',
+    boxSizing: 'content-box',
+    overflow: 'visible', overflowX: 'visible', overflowY: 'visible', resize: 'none', scrollBehavior: 'auto',
+    margin: '5px 0', padding: '10px',
+    border: 'none', borderWidth: 0, borderStyle: 'solid', borderColor: '#000000', borderTopWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderLeftWidth: 0,
+    borderTopStyle: 'solid', borderRightStyle: 'solid', borderBottomStyle: 'solid', borderLeftStyle: 'solid',
+    borderTopColor: '#000000', borderRightColor: '#000000', borderBottomColor: '#000000', borderLeftColor: '#000000',
+    borderCollapse: 'separate', borderSpacing: '0', borderRadius: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+    fontFamily: 'Arial', fontSize: 16, fontWeight: '400', fontStyle: 'normal', fontVariant: 'normal', fontStretch: 'normal', lineHeight: 1.4,
+    letterSpacing: 0, wordSpacing: 0, textAlign: 'left', textDecoration: 'none', textTransform: 'none', textIndent: 0, textShadow: '', textShadowColor: '#000000', textShadowOffsetX: 0, textShadowOffsetY: 0,
+    textStrokeEnabled: false, textStrokeWidth: 0, textStrokeColor: '#000000', boxShadowColor: '#000000', boxShadowOffsetX: 0, boxShadowOffsetY: 0,
+    verticalAlign: 'baseline', whiteSpace: 'normal', wordBreak: 'normal', wordWrap: 'normal', color: '#000000', backgroundColor: 'transparent', background: '', backgroundImage: '', backgroundSize: 'auto', backgroundRepeat: 'repeat', backgroundPosition: '0% 0%', backgroundAttachment: 'scroll', backgroundClip: 'border-box', backgroundOrigin: 'padding-box',
+    flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'stretch', alignContent: 'stretch', justifyContent: 'flex-start', gap: 0, rowGap: 0, columnGap: 0,
+    flex: '', flexGrow: 0, flexShrink: 1, flexBasis: 'auto', alignSelf: 'auto', order: 0,
+    gridTemplateColumns: '', gridTemplateRows: '', gridTemplateAreas: '', gridAutoFlow: 'row', gridAutoColumns: '', gridAutoRows: '', justifyItems: 'stretch', placeItems: 'auto', placeContent: 'auto',
+    gridColumn: '', gridRow: '', gridColumnStart: '', gridColumnEnd: '', gridRowStart: '', gridRowEnd: '', gridArea: '', justifySelf: 'auto', placeSelf: 'auto',
+    listStyleType: 'disc', listStylePosition: 'outside', listStyleImage: 'none', tableLayout: 'auto', captionSide: 'top', emptyCells: 'show',
+    transform: 'none', transformOrigin: '50% 50%', transition: '', animation: '', opacity: 1, filter: '', backdropFilter: '', boxShadow: 'none', clipPath: '', mask: '', mixBlendMode: 'normal', backgroundBlendMode: 'normal',
+    cursor: 'auto', pointerEvents: 'auto', userSelect: 'auto', touchAction: 'auto', content: '', quotes: '', counterReset: '', counterIncrement: '', objectFit: 'fill', objectPosition: '50% 50%', scrollSnapType: 'none', scrollSnapAlign: 'none',
+    src: '', alt: '', href: '', placeholder: '', title: '', id: '', className: '', target: '', rel: '', type: '', value: '', name: '', disabled: false, required: false, readonly: false, multiple: false, checked: false, selected: false, hidden: false, contentEditable: false, draggable: false, spellCheck: true, translate: true, tabIndex: 0, accessKey: '', dir: 'auto', lang: '', role: '', ariaLabel: '', ariaDescribedBy: '', ariaLabelledBy: '', dataAttributes: {}, textBindingPath: '', textBindingScope: 'local'
   },
   rules: {
     canDrag: () => true,

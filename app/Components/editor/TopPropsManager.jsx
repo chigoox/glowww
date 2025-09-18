@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Tabs, Button, Input, Tag, Modal, Space, Tooltip, Select, Switch, Empty, Dropdown, Typography, theme, message } from 'antd';
-import { GlobalOutlined, NodeIndexOutlined, ApartmentOutlined, AppstoreOutlined, ReloadOutlined, ThunderboltOutlined, ExpandOutlined, CompressOutlined, PlusOutlined, DeleteOutlined, FunctionOutlined, WarningOutlined } from '@ant-design/icons';
+import { Tabs, Button, Input, Tag, Modal, Space, Tooltip, Select, Switch, Empty, Dropdown, Typography, theme, message, Alert } from 'antd';
+import { GlobalOutlined, NodeIndexOutlined, ApartmentOutlined, AppstoreOutlined, ReloadOutlined, ThunderboltOutlined, ExpandOutlined, CompressOutlined, PlusOutlined, DeleteOutlined, FunctionOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useEditor } from '@craftjs/core';
 import { useUserProps } from '../utils/userprops/useUserProps';
+import UserPropDetailDrawer from '../utils/userprops/components/UserPropDetailDrawer';
 
 /**
  * TopPropsManager
@@ -107,6 +108,21 @@ export default function TopPropsManager({ open, onClose }) {
           </div>
           {/* Right: compact tree distinct from style menu manager */}
           <div style={{ border: '1px solid #e5e5e5', borderRadius: 6, padding: 12, background:'#fff', minHeight: 420 }}>
+            <div style={{ marginBottom: 8 }}>
+              <Alert
+                type="info"
+                showIcon
+                icon={<InfoCircleOutlined />}
+                message={<span style={{ fontWeight: 600 }}>Tips</span>}
+                description={
+                  <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                    <div>• Click Details on any key to edit expressions, validation, watchers, and more.</div>
+                    <div>• Bound props cannot be edited directly; clear binding to enable expressions.</div>
+                    <div>• Site Globals live across pages. Promote local keys to reuse them.</div>
+                  </div>
+                }
+              />
+            </div>
             {selectedComponentId ? (
               <CompactPropsTree nodeId={selectedComponentId} viewerNodeId={selectedNodeId} />
             ) : (
@@ -225,6 +241,22 @@ function CompactPropsTree({ nodeId, forceLocalRoot = false, viewerNodeId = null 
   const [adding, setAdding] = React.useState({}); // per-path add rows
   const refreshKey = React.useReducer(x=>x+1,0)[1];
   const refresh = () => refreshKey();
+
+  // Detail drawer state
+  const [detailOpen, setDetailOpen] = React.useState(false);
+  const [detailPath, setDetailPath] = React.useState('');
+  const openDetails = (path) => { if (!path && path !== '') return; setDetailPath(path); setDetailOpen(true); };
+
+  const expandToPath = (path) => {
+    if (!path) return;
+    const parts = path.split('.');
+    const next = new Set(expanded);
+    let cur = '';
+    parts.forEach((p) => { cur = cur ? `${cur}.${p}` : p; next.add(cur); });
+    // ensure root opened
+    next.add('');
+    setExpanded(next);
+  };
 
   const isHiddenByFilter = (path) => {
     if (filterMode === 'all') return false;
@@ -356,17 +388,17 @@ function CompactPropsTree({ nodeId, forceLocalRoot = false, viewerNodeId = null 
     );
   }
 
-  const PrimitiveEditor = ({ path, node }) => {
+  const PrimitiveEditor = ({ path, node, disabled }) => {
     const [text, setText] = React.useState(node.type==='string' ? (node.value ?? '') : String(node.value ?? ''));
     React.useEffect(()=>{ setText(node.type==='string' ? (node.value ?? '') : String(node.value ?? '')); }, [node.value, node.type]);
     if (node.type === 'boolean') return (
-      <Switch size="small" checked={!!node.value} onChange={async (v)=>{ if(isGlobal) { const r=createGlobalPrimitive(path,'boolean',!!v); if (r && typeof r.then === 'function') await r; } else { const r=setPrimitiveAtPath(path, !!v, 'boolean'); if (r && typeof r.then === 'function') await r; } refresh(); }} />
+      <Switch size="small" checked={!!node.value} disabled={disabled} onChange={async (v)=>{ if(disabled) return; if(isGlobal) { const r=createGlobalPrimitive(path,'boolean',!!v); if (r && typeof r.then === 'function') await r; } else { const r=setPrimitiveAtPath(path, !!v, 'boolean'); if (r && typeof r.then === 'function') await r; } refresh(); }} />
     );
     if (node.type === 'number') return (
-      <Input size="small" type="number" value={text} onChange={(e)=>setText(e.target.value)} onBlur={async ()=>{ const n=Number(text); if(!Number.isNaN(n)) { if(isGlobal) { const r=createGlobalPrimitive(path,'number',n); if (r && typeof r.then === 'function') await r; } else { const r=setPrimitiveAtPath(path,n,'number'); if (r && typeof r.then === 'function') await r; } refresh(); } }} style={{ width: 120 }} />
+      <Input size="small" type="number" disabled={disabled} value={text} onChange={(e)=>setText(e.target.value)} onBlur={async ()=>{ if(disabled) return; const n=Number(text); if(!Number.isNaN(n)) { if(isGlobal) { const r=createGlobalPrimitive(path,'number',n); if (r && typeof r.then === 'function') await r; } else { const r=setPrimitiveAtPath(path,n,'number'); if (r && typeof r.then === 'function') await r; } refresh(); } }} style={{ width: 120 }} />
     );
     return (
-  <Input size="small" value={text} onChange={(e)=>setText(e.target.value)} onBlur={async ()=>{ if(isGlobal) { const r=createGlobalPrimitive(path,'string',text); if (r && typeof r.then === 'function') await r; } else { const r=setPrimitiveAtPath(path,text,'string'); if (r && typeof r.then === 'function') await r; } refresh(); }} style={{ minWidth: 160, maxWidth: 260 }} />
+      <Input size="small" disabled={disabled} value={text} onChange={(e)=>setText(e.target.value)} onBlur={async ()=>{ if(disabled) return; if(isGlobal) { const r=createGlobalPrimitive(path,'string',text); if (r && typeof r.then === 'function') await r; } else { const r=setPrimitiveAtPath(path,text,'string'); if (r && typeof r.then === 'function') await r; } refresh(); }} style={{ minWidth: 160, maxWidth: 260 }} />
     );
   };
 
@@ -400,18 +432,23 @@ function CompactPropsTree({ nodeId, forceLocalRoot = false, viewerNodeId = null 
   const Row = ({ node, path, depth }) => {
     if (!node) return null;
     const isRoot = path === '';
-  const label = isRoot ? 'root' : path.split('.').pop();
+    const label = isRoot ? 'root' : path.split('.').pop();
     if (!isRoot && isHiddenByFilter(path)) return null;
     const isContainer = node.type==='object' || node.type==='array';
     const open = expanded.has(path);
-  const meta = getNodeMeta(path) || {};
+    const meta = getNodeMeta(path) || {};
+    const isBound = !!meta.meta?.ref;
+    const hasExpression = !!meta.meta?.expression;
     const isAlias = !!(meta.meta?.aliasGlobalId || meta.meta?.aliasGlobalPath);
     // For alias nodes, fetch live global value for display (read-only hint)
     const aliasPath = meta.meta?.aliasGlobalPath;
     const liveAliasValue = (!isContainer && aliasPath) ? getGlobalValue(aliasPath) : undefined;
     return (
       <div style={{ marginBottom: 6 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', background: isRoot?'transparent':'#fafafa', border: isRoot?'none':'1px solid #eee', borderRadius:6, marginLeft: depth*16 }}>
+        <div
+          style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', background: isRoot?'transparent':'#fafafa', border: isRoot?'none':'1px solid #eee', borderRadius:6, marginLeft: depth*16 }}
+          onDoubleClick={() => { expandToPath(path); openDetails(path); }}
+        >
           {isContainer ? <Button size="small" type="text" onClick={()=>toggle(path)} style={{ width: 22 }}>{open?'-':'+'}</Button> : <span style={{ width: 22 }} />}
           <Typography.Text strong style={{ whiteSpace: 'nowrap' }}>{label}</Typography.Text>
           <Tag color={typeTagColor(node.type)} style={{ margin:0 }}>{node.type}</Tag>
@@ -421,7 +458,7 @@ function CompactPropsTree({ nodeId, forceLocalRoot = false, viewerNodeId = null 
               <Tag color="geekblue" style={{ margin:0 }}>Alias</Tag>
             </Tooltip>
           )}
-          {meta.meta?.expression && <Tooltip title="Computed"><FunctionOutlined style={{ color:'#1677ff' }} /></Tooltip>}
+      {hasExpression && <Tooltip title="Computed"><FunctionOutlined style={{ color:'#1677ff' }} /></Tooltip>}
           {!isContainer && (
             <>
               {isAlias ? (
@@ -431,12 +468,13 @@ function CompactPropsTree({ nodeId, forceLocalRoot = false, viewerNodeId = null 
                   <Input size="small" value={String(liveAliasValue ?? node.value ?? '')} disabled style={{ minWidth: 160, maxWidth: 260 }} />
                 )
               ) : (
-                <PrimitiveEditor path={path} node={node} />
+                <PrimitiveEditor path={path} node={node} disabled={isBound || hasExpression} />
               )}
               {!meta.meta?.ref && !meta.meta?.aliasGlobalId && <BindMenu path={path} />}
               {meta.meta?.ref && <Button size="small" type="primary" onClick={async ()=>{ const r = unbindUserPropPath(path); if (r && typeof r.then === 'function') await r; refresh(); }}>Bound</Button>}
             </>
           )}
+          <Button size="small" onClick={()=>{ expandToPath(path); openDetails(path); }}>Details</Button>
           <span style={{ flex:1 }} />
           {!isRoot && !isGlobal && (
             <Tooltip title="Delete"><Button danger size="small" icon={<DeleteOutlined />} onClick={async ()=>{ const r = deletePath(path); if (r && typeof r.then === 'function') await r; refresh(); }} /></Tooltip>
@@ -544,6 +582,17 @@ function CompactPropsTree({ nodeId, forceLocalRoot = false, viewerNodeId = null 
         </Space>
       </div>
       <Row node={tree} path="" depth={0} />
+      {/* Detail Drawer */}
+      <UserPropDetailDrawer
+        open={detailOpen}
+        path={detailPath}
+        onClose={()=>setDetailOpen(false)}
+        hookApis={hook}
+        nodeMeta={detailPath !== null ? getNodeMeta(detailPath) : null}
+        validationErrors={getValidationErrors() || {}}
+        onDependencyClick={(depPath)=>{ if(!depPath) return; expandToPath(depPath); setDetailPath(depPath); }}
+        onRequestPathChange={(newPath)=>{ if(!newPath) return; expandToPath(newPath); setDetailPath(newPath); }}
+      />
     </div>
   );
 }

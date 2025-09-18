@@ -2,6 +2,10 @@
 
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Tooltip } from 'antd';
+import { DragOutlined, EditOutlined, AimOutlined, SlidersOutlined } from '@ant-design/icons';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+// Use the editor variant of SnapPositionHandle; the support variant handles container auto-position and can interfere with size
 import SnapPositionHandle from '../../editor/SnapPositionHandle';
 import ResizeHandles from './ResizeHandles';
 
@@ -37,23 +41,34 @@ export default function PortalControls({
   dragRef,
   onEditClick,
   handleResizeStart,
-  order = ["MOVE","POS", "EDIT" ],
-  show = { move: true, edit: true, pos: true, corners: true},
-  labels = { move: "MOVE", edit: "EDIT", pos: "POS" },
-  offsetY = -28,
+  order = ["MOVE", "POS", "EDIT", "UPM"],
+  show = { move: true, edit: true, pos: true, upm: true, corners: true },
+  labels = { move: "MOVE", edit: "EDIT", pos: "POS", upm: "User Props" },
+  offsetY = -36,
   offsetX = 0,
-  zIndex = 999,
+  zIndex = 99999,
   styleOverrides = {},
   // Optional callback that the portal can call to request a position refresh
   // Keep the name compatible with other code: updateBoxPosition
   updateBoxPosition,
 }) {
-  if (typeof window === "undefined" || !boxPosition) return null;
+  const isClient = typeof window !== 'undefined';
+  const prefersReducedMotion = useReducedMotion();
+  const motionCfg = prefersReducedMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.12 } }
+    : {
+        initial: { opacity: 0, y: 6, scale: 0.98 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 6, scale: 0.98 },
+        transition: { duration: 0.18, ease: [0.4, 0, 0.2, 1] }
+      };
 
   const { top = 0, left = 0, width = 0, height = 0 } = boxPosition || {};
   const showMove = show?.move && !!dragRef;
-  const showEdit = show?.edit && !!onEditClick;
+  // Show Edit control even if no handler; clicking will no-op if missing
+  const showEdit = show?.edit !== false;
   const showPos = show?.pos && !!nodeId;
+  const showUPM = show?.upm !== false; // allow toggle, default true
 
   const colors = {
     move: styleOverrides.colors?.move || "#52c41a",
@@ -61,89 +76,139 @@ export default function PortalControls({
     pos: styleOverrides.colors?.pos || "#1890ff",
   };
 
-  const baseSegmentStyle = {
-    color: "white",
-    padding: "4px 10px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "4px",
-    minWidth: 56,
-    cursor: "pointer",
-    transition: "background 0.2s ease",
-    ...styleOverrides.segment,
+  // Build icon-only controls
+  const iconButtonBase = {
+    width: 28,
+    height: 28,
+    minWidth: 28,
+    padding: 0,
+    borderRadius: 8,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.12)'
   };
 
   const segments = [];
 
   const makeMove = () => (
-    <div
-      key="MOVE"
-      className="move-handle"
-      ref={dragRef}
-      data-handle-type="move"
-      data-craft-node-id={nodeId}
-      style={{
-        ...baseSegmentStyle,
-        background: colors.move,
-        cursor: dragRef ? "grab" : "not-allowed",
-        borderRight: "1px solid rgba(255,255,255,0.6)",
-      }}
-      title="Drag to move between containers"
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      {labels.move}
-    </div>
+    <Tooltip key="MOVE" title="Drag to move between containers">
+      <div
+        ref={dragRef}
+  className="move-handle"
+  data-cy="move-handle"
+        data-handle-type="move"
+        data-craft-node-id={nodeId}
+  role="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          ...iconButtonBase,
+          background: colors.move,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: dragRef ? 'grab' : 'not-allowed'
+          ,
+          ...(styleOverrides.segment || {})
+        }}
+        aria-label={labels.move}
+      >
+        <DragOutlined style={{ color: '#fff', fontSize: 14 }} />
+      </div>
+    </Tooltip>
   );
 
   const makeEdit = () => (
-    <div
-      key="EDIT"
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        // Forward the original event to the consumer so handlers that expect (e)
-        // (for example to call preventDefault()) won't receive undefined.
-        onEditClick?.(e);
-      }}
-      style={{
-        ...baseSegmentStyle,
-        background: colors.edit,
-        borderRight: "1px solid rgba(255,255,255,0.6)",
-      }}
-      title="Edit"
-    >
-      {labels.edit}
-    </div>
+    <Tooltip key="EDIT" title="Edit">
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onEditClick?.(e); }}
+        style={{
+          ...iconButtonBase,
+          background: colors.edit,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: onEditClick ? 'pointer' : 'default',
+          ...(styleOverrides.segment || {})
+        }}
+        aria-label={labels.edit}
+        role="button"
+      >
+        <EditOutlined style={{ color: '#fff' }} />
+      </div>
+    </Tooltip>
   );
 
   const makePos = () => (
+    <Tooltip key="POS" title="Position (drag)">
     <SnapPositionHandle
-      key="POS"
-      nodeId={nodeId}
-      style={{
-        ...baseSegmentStyle,
-        background: colors.pos,
-        cursor: "move",
-      }}
-    >
-      {labels.pos}
-    </SnapPositionHandle>
+        nodeId={nodeId}
+        style={{
+          ...iconButtonBase,
+          background: colors.pos,
+          cursor: 'move',
+          display: 'flex',
+          alignItems: 'center',
+      justifyContent: 'center',
+      ...(styleOverrides.segment || {})
+        }}
+      >
+        <AimOutlined style={{ color: '#fff' }} />
+      </SnapPositionHandle>
+    </Tooltip>
+  );
+
+  const makeUPM = () => (
+    <Tooltip key="UPM" title="User Prop Manager">
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          try {
+            if (nodeId && editorActions?.selectNode) {
+              editorActions.selectNode(nodeId);
+            }
+            // Defer to next frame to ensure selection state is applied
+            const open = () => {
+              const evt = new CustomEvent('open-props-manager', { detail: { target: 'component', nodeId } });
+              window.dispatchEvent(evt);
+            };
+            if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
+              window.requestAnimationFrame(open);
+            } else {
+              setTimeout(open, 0);
+            }
+          } catch {/* noop */}
+        }}
+        style={{
+          ...iconButtonBase,
+          background: '#6f42c1',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          ...(styleOverrides.segment || {})
+        }}
+        aria-label={labels.upm}
+        role="button"
+      >
+        <SlidersOutlined style={{ color: '#fff' }} />
+      </div>
+    </Tooltip>
   );
 
   const factory = {
     MOVE: () => showMove && makeMove(),
     EDIT: () => showEdit && makeEdit(),
     POS: () => showPos && makePos(),
+    UPM: () => showUPM && makeUPM(),
   };
 
-  order.forEach((seg, idx) => {
+  order.forEach((seg) => {
     const el = factory[seg]?.();
     if (el) segments.push(el);
   });
 
   const showAnySegment = segments.length > 0;
-  const showCorners = true; // Always show resize handles
+  const showCorners = show?.corners !== false; // allow toggle via props
 
   // Keep the portal positioned during nested/container scrolling and style changes.
   // If a consumer passes `updateBoxPosition` it will be called (throttled via rAF).
@@ -252,7 +317,7 @@ export default function PortalControls({
     boxPosition?.height,
     updateBoxPosition,
   ]);
-
+  if (!isClient || !boxPosition) return null;
   return createPortal(
     <div
       style={{
@@ -263,29 +328,27 @@ export default function PortalControls({
         zIndex,
       }}
     >
-      {showAnySegment && (
-        <div
-          style={{
-            position: "absolute",
-            top: top + offsetY,
-            left: left + width / 2 + offsetX,
-            transform: "translateX(-50%)",
-            display: "flex",
-            background: "white",
-            borderRadius: "16px",
-            border: "2px solid #d9d9d9",
-            overflow: "hidden",
-            fontSize: "10px",
-            fontWeight: 600,
-            userSelect: "none",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            pointerEvents: "auto",
-            ...styleOverrides.pill,
-          }}
-        >
-          {segments}
-        </div>
-      )}
+      <AnimatePresence>
+        {showAnySegment && (
+          <motion.div
+            key="controls"
+            {...motionCfg}
+            style={{
+              position: 'absolute',
+              top: top + offsetY,
+              left: left + offsetX,
+              display: 'flex',
+              gap: 6,
+              background: 'transparent',
+              userSelect: 'none',
+              pointerEvents: 'auto',
+              ...(styleOverrides.pill || {})
+            }}
+          >
+            {segments}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Resize handles */}
       {showCorners && (

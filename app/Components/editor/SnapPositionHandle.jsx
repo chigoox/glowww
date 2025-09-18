@@ -10,7 +10,7 @@ import { snapGridSystem } from '../utils/grid/SnapGridSystem';
  */
 const SnapPositionHandle = ({ 
   nodeId, 
-  style = {}, 
+  style = {},
   className = '', 
   children,
   onDragStart,
@@ -116,6 +116,14 @@ const SnapPositionHandle = ({
   dragState.current.hasMoved = false;
 
     setIsDragging(true);
+
+    // Signal globally that a SnapPositionHandle POS drag is in progress
+    try {
+      if (typeof window !== 'undefined') {
+        window.__GLOW_POS_DRAGGING = nodeId;
+        document.documentElement.setAttribute('data-glow-pos-drag', String(nodeId || '1'));
+      }
+    } catch (_) {}
 
     // Register all elements for snapping (relative to the same container)
     const nodes = query.getNodes();
@@ -311,78 +319,151 @@ const SnapPositionHandle = ({
       }
     }
 
-    // Round to 4 decimal places for stability yet precision
-    const formatPct = (v) => `${parseFloat(v.toFixed(4))}%`;
+  // Round to 4 decimal places for stability yet precision
+  const formatPct = (v) => `${parseFloat(v.toFixed(4))}%`;
 
-    // Also convert element dimensions to percentage to preserve visual center during parent resizing
-    let widthPercent; let heightPercent;
-    if (container) {
-      const containerRect = container.getBoundingClientRect();
-      const originalRect = dragState.current.canvasRect;
-      const baseHeight = (originalRect && originalRect.height) || containerRect.height || 0;
-      if (containerRect.width) widthPercent = (elementWidth / containerRect.width) * 100;
-      if (baseHeight) heightPercent = (elementHeight / baseHeight) * 100;
-    }
+    // Decide if we must preserve size to avoid collapse when switching to absolute
+  let widthPercent; let heightPercent; let shouldCommitSize = false;
+  let commitWidth = false; let commitHeight = false; // Initialize outside try block
+  // Track where original sizes lived to write back correctly
+  let originalWInStyle = false; let originalWInRoot = false;
+  let originalHInStyle = false; let originalHInRoot = false;
+  try {
+      if (container && dom) {
+        const containerRect = container.getBoundingClientRect();
+        const originalRect = dragState.current.canvasRect;
+        const baseHeight = (originalRect && originalRect.height) || containerRect.height || 0;
 
-    // Only commit position changes if the user actually dragged the handle.
-    if (dragState.current.hasMoved) {
-  setProp((props) => {
-        // Decide whether to persist width/height changes.
-        // Only commit size if the original props used numeric-style units (px or %),
-        // to avoid replacing sensible defaults like "16rem" on Text components.
-        const originalWidth = (props && props.width) || (props && props.style && props.style.width);
-        const originalHeight = (props && props.height) || (props && props.style && props.style.height);
+        // Compute potential % values
+        if (containerRect.width) widthPercent = (elementWidth / containerRect.width) * 100;
+        if (baseHeight) heightPercent = (elementHeight / baseHeight) * 100;
 
-        const isNumericUnit = (v) => {
+        // Detect if props had explicit sizes
+        const nodeWrapper = query?.node?.(nodeId);
+        let originalWidth, originalHeight, currentPosition;
+        try {
+          const data = nodeWrapper?.get?.();
+          const p = data?.data?.props || {};
+          originalWInRoot = typeof p.width !== 'undefined';
+          originalHInRoot = typeof p.height !== 'undefined';
+          originalWInStyle = !originalWInRoot && typeof p.style?.width !== 'undefined';
+          originalHInStyle = !originalHInRoot && typeof p.style?.height !== 'undefined';
+          originalWidth = originalWInRoot ? p.width : p.style?.width;
+          originalHeight = originalHInRoot ? p.height : p.style?.height;
+          currentPosition = p.position || 'static';
+        } catch (_) {}
+
+        const hasExplicit = (v) => {
           if (v === undefined || v === null) return false;
           if (typeof v === 'number') return true;
           if (typeof v === 'string') {
             const s = v.trim();
-            return s.endsWith('px') || s.endsWith('%');
+            // Treat px/%/rem/vw/vh as explicit; 'auto'/'initial' are not
+            return /(px|%|rem|vw|vh)$/i.test(s) && s !== 'auto' && s !== 'initial';
           }
           return false;
         };
 
-        const commitSize = isNumericUnit(originalWidth) || isNumericUnit(originalHeight);
+  const hasExplicitW = hasExplicit(originalWidth);
+  const hasExplicitH = hasExplicit(originalHeight);
 
-        if (typeof props.left !== 'undefined' || typeof props.top !== 'undefined') {
-          props.left = formatPct(percentLeft);
-          props.top = formatPct(percentTop);
+  // CRITICAL: Only preserve size when we're actually repositioning an existing element.
+  // Initial placements should go to exact mouse position without size preservation.
+  const isBecomingAbsolute = currentPosition !== 'absolute';
+  
+  // For already-absolute elements (repositioning), always preserve size
+  // For relative elements (initial placement), only preserve if they have actual content size
+  const isExistingAbsoluteElement = currentPosition === 'absolute';
+  const hasReasonableSize = elementWidth >= 100 && elementHeight >= 50; // Suggests real content, not just defaults
+  
+  // Commit size only when repositioning existing absolute elements or when initial placement of sizable elements
+  const commitWidth = (isExistingAbsoluteElement || (isBecomingAbsolute && hasReasonableSize)) && 
+                      Number.isFinite(widthPercent) && widthPercent > 0;
+  const commitHeight = (isExistingAbsoluteElement || (isBecomingAbsolute && hasReasonableSize)) && 
+                       Number.isFinite(heightPercent) && heightPercent > 0;
+  shouldCommitSize = commitWidth || commitHeight;
+  
+  // Debug logging to track size preservation
+  console.log('🔍 SIZE PRESERVATION DEBUG [LATEST]:', {
+    nodeId,
+    isBecomingAbsolute,
+    isExistingAbsoluteElement,
+    hasReasonableSize,
+    currentPosition,
+    elementWidth,
+    elementHeight,
+    widthPercent: widthPercent?.toFixed(2),
+    heightPercent: heightPercent?.toFixed(2),
+    commitWidth,
+    commitHeight,
+    shouldCommitSize
+  });
+      }
+    } catch (_) {}
+
+    // Only commit position changes if the user actually dragged the handle.
+    if (dragState.current.hasMoved) {
+  // Commit position changes and, when necessary, persist size to prevent collapse
+      setProp((props) => {
+        const commitToRoot = (typeof props.left !== 'undefined' || typeof props.top !== 'undefined');
+        const leftVal = formatPct(percentLeft);
+        const topVal = formatPct(percentTop);
+
+        if (commitToRoot) {
+          props.left = leftVal;
+          props.top = topVal;
           props.position = 'absolute';
-          if (commitSize && widthPercent) props.width = formatPct(widthPercent);
-          if (commitSize && heightPercent) props.height = formatPct(heightPercent);
+        } 
+
+        // Ensure style object exists if we’ll write there
+        if (!commitToRoot) {
+          props.style = { ...(props.style || {}), position: 'absolute', left: leftVal, top: topVal };
         } else if (props.style) {
-          props.style = {
-            ...props.style,
-            position: 'absolute',
-            left: formatPct(percentLeft),
-            top: formatPct(percentTop),
-            ...(commitSize && widthPercent ? { width: formatPct(widthPercent) } : {}),
-            ...(commitSize && heightPercent ? { height: formatPct(heightPercent) } : {})
-          };
+          // Keep style position for consumers that read from style
+          props.style = { ...props.style, position: 'absolute', left: leftVal, top: topVal };
+        }
+
+        // Persist size only when there were no explicit sizes originally
+        if (shouldCommitSize) {
+          console.log('📝 COMMITTING SIZE to props:', { commitWidth, commitHeight, widthPercent, heightPercent });
+          if (commitWidth) {
+            const wVal = formatPct(widthPercent);
+            console.log('📏 Setting width to:', wVal, commitToRoot ? '(root prop)' : '(style prop)');
+            if (commitToRoot) {
+              props.width = wVal;
+            } else {
+              props.style = { ...(props.style || {}), width: wVal };
+            }
+          }
+          if (commitHeight) {
+            const hVal = formatPct(heightPercent);
+            console.log('📏 Setting height to:', hVal, commitToRoot ? '(root prop)' : '(style prop)');
+            if (commitToRoot) {
+              props.height = hVal;
+            } else {
+              props.style = { ...(props.style || {}), height: hVal };
+            }
+          }
         } else {
-          props.style = {
-            position: 'absolute',
-            left: formatPct(percentLeft),
-            top: formatPct(percentTop),
-            ...(commitSize && widthPercent ? { width: formatPct(widthPercent) } : {}),
-            ...(commitSize && heightPercent ? { height: formatPct(heightPercent) } : {})
-          };
+          console.log('🚫 NOT committing size (shouldCommitSize is false)');
         }
       });
-        // If we didn't commit size but we added inline px sizes for dragging, clear them so
-        // the component's original sizing (e.g. rem) is preserved by CSS on next render.
-        const originalWidth = (typeof dragState.current.originalWidth !== 'undefined') ? dragState.current.originalWidth : null;
-        const originalHeight = (typeof dragState.current.originalHeight !== 'undefined') ? dragState.current.originalHeight : null;
-        // If commitSize was false (we didn't write width/height), remove inline sizes
-        // (we can't access commitSize here directly, so infer from props by checking if props were numeric - re-evaluate quickly)
+      
+      // Clear temporary inline styles, but only if we didn't commit size values
+      // If we committed size, let React handle the DOM styles through props
+      if (!shouldCommitSize) {
+        console.log('🧹 Clearing DOM styles immediately (no size commitment)');
         try {
-          // If element still has inline px width we set during dragging, remove it so CSS wins
           if (dom && dom.style) {
             dom.style.width = '';
             dom.style.height = '';
           }
         } catch (_) {}
+      } else {
+        console.log('🎯 NOT clearing DOM styles (size was committed - let React handle via props)');
+        // For size-committed elements, don't clear DOM styles at all
+        // Let React's re-render with the new props override the inline styles naturally
+      }
     } else {
       // No meaningful move detected: do not modify props. Keep DOM state as-is.
       // Still clear snap indicators and cleanup tracked elements below.
@@ -405,6 +486,33 @@ const SnapPositionHandle = ({
 
     // Call external drag end handler
     onDragEnd?.(e);
+
+    // Set a short recent-commit cooldown so other systems don't override the new position
+    try {
+      if (typeof window !== 'undefined') {
+        window.__GLOW_POS_RECENT = window.__GLOW_POS_RECENT || {};
+        window.__GLOW_POS_RECENT[nodeId] = Date.now() + 1200; // ~1.2s cooldown
+        document.documentElement.setAttribute('data-glow-pos-recent', String(nodeId || '1'));
+        setTimeout(() => {
+          try {
+            if (window.__GLOW_POS_RECENT) delete window.__GLOW_POS_RECENT[nodeId];
+            if (document.documentElement.getAttribute('data-glow-pos-recent') === String(nodeId || '1')) {
+              document.documentElement.removeAttribute('data-glow-pos-recent');
+            }
+          } catch (_) {}
+        }, 1300);
+      }
+    } catch (_) {}
+
+    // Clear global POS-drag flag
+    try {
+      if (typeof window !== 'undefined') {
+        if (window.__GLOW_POS_DRAGGING === nodeId) {
+          window.__GLOW_POS_DRAGGING = null;
+        }
+        document.documentElement.removeAttribute('data-glow-pos-drag');
+      }
+    } catch (_) {}
 
   }, [handleMouseMove, onDragEnd, setProp, nodeId]); // Removed enhancedMove from dependencies
 

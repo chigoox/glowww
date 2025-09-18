@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNode, useEditor } from "@craftjs/core";
 import ContextMenu from "../../utils/context/ContextMenu";
@@ -11,6 +11,7 @@ import { snapGridSystem } from "../../utils/grid/SnapGridSystem";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import ResizeHandles from "../support/ResizeHandles";
 import PortalControls from "../support/PortalControls";
+import { shouldSkipPositionReset, normalizeUnit } from '../../utils/style/positioning';
 
 export const FlexBox = ({
   
@@ -359,7 +360,7 @@ placeContent,
   };
 
   // Function to update FlexBox position for portal positioning
-  const updateBoxPosition = () => {
+  const updateBoxPosition = useCallback(() => {
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
       setBoxPosition({
@@ -369,7 +370,7 @@ placeContent,
         height: rect.height
       });
     }
-  };
+  }, []); // No dependencies - cardRef is always stable
 
   useEffect(() => {
     const connectElements = () => {
@@ -400,40 +401,42 @@ placeContent,
   useEffect(() => {
     // Skip the initial render (when prevParentRef.current is first set)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
-      // Parent has changed - element was moved to a different container
-      console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
-      
-      // Wait longer than the centered drag positioning (600ms) before resetting
-      // This allows useCenteredContainerDrag to apply its centered positioning first
-      setTimeout(() => {
-        // Check if position was already set by centered drag (absolute position with left/top set)
-        const currentNode = query.node(nodeId);
-        if (currentNode) {
-          const currentProps = currentNode.get().data.props;
-          const hasPositioning = currentProps.position === 'absolute' && 
-                                (currentProps.left !== undefined || currentProps.top !== undefined);
-          
-          if (hasPositioning) {
-            console.log('🎯 Position already set by centered drag system, skipping reset');
-            return; // Don't reset if centered positioning was applied
-          }
-        }
+      if (shouldSkipPositionReset(nodeId)) {
+        console.log('⏭️ FlexBox position reset skipped (POS drag active or recent commit)', nodeId);
+      } else {
+        console.log(`📦 Element ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
         
-        // Reset position properties to default only if no positioning was applied
-        editorActions.history.throttle(500).setProp(nodeId, (props) => {
-          // Only reset if position properties were actually set
-          if (props.top !== undefined || props.left !== undefined || 
-              props.right !== undefined || props.bottom !== undefined) {
-            console.log('🔄 Resetting position properties after container move (no centered positioning detected)');
-            props.top = undefined;
-            props.left = undefined;
-            props.right = undefined;
-            props.bottom = undefined;
-            // Keep position as relative for normal flow
-            props.position = "relative";
+        // Wait longer than the centered drag positioning (600ms) before resetting
+        // This allows useCenteredContainerDrag to apply its centered positioning first
+        setTimeout(() => {
+          // Check if position was already set by centered drag (absolute position with left/top set)
+          const currentNode = query.node(nodeId);
+          if (currentNode) {
+            const currentProps = currentNode.get().data.props;
+            const hasPositioning = currentProps.position === 'absolute' && 
+                                  (currentProps.left !== undefined || currentProps.top !== undefined);
+            
+            if (hasPositioning) {
+              console.log('🎯 Absolute positioning detected; skip FlexBox reset');
+              return;
+            }
           }
-        });
-      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
+          
+          // Reset position properties to default only if no positioning was applied
+          editorActions.history.throttle(500).setProp(nodeId, (props) => {
+            // Only reset if position properties were actually set
+            if (props.top !== undefined || props.left !== undefined || 
+                props.right !== undefined || props.bottom !== undefined) {
+              console.log('🔄 Resetting FlexBox position properties after container move');
+              props.top = undefined;
+              props.left = undefined;
+              props.right = undefined;
+              props.bottom = undefined;
+              if (props.position !== 'absolute') props.position = 'relative';
+            }
+          });
+        }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
+      }
     }
     
     // Update the ref for next comparison
@@ -495,7 +498,7 @@ placeContent,
   // };
 
   // Helper function to process values (add px to numbers where appropriate)
-  const processValue = (value, property) => {
+  const normalizeUnit = (value, property) => {
     if (value === undefined || value === null) return undefined;
     if (value === "") return undefined;
     if (typeof value === 'number' && !['opacity', 'zIndex', 'lineHeight', 'fontWeight', 'flexGrow', 'flexShrink', 'order'].includes(property)) {
@@ -507,18 +510,18 @@ placeContent,
    // Build computed styles
   const computedStyles = {
     // Layout & Position
-    width: processValue(width, 'width'),
-    height: processValue(height, 'height'),
-    minWidth: processValue(minWidth, 'minWidth'),
-    maxWidth: processValue(maxWidth, 'maxWidth'),
-    minHeight: processValue(minHeight, 'minHeight'),
-    maxHeight: processValue(maxHeight, 'maxHeight'),
+    width: normalizeUnit(width, 'width'),
+    height: normalizeUnit(height, 'height'),
+    minWidth: normalizeUnit(minWidth, 'minWidth'),
+    maxWidth: normalizeUnit(maxWidth, 'maxWidth'),
+    minHeight: normalizeUnit(minHeight, 'minHeight'),
+    maxHeight: normalizeUnit(maxHeight, 'maxHeight'),
     display,
     position,
-    top: processValue(top, 'top'),
-    right: processValue(right, 'right'),
-    bottom: processValue(bottom, 'bottom'),
-    left: processValue(left, 'left'),
+    top: normalizeUnit(top, 'top'),
+    right: normalizeUnit(right, 'right'),
+    bottom: normalizeUnit(bottom, 'bottom'),
+    left: normalizeUnit(left, 'left'),
     zIndex,
     visibility,
     float,
@@ -542,16 +545,16 @@ placeContent,
     
     // Spacing - handle individual sides or combined values
     margin: marginTop || marginRight || marginBottom || marginLeft || marginX || marginY 
-      ? `${processValue(marginTop, 'marginTop') || 0} ${processValue(marginRight, 'marginRight') || 0} ${processValue(marginBottom, 'marginBottom') || 0} ${processValue(marginLeft, 'marginLeft') || 0}`
-      : processValue(margin, 'margin'),
+      ? `${normalizeUnit(marginTop, 'marginTop') || 0} ${normalizeUnit(marginRight, 'marginRight') || 0} ${normalizeUnit(marginBottom, 'marginBottom') || 0} ${normalizeUnit(marginLeft, 'marginLeft') || 0}`
+      : normalizeUnit(margin, 'margin'),
     padding: paddingTop || paddingRight || paddingBottom || paddingLeft || paddingX || paddingY
-      ? `${processValue(paddingTop, 'paddingTop') || 0} ${processValue(paddingRight, 'paddingRight') || 0} ${processValue(paddingBottom, 'paddingBottom') || 0} ${processValue(paddingLeft, 'paddingLeft') || 0}`
-      : processValue(padding, 'padding'),
+      ? `${normalizeUnit(paddingTop, 'paddingTop') || 0} ${normalizeUnit(paddingRight, 'paddingRight') || 0} ${normalizeUnit(paddingBottom, 'paddingBottom') || 0} ${normalizeUnit(paddingLeft, 'paddingLeft') || 0}`
+      : normalizeUnit(padding, 'padding'),
     
     // Border - use individual values if set, otherwise use combined
     borderWidth: borderTopWidth !== undefined || borderRightWidth !== undefined || borderBottomWidth !== undefined || borderLeftWidth !== undefined
-      ? `${processValue(borderTopWidth || borderWidth, 'borderWidth')} ${processValue(borderRightWidth || borderWidth, 'borderWidth')} ${processValue(borderBottomWidth || borderWidth, 'borderWidth')} ${processValue(borderLeftWidth || borderWidth, 'borderWidth')}`
-      : processValue(borderWidth, 'borderWidth'),
+      ? `${normalizeUnit(borderTopWidth || borderWidth, 'borderWidth')} ${normalizeUnit(borderRightWidth || borderWidth, 'borderWidth')} ${normalizeUnit(borderBottomWidth || borderWidth, 'borderWidth')} ${normalizeUnit(borderLeftWidth || borderWidth, 'borderWidth')}`
+      : normalizeUnit(borderWidth, 'borderWidth'),
     borderStyle: borderTopStyle || borderRightStyle || borderBottomStyle || borderLeftStyle
       ? `${borderTopStyle || borderStyle} ${borderRightStyle || borderStyle} ${borderBottomStyle || borderStyle} ${borderLeftStyle || borderStyle}`
       : borderStyle,
@@ -563,28 +566,28 @@ placeContent,
     borderSpacing,
     
     // Stroke properties (using -webkit-text-stroke for text stroke effects or outline for general stroke)
-    WebkitTextStroke: stroke !== "none" ? `${processValue(stroke, 'stroke')} ${strokeColor}` : undefined,
-    outline: stroke !== "none" ? `${processValue(stroke, 'stroke')} solid ${strokeColor}` : undefined,
+    WebkitTextStroke: stroke !== "none" ? `${normalizeUnit(stroke, 'stroke')} ${strokeColor}` : undefined,
+    outline: stroke !== "none" ? `${normalizeUnit(stroke, 'stroke')} solid ${strokeColor}` : undefined,
     
     // Border Radius
     borderRadius: borderTopLeftRadius !== undefined || borderTopRightRadius !== undefined || borderBottomLeftRadius !== undefined || borderBottomRightRadius !== undefined
-      ? `${processValue(borderTopLeftRadius || borderRadius, 'borderRadius')} ${processValue(borderTopRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomRightRadius || borderRadius, 'borderRadius')} ${processValue(borderBottomLeftRadius || borderRadius, 'borderRadius')}`
-      : processValue(borderRadius, 'borderRadius'),
+      ? `${normalizeUnit(borderTopLeftRadius || borderRadius, 'borderRadius')} ${normalizeUnit(borderTopRightRadius || borderRadius, 'borderRadius')} ${normalizeUnit(borderBottomRightRadius || borderRadius, 'borderRadius')} ${normalizeUnit(borderBottomLeftRadius || borderRadius, 'borderRadius')}`
+      : normalizeUnit(borderRadius, 'borderRadius'),
     
     // Typography
     fontFamily,
-    fontSize: processValue(fontSize, 'fontSize'),
+    fontSize: normalizeUnit(fontSize, 'fontSize'),
     fontWeight,
     fontStyle,
     fontVariant,
     fontStretch,
     lineHeight,
-    letterSpacing: processValue(letterSpacing, 'letterSpacing'),
-    wordSpacing: processValue(wordSpacing, 'wordSpacing'),
+    letterSpacing: normalizeUnit(letterSpacing, 'letterSpacing'),
+    wordSpacing: normalizeUnit(wordSpacing, 'wordSpacing'),
     textAlign,
     textDecoration,
     textTransform,
-    textIndent: processValue(textIndent, 'textIndent'),
+    textIndent: normalizeUnit(textIndent, 'textIndent'),
     textShadow: textShadow || undefined,
     verticalAlign,
     whiteSpace,
@@ -608,15 +611,15 @@ placeContent,
     alignItems,
     justifyContent,
     alignContent,
-    gap: processValue(gap, 'gap'),
-    rowGap: processValue(rowGap, 'gap'),
-    columnGap: processValue(columnGap, 'gap'),
+    gap: normalizeUnit(gap, 'gap'),
+    rowGap: normalizeUnit(rowGap, 'gap'),
+    columnGap: normalizeUnit(columnGap, 'gap'),
 
     // Flexbox Item Properties  
     flex,
     flexGrow,
     flexShrink,
-    flexBasis: processValue(flexBasis, 'flexBasis'),
+    flexBasis: normalizeUnit(flexBasis, 'flexBasis'),
     alignSelf,
     order,
 
@@ -768,10 +771,7 @@ FlexBox.craft = {
     minWidth: "200px",
     display: "flex",
     position: "relative",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+    // removed top/right/bottom/left defaults
     zIndex: 1,
     visibility: "visible",
     float: "none",

@@ -11,6 +11,7 @@ import SnapPositionHandle from "../../editor/SnapPositionHandle";
 import { useMultiSelect } from '../../utils/context/MultiSelectContext';
 import ResizeHandles from "../support/ResizeHandles";
 import PortalControls from "../support/PortalControls";
+import { positionalStyles, sizeStyles, normalizeUnit, shouldSkipPositionReset } from '../../utils/style/positioning';
 
 const placeholderURL = 'https://images.unsplash.com/photo-1750797490751-1fc372fdcf88?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -79,43 +80,30 @@ export const Image = ({
   useEffect(() => {
     // Only process if parent actually changed (not initial mount)
     if (prevParentRef.current !== null && prevParentRef.current !== parent) {
-      // Parent has changed - element was moved to a different container
-      console.log(`📦 Image ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
-      
-      // Wait longer than the centered drag positioning (600ms) before resetting
-      // This allows useCenteredContainerDrag to apply its centered positioning first
-      setTimeout(() => {
-        // Check if position was already set by centered drag (absolute position with left/top set)
-        const currentNode = query.node(nodeId);
-        if (currentNode) {
-          const currentProps = currentNode.get().data.props;
-          const hasPositioning = currentProps.position === 'absolute' && 
-                                (currentProps.left !== undefined || currentProps.top !== undefined);
-          
-          if (hasPositioning) {
-            console.log('🎯 Image position already set by centered drag system, skipping reset');
-            return; // Don't reset if centered positioning was applied
+      if (shouldSkipPositionReset(nodeId)) {
+        console.log('⏭️ Image position reset skipped (POS drag active or recent commit)', nodeId);
+      } else {
+        console.log(`📦 Image ${nodeId} moved from parent ${prevParentRef.current} to ${parent} - checking if position reset is needed`);
+        setTimeout(() => {
+          const currentNode = query.node(nodeId);
+          if (currentNode) {
+            const currentProps = currentNode.get().data.props;
+            const hasAbsolute = currentProps.position === 'absolute' && (currentProps.left !== undefined || currentProps.top !== undefined);
+            if (hasAbsolute) {
+              console.log('🎯 Image position already absolute, skipping reset');
+              return;
+            }
           }
-        }
-        
-        // Reset position properties to default only if no positioning was applied
-        setProp(props => {
-          // Only reset if position properties were actually set
-          if (props.top !== undefined || props.left !== undefined || 
-              props.right !== undefined || props.bottom !== undefined) {
-            console.log('🔄 Resetting Image position properties after container move (no centered positioning detected)');
-            props.top = undefined;
-            props.left = undefined;
-            props.right = undefined;
-            props.bottom = undefined;
-            // Keep position as relative for normal flow
-            props.position = "relative";
-          }
-        });
-      }, 700); // Wait 700ms to ensure centered drag positioning (600ms) completes first
+          setProp(props => {
+            if (props.top !== undefined || props.left !== undefined || props.right !== undefined || props.bottom !== undefined) {
+              console.log('🔄 Resetting Image position properties after container move');
+              props.top = undefined; props.left = undefined; props.right = undefined; props.bottom = undefined;
+              if (props.position !== 'absolute') props.position = 'relative';
+            }
+          });
+        }, 700);
+      }
     }
-    
-    // Update the ref for next comparison
     prevParentRef.current = parent;
   }, [parent, nodeId, setProp, query]);
   
@@ -252,39 +240,21 @@ export const Image = ({
     }
   };
 
-  // Helper function to process values
-  const processValue = (value, property) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (typeof value === 'number' && !['opacity', 'zIndex'].includes(property)) {
-      return `${value}px`;
-    }
-    return value;
-  };
-
   // Build computed styles with better handling for percentage values
   const computedStyles = {
-    width: typeof width === 'string' && width.includes('%') ? width : processValue(width, 'width'),
-    height: typeof height === 'string' && height.includes('%') ? height : processValue(height, 'height'),
-    minWidth: processValue(minWidth, 'minWidth'),
-    maxWidth: processValue(maxWidth, 'maxWidth'),
-    minHeight: processValue(minHeight, 'minHeight'),
-    maxHeight: processValue(maxHeight, 'maxHeight'),
+    ...sizeStyles({ width, height, minWidth, minHeight, maxWidth, maxHeight }),
     display,
-    position,
-    top: typeof top === 'string' && top.includes('%') ? top : processValue(top, 'top'),
-    right: typeof right === 'string' && right.includes('%') ? right : processValue(right, 'right'),
-    bottom: typeof bottom === 'string' && bottom.includes('%') ? bottom : processValue(bottom, 'bottom'),
-    left: typeof left === 'string' && left.includes('%') ? left : processValue(left, 'left'),
+    ...positionalStyles({ position, top, right, bottom, left }),
     zIndex,
-    margin: processValue(margin, 'margin'),
-    padding: processValue(padding, 'padding'),
-    borderWidth: processValue(borderWidth, 'borderWidth'),
+    margin: normalizeUnit(margin,'margin'),
+    padding: normalizeUnit(padding,'padding'),
+    borderWidth: normalizeUnit(borderWidth,'borderWidth'),
     borderStyle,
     borderColor,
-    borderRadius: processValue(borderRadius, 'borderRadius'),
-    boxShadow: boxShadow !== "none" ? boxShadow : undefined,
+    borderRadius: normalizeUnit(borderRadius,'borderRadius'),
+    boxShadow: boxShadow !== 'none' ? boxShadow : undefined,
     opacity,
-    filter: filter !== "none" ? filter : undefined,
+    filter: filter !== 'none' ? filter : undefined,
     objectFit,
     objectPosition,
   };
@@ -314,7 +284,7 @@ export const Image = ({
       className={`${isSelected && !hideEditorUI ? 'ring-2 ring-blue-500' : ''} ${isHovered && !hideEditorUI ? 'ring-1 ring-gray-300' : ''} ${isMultiSelected(nodeId) ? 'ring-2 ring-purple-500 multi-selected-element' : ''} ${className || ''}`}
       ref={imageRef}
       style={{
-        position: 'relative',
+        // removed hard-coded position: 'relative' so absolute from props is honored
         cursor: 'default',
         userSelect: 'none',
         pointerEvents: 'auto',
@@ -423,29 +393,28 @@ Image.craft = {
   displayName: "Image",
   props: {
     src: placeholderURL,
-    alt: "Image",
+    alt: 'Image',
     width: 300,
     height: 200,
     minWidth: 50,
     maxWidth: 10000,
     minHeight: 50,
     maxHeight: 10000,
-    position: "relative",
-    top: 0,
-    left: 0,
+    position: 'relative',
+    // removed default top/left to allow undefined meaningfully
     zIndex: 1,
     margin: 0,
     padding: 0,
     borderWidth: 0,
-    borderStyle: "solid",
-    borderColor: "#e0e0e0",
+    borderStyle: 'solid',
+    borderColor: '#e0e0e0',
     borderRadius: 4,
-    boxShadow: "none",
+    boxShadow: 'none',
     opacity: 1,
-    objectFit: "cover",
-    objectPosition: "center",
-    title: "",
-    className: "",
+    objectFit: 'cover',
+    objectPosition: 'center',
+    title: '',
+    className: ''
   },
   rules: {
     canDrag: () => true,

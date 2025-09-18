@@ -187,26 +187,7 @@ body {
   border-top: 1px solid var(--custom-panel-border) !important;
 }
 
-/* Tabs theming */
-.ant-tabs {
-  color: var(--text-primary) !important;
-}
-
-.ant-tabs-nav {
-  background: var(--bg-secondary) !important;
-}
-
-.ant-tabs-tab {
-  color: var(--text-secondary) !important;
-}
-
-.ant-tabs-tab-active {
-  color: var(--accent-color) !important;
-}
-
-.ant-tabs-content-holder {
-  background: var(--bg-primary) !important;
-}
+/* Tabs theming removed here to avoid global overrides. Use scoped styles if needed. */
 
 /* Dropdown theming with improved dark mode */
 [data-theme="dark"] .ant-dropdown {
@@ -501,30 +482,7 @@ body {
   border-color: var(--accent-color) !important;
 }
 
-.ant-tabs-tab {
-  color: var(--text-secondary) !important;
-  background: var(--bg-secondary) !important;
-  border: 1px solid var(--border-color) !important;
-}
-
-.ant-tabs-tab:hover {
-  color: var(--text-primary) !important;
-}
-
-.ant-tabs-tab-active {
-  color: var(--text-primary) !important;
-  background: var(--panel-bg) !important;
-  border-color: var(--panel-accent) !important;
-}
-
-.ant-tabs-content-holder {
-  background: var(--panel-bg) !important;
-}
-
-.ant-tabs-tabpane {
-  background: var(--panel-bg) !important;
-  color: var(--text-primary) !important;
-}
+/* Removed unscoped Tabs overrides that conflicted with AntD tokens */
 
 /* Card theming */
 .ant-card {
@@ -1322,7 +1280,6 @@ body.dark-theme .bg-white:not(.ant-modal-content):not(.ant-popover-content):not(
 /* Force theme application to all text elements */
 .ant-modal *,
 .ant-dropdown *,
-.ant-tabs *,
 .ant-card * {
   color: inherit !important;
 }

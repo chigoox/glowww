@@ -8,7 +8,7 @@ import { Spin, message, Button, Space, Typography, Alert, Switch, Dropdown, Tool
 import { EyeOutlined, ArrowLeftOutlined, UndoOutlined, RedoOutlined, HistoryOutlined, EditOutlined, 
          SaveOutlined, SettingOutlined, ImportOutlined, ExportOutlined, BgColorsOutlined, HeatMapOutlined,
          BoxPlotOutlined, MenuOutlined, EyeInvisibleOutlined, GlobalOutlined, ClockCircleOutlined, 
-         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined, SelectOutlined, DragOutlined, SlidersOutlined } from '@ant-design/icons';
+         MinusOutlined, ToolOutlined, FormatPainterOutlined, LayoutOutlined, SelectOutlined, DragOutlined, SlidersOutlined, FileTextOutlined } from '@ant-design/icons';
 
 // Import existing editor components
 import { Toolbox } from '../../Components/editor/ToolBox';
@@ -40,7 +40,7 @@ import { useContainerSwitchingFeedback } from '../../Components/utils/drag-drop/
 import SnapGridControls from '../../Components/utils/grid/SnapGridControls';
 import PageManager2 from '../../Components/editor/PageManager2';
 import PageLoadModal from '../../Components/editor/PageLoadModal';
-import { exportPageToGlow } from '../../../lib/pageExportImport';
+import { exportPageToGlow, exportPageToJson } from '../../../lib/pageExportImport';
 import pako from 'pako';
 import TopPropsManager from '../../Components/editor/TopPropsManager';
 
@@ -1119,8 +1119,8 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
     }
   };
 
-  // Handle exporting current page (matching PageManager compression approach)
-  const handleExportPage = async () => {
+  // Handle exporting current page with format selection
+  const handleExportPage = async (format = 'glow') => {
     try {
       if (!query || !currentPageId) {
         message.error('No page to export');
@@ -1140,28 +1140,17 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
         return;
       }
       
-      // Compress the data using PageManager approach
-      const compressedData = compressData(currentContent);
-      
-      // Create the file blob with compressed data
-      const blob = new Blob([compressedData], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      
-      // Create download link
-      const link = document.createElement('a');
-      link.href = url;
       const pageName = pages.find(p => p.id === currentPageId)?.name || currentPageId;
-      link.download = `${pageName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.glow`;
       
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Cleanup
-      URL.revokeObjectURL(url);
-      
-      message.success(`Page "${pageName}" exported as compressed .glow file!`);
+      if (format === 'json') {
+        // Export as raw JSON
+        await exportPageToJson(currentContent, pageName);
+        message.success(`Page "${pageName}" exported as JSON file!`);
+      } else {
+        // Export as compressed .glow file (default)
+        await exportPageToGlow(currentContent, pageName);
+        message.success(`Page "${pageName}" exported as compressed .glow file!`);
+      }
       
     } catch (error) {
       console.error('Export failed:', error);
@@ -1913,13 +1902,34 @@ const SiteEditorLayout = ({ siteId, siteData, siteContent }) => {
             </Tooltip>
 
             <Tooltip title="Export Page">
-              <Button
-                icon={<ExportOutlined className="text-lg" />}
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'glow',
+                      icon: <ExportOutlined />,
+                      label: 'Export as .glow',
+                      onClick: () => handleExportPage('glow')
+                    },
+                    {
+                      key: 'json',
+                      icon: <FileTextOutlined />,
+                      label: 'Export as .json',
+                      onClick: () => handleExportPage('json')
+                    }
+                  ]
+                }}
+                trigger={['click']}
+                placement="bottomLeft"
                 disabled={!isInitialized || isLoadingPage}
-                onClick={handleExportPage}
-                className="h-10 w-10 bg-purple-600 text-white hover:bg-purple-700 border-purple-500"
-                size="large"
-              />
+              >
+                <Button
+                  icon={<ExportOutlined className="text-lg" />}
+                  disabled={!isInitialized || isLoadingPage}
+                  className="h-10 w-10 bg-purple-600 text-white hover:bg-purple-700 border-purple-500"
+                  size="large"
+                />
+              </Dropdown>
             </Tooltip>
 
             <div className="w-px h-6 bg-gray-300 mx-2"></div>

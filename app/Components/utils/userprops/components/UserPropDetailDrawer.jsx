@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Tabs, Typography, Space, Tag, Button, Tooltip, message, Table } from 'antd';
+import { Drawer, Tabs, Typography, Space, Tag, Button, Tooltip, message, Table, Alert } from 'antd';
 import { InfoCircleOutlined, FunctionOutlined, EyeOutlined, AlertOutlined, CodeOutlined, FileTextOutlined } from '@ant-design/icons';
 import ExpressionEditor from './ExpressionEditor';
 import ValidationEditor from './ValidationEditor';
@@ -82,6 +82,12 @@ export default function UserPropDetailDrawer({ open, path, onClose, hookApis, no
   label: t('userprops.drawer.tabs.value'),
       children: (
         <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Editing Values</span>}
+            description={<span className="text-xs">Direct value edits are disabled when a prop is bound or has an expression. Use Unbind or clear the expression to edit directly.</span>}
+          />
           {isBound && <Typography.Text type="secondary">Bound to component prop; editing disabled.</Typography.Text>}
           {hasExpression && !isBound && <Typography.Text type="secondary">Computed by expression; direct edits disabled.</Typography.Text>}
           <div className="flex items-center gap-2">
@@ -116,46 +122,124 @@ export default function UserPropDetailDrawer({ open, path, onClose, hookApis, no
     {
       key: 'expression',
   label: <span>{t('userprops.drawer.tabs.expression')} {hasExpression && <FunctionOutlined style={{marginLeft:4}}/>}</span>,
-      children: <ExpressionEditor path={path} disabled={isBound || nodeMeta?.type==='object' || nodeMeta?.type==='array'} nodeMeta={nodeMeta} setExpression={setExpression} clearExpression={clearExpression} listDependencies={listDependencies} getExpressionHistory={getExpressionHistory} onDependencyClick={onDependencyClick} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Expressions</span>}
+            description={<span className="text-xs">Write small JS snippets to compute values. Click dependencies in the graph or suggestions to navigate. Expressions are disabled if the prop is bound.</span>}
+          />
+          <ExpressionEditor path={path} disabled={isBound || nodeMeta?.type==='object' || nodeMeta?.type==='array'} nodeMeta={nodeMeta} setExpression={setExpression} clearExpression={clearExpression} listDependencies={listDependencies} getExpressionHistory={getExpressionHistory} onDependencyClick={onDependencyClick} />
+        </div>
+      )
     },
     {
       key: 'validation',
   label: <span>{t('userprops.drawer.tabs.validation')} {errorsForPath.length>0 && <AlertOutlined style={{marginLeft:4,color:'var(--ant-color-error)'}}/>}</span>,
-      children: <ValidationEditor path={path} nodeMeta={nodeMeta} updateValidation={updateValidation} clearValidation={clearValidation} errors={errorsForPath} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Validation</span>}
+            description={<span className="text-xs">Add constraints like required, min/max, or regex. Errors will appear here and next to the field.</span>}
+          />
+          <ValidationEditor path={path} nodeMeta={nodeMeta} updateValidation={updateValidation} clearValidation={clearValidation} errors={errorsForPath} />
+        </div>
+      )
     },
     {
       key: 'watchers',
   label: <span>{t('userprops.drawer.tabs.watchers')} <EyeOutlined style={{marginLeft:4}}/></span>,
-      children: <WatchersEditor path={path} listWatchers={listWatchers} addWatcher={addWatcher} removeWatcher={removeWatcher} updateWatcher={updateWatcher} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Watchers</span>}
+            description={<span className="text-xs">Run scripts when this value changes. Use for side-effects like syncing with external services. Check Logs for results.</span>}
+          />
+          <WatchersEditor path={path} listWatchers={listWatchers} addWatcher={addWatcher} removeWatcher={removeWatcher} updateWatcher={updateWatcher} />
+        </div>
+      )
     },
     {
       key: 'json',
   label: <span>{t('userprops.drawer.tabs.json')} <FileTextOutlined style={{marginLeft:4}}/></span>,
-      children: <JsonPreview path={path} getValueAtPath={getValueAtPath} nodeMeta={nodeMeta} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>JSON Preview</span>}
+            description={<span className="text-xs">View the raw value or structure. Containers show structural JSON.</span>}
+          />
+          <JsonPreview path={path} getValueAtPath={getValueAtPath} nodeMeta={nodeMeta} />
+        </div>
+      )
     },
     {
       key: 'diff',
   label: t('userprops.drawer.tabs.diff'),
-      children: <DiffPreview path={path} getPathDiff={getPathDiff} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Change Diff</span>}
+            description={<span className="text-xs">Compare the latest two snapshots of this path to inspect changes.</span>}
+          />
+          <DiffPreview path={path} getPathDiff={getPathDiff} />
+        </div>
+      )
     },
     {
       key: 'watcherLogs',
   label: t('userprops.drawer.tabs.logs'),
-      children: <WatcherLogs logs={(getWatcherLogs && getWatcherLogs()) || []} filterPath={path} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Watcher Logs</span>}
+            description={<span className="text-xs">Recent watcher runs for this path. Errors and durations are shown here.</span>}
+          />
+          <WatcherLogs logs={(getWatcherLogs && getWatcherLogs()) || []} filterPath={path} />
+        </div>
+      )
     },
     {
       key: 'graph',
       label: t('userprops.drawer.tabs.graph'),
-      children: <DependencyGraphViewer rootTree={(hookApis.getUserPropsTree && hookApis.getUserPropsTree()) || null} onSelectPath={(p)=>{ if(!p) return; if (onRequestPathChange) onRequestPathChange(p); setActiveTab('value'); }} />
+      children: (
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Dependency Graph</span>}
+            description={<span className="text-xs">See which props depend on or feed into others. Click a node to jump to it.</span>}
+          />
+          <DependencyGraphViewer rootTree={(hookApis.getUserPropsTree && hookApis.getUserPropsTree()) || null} onSelectPath={(p)=>{ if(!p) return; if (onRequestPathChange) onRequestPathChange(p); setActiveTab('value'); }} />
+        </div>
+      )
     },
     {
       key: 'templates',
       label: t('userprops.drawer.tabs.templates'),
       children: (
-        <UserPropsTemplateLibrary
-          onApplyExpression={(tpl)=>{ if(path){ hookApis.applyExpressionTemplate(path, tpl.key, {}); message.success(t('userprops.templates.applied')); }}}
-          onApplyWatcher={(tpl)=>{ if(path){ hookApis.applyWatcherTemplate(path, tpl.key, {}); message.success(t('userprops.templates.applied')); }}}
-        />
+        <div className="flex flex-col gap-3">
+          <Alert
+            type="info"
+            showIcon
+            message={<span style={{fontWeight:600}}>Templates</span>}
+            description={<span className="text-xs">Start from common recipes for expressions and watchers. Applying a template will update this path.</span>}
+          />
+          <UserPropsTemplateLibrary
+            onApplyExpression={(tpl)=>{ if(path){ hookApis.applyExpressionTemplate(path, tpl.key, {}); message.success(t('userprops.templates.applied')); }}}
+            onApplyWatcher={(tpl)=>{ if(path){ hookApis.applyWatcherTemplate(path, tpl.key, {}); message.success(t('userprops.templates.applied')); }}}
+          />
+        </div>
       )
     }
   ];

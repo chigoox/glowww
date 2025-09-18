@@ -53,6 +53,34 @@ export const useDropPositionCorrection = () => {
   lastDetectedContainer: null // Remember last valid container to reduce ROOT fallbacks
   });
 
+  // Global guard helpers: stand down while SnapPositionHandle POS-drag is active
+  const isPosDragActive = useCallback(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      return !!window.__GLOW_POS_DRAGGING || document.documentElement.hasAttribute('data-glow-pos-drag');
+    } catch (_) {
+      return false;
+    }
+  }, []);
+
+  const eventFromPosHandle = useCallback((e) => {
+    try {
+      return !!e?.target?.closest?.('.snap-position-handle');
+    } catch (_) {
+      return false;
+    }
+  }, []);
+
+  const isRecentPosCommit = useCallback((nodeId) => {
+    try {
+      if (typeof window === 'undefined') return false;
+      const until = window.__GLOW_POS_RECENT?.[nodeId];
+      return typeof until === 'number' && Date.now() < until;
+    } catch (_) {
+      return false;
+    }
+  }, []);
+
   // Reliable reparent with retries to avoid node snapping back to ROOT
   const ensureParent = useCallback(async (nodeId, targetParentId, { attempts = 5, interval = 80, index = 0 } = {}) => {
     if (!nodeId || !targetParentId) return false;
@@ -679,6 +707,10 @@ console.log('second')
 // Enhanced applyPositioning function that handles new vs existing components correctly
 const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT') => {
   try {
+    // Respect active POS drag from SnapPositionHandle to avoid overriding its commit
+  if (isPosDragActive() || isRecentPosCommit(nodeId)) {
+      return;
+    }
     // Get the actual component dimensions for precision
     const componentDimensions = getExistingComponentDimensions(nodeId);
     
@@ -748,9 +780,9 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
           }
         }
 
-        // Always trust (possibly adjusted) coordinates
-        props.left =  parentId =='ROOT' ? finalX : 24;
-        props.top =   parentId =='ROOT' ? finalY : 24;
+  // Always trust (possibly adjusted) coordinates for any parent
+  props.left = finalX;
+  props.top = finalY;
 
         // Percentage conversion only for newly dropped components and only once
         if (isNewComponent && !props._percentConverted) {
@@ -799,7 +831,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
   } catch (error) {
     // Failed to apply positioning
   }
-}, [actions, getExistingComponentDimensions, settings.dropPosition.snapToGrid, settings.snap.enabled, settings.grid?.size, settings.dropPosition.mode, query]);
+}, [actions, getExistingComponentDimensions, settings.dropPosition.snapToGrid, settings.snap.enabled, settings.grid?.size, settings.dropPosition.mode, query, isPosDragActive, isRecentPosCommit]);
   // Detect new component additions and apply position correction
   const checkForNewComponents = useCallback(() => {
     const currentNodes = query.getNodes();
@@ -813,7 +845,18 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
       const newNodeIds = nodeIds.slice(dropStateRef.current.lastNodeCount);
       
       if (newNodeIds.length > 0) {
+        // Guard: if POS drag active, skip correction
+        if (isPosDragActive()) {
+          dropStateRef.current.isNewDrop = false;
+          dropStateRef.current.lastNodeCount = currentNodeCount;
+          return;
+        }
         const newNodeId = newNodeIds[0]; // Take the first new node
+        if (isRecentPosCommit(newNodeId)) {
+          dropStateRef.current.isNewDrop = false;
+          dropStateRef.current.lastNodeCount = currentNodeCount;
+          return;
+        }
         
         
         // Apply position correction with longer delay for DOM stability
@@ -905,17 +948,28 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     }
     
     dropStateRef.current.lastNodeCount = currentNodeCount;
-  }, [query, actions, findContainerAtPosition, calculateRelativePosition, getComponentDimensions, getExistingComponentDimensions]);
+  }, [query, actions, findContainerAtPosition, calculateRelativePosition, getComponentDimensions, getExistingComponentDimensions, isPosDragActive, isRecentPosCommit]);
 
   // Handle existing component move completion with enhanced coordinate conversion
   const handleExistingComponentMove = useCallback(() => {
-    if (!dropStateRef.current.isExistingMove || !dropStateRef.current.draggedNodeId) {
+    // Guard: if POS drag active, do not interfere
+    if (isPosDragActive()) {
+      dropStateRef.current.isExistingMove = false;
+      dropStateRef.current.draggedNodeId = null;
+      return;
+    }
+  if (!dropStateRef.current.isExistingMove || !dropStateRef.current.draggedNodeId) {
       return;
     }
 
     try {
       const { x: mouseX, y: mouseY } = dropStateRef.current.mousePosition;
       const nodeId = dropStateRef.current.draggedNodeId;
+      if (isRecentPosCommit(nodeId)) {
+        dropStateRef.current.isExistingMove = false;
+        dropStateRef.current.draggedNodeId = null;
+        return;
+      }
       
       // Enhanced mouse position validation
       if (mouseX <= 0 || mouseY <= 0 || mouseX >= window.innerWidth || mouseY >= window.innerHeight) {
@@ -1088,7 +1142,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     // Reset existing move state
     dropStateRef.current.isExistingMove = false;
     dropStateRef.current.draggedNodeId = null;
-  }, [query, actions, findContainerAtPosition, convertToContainerCoordinates, getExistingComponentDimensions, applyPositioning]);
+  }, [query, actions, findContainerAtPosition, convertToContainerCoordinates, getExistingComponentDimensions, applyPositioning, isPosDragActive, isRecentPosCommit]);
 
   // Mouse position tracking
   const lastMousePositionRef = useRef({ x: 0, y: 0 });
@@ -1102,8 +1156,10 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
   // Set up event listeners and monitoring
   useEffect(() => {
     // Listen for dragstart events on toolbox items AND existing components
-    const handleDragStart = (e) => {
+  const handleDragStart = (e) => {
       try {
+    // Ignore drags initiated from the POS handle
+    if (eventFromPosHandle(e) || isPosDragActive()) return;
         // Check if this is a drag from the toolbox (NEW component)
         const toolboxItem = e.target.closest('[data-component]');
         if (toolboxItem) {
@@ -1188,6 +1244,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     let dropFrozen = false;
     const handleMouseMove = (e) => {
       if (dropFrozen) return;
+      if (isPosDragActive()) return;
       if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         // Update stored positions (no visual feedback)
         const newPosition = { x: e.clientX, y: e.clientY };
@@ -1199,6 +1256,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     // Listen for dragover to update mouse position during drag
     const handleDragOver = (e) => {
       if (dropFrozen) return;
+      if (isPosDragActive()) return;
       if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
         e.preventDefault(); // Allow drop
 
@@ -1243,6 +1301,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     
     // Capture mouseup separately to freeze final release coordinates
     const handleMouseUp = (e) => {
+      if (isPosDragActive()) return;
       if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove || dropStateRef.current.potentialDragNodeId) {
         // FIXED: Capture and freeze the exact release position
         const releasePosition = { x: e.clientX, y: e.clientY };
@@ -1255,8 +1314,9 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     };
 
     // Also listen for dragend to capture final position and handle existing moves
-    const handleDragEnd = (e) => {
+  const handleDragEnd = (e) => {
       try {
+    if (isPosDragActive()) return;
         if (dropStateRef.current.isNewDrop || dropStateRef.current.isExistingMove) {
           
           // Update final mouse position
@@ -1344,6 +1404,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
     
     // Monitor for Craft.js operations completing
     const craftMonitorInterval = setInterval(() => {
+      if (isPosDragActive()) return;
       // If we have a potential drag but no craft indicators, force our system to activate
       if (dropStateRef.current.potentialDragNodeId && !dropStateRef.current.isExistingMove) {
         
@@ -1385,7 +1446,7 @@ const applyPositioning = useCallback((nodeId, position, containerIdUsed = 'ROOT'
       clearInterval(monitorInterval);
       clearInterval(craftMonitorInterval);
     };
-  }, [checkForNewComponents, handleExistingComponentMove, findContainerAtPosition, query]);
+  }, [checkForNewComponents, handleExistingComponentMove, findContainerAtPosition, query, isPosDragActive, eventFromPosHandle]);
 
   // Expose manual trigger for testing
   useEffect(() => {

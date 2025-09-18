@@ -22,16 +22,28 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
   const prevParentRef = useRef(parent);
   const lastMousePosition = useRef({ x: 0, y: 0 });
   const isInitialMount = useRef(true);
+
+  // Respect SnapPositionHandle POS drags: stand down while active
+  const isPosDragActive = useCallback(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      return !!window.__GLOW_POS_DRAGGING || document.documentElement.hasAttribute('data-glow-pos-drag');
+    } catch (_) {
+      return false;
+    }
+  }, []);
   
   // Track global mouse position during move operations
   useEffect(() => {
     const updateMousePosition = (e) => {
+      if (isPosDragActive()) return;
       lastMousePosition.current = { x: e.clientX, y: e.clientY };
       console.log('📍 Mouse position updated:', { x: e.clientX, y: e.clientY });
     };
     
     // Only track during potential move operations
     const handleMouseDown = (e) => {
+      if (isPosDragActive()) return;
       console.log('🖱️ MouseDown detected, checking target:', e.target);
       
       // Check if this is a MOVE handle operation with the exact selectors used in components
@@ -72,15 +84,15 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
       }, 100);
     };
     
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
+  document.addEventListener('mousedown', handleMouseDown);
+  document.addEventListener('mouseup', handleMouseUp);
     
     return () => {
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', updateMousePosition);
     };
-  }, []);
+  }, [isPosDragActive]);
   
   // Calculate position relative to new container
   const calculateRelativePosition = useCallback((mouseX, mouseY, newParentId) => {
@@ -201,6 +213,10 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
     
     // Check if parent actually changed
     if (prevParentRef.current !== parent) {
+      if (isPosDragActive()) {
+        prevParentRef.current = parent;
+        return;
+      }
       const oldParent = prevParentRef.current;
       const newParent = parent;
       
@@ -377,7 +393,7 @@ export const useAutoPositionOnContainerSwitch = (nodeId) => {
     } else {
       console.log('➡️ No parent change detected for node:', nodeId);
     }
-  }, [parent, nodeId, calculateRelativePosition, setProp, dom, query]);
+  }, [parent, nodeId, calculateRelativePosition, setProp, dom, query, isPosDragActive]);
   
   // Return useful info for debugging
   return {

@@ -1014,10 +1014,17 @@ export const FigmaStyleMenu = ({
           <Tooltip title="Manage this component's props">
             <Button size="small" icon={<CodeOutlined />} onClick={() => {
               try {
-                // Open top-level Props Manager modal focused on Component tab
-                // We simulate by dispatching a custom event listened by TopBar or a global handler.
-                const evt = new CustomEvent('open-props-manager', { detail: { target: 'component' } });
-                window.dispatchEvent(evt);
+                // Ensure the current component is selected, then open TopPropsManager targeting it
+                if (selected?.id && actions?.selectNode) {
+                  actions.selectNode(selected.id);
+                }
+                const detail = { target: 'component', nodeId: selected?.id };
+                const open = () => window.dispatchEvent(new CustomEvent('open-props-manager', { detail }));
+                if (typeof window !== 'undefined' && 'requestAnimationFrame' in window) {
+                  window.requestAnimationFrame(open);
+                } else {
+                  setTimeout(open, 0);
+                }
               } catch {/* ignore */}
             }} />
           </Tooltip>

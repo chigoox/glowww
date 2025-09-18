@@ -9,6 +9,16 @@ import { useEditor } from '@craftjs/core';
  */
 export const useEnhancedComponentMove = () => {
   const { actions, query } = useEditor();
+
+  // Respect SnapPositionHandle POS drags: stand down while active
+  const isPosDragActive = useCallback(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      return !!window.__GLOW_POS_DRAGGING || document.documentElement.hasAttribute('data-glow-pos-drag');
+    } catch (_) {
+      return false;
+    }
+  }, []);
   
   // Find the best container at mouse position (similar to enhanced drop system)
   const findTargetContainer = useCallback((mouseX, mouseY, draggedNodeId) => {
@@ -150,6 +160,10 @@ export const useEnhancedComponentMove = () => {
 
   // Enhanced move function that handles container switching
   const enhancedMove = useCallback((nodeId, mouseX, mouseY, elementWidth, elementHeight) => {
+    // Guard: do not override active POS drag positioning
+    if (isPosDragActive()) {
+      return { moved: false, reason: 'pos-drag-active' };
+    }
     
     // Get all nodes for debugging
     const allNodes = query.getNodes();
@@ -237,7 +251,7 @@ export const useEnhancedComponentMove = () => {
         snapped: window.snapGridSystem?.snapEnabled
       };
     }
-  }, [findTargetContainer, calculateContainerRelativePosition, actions, query]);
+  }, [findTargetContainer, calculateContainerRelativePosition, actions, query, isPosDragActive]);
 
   return {
     enhancedMove,
