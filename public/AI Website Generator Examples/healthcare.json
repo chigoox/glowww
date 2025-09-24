@@ -1,0 +1,13 @@
+{
+  "name": "Healthcare Provider",
+  "description": "Trustworthy and clean design for healthcare services",
+  "category": "healthcare",
+  "structure": {
+    "sections": ["hero", "services", "team", "testimonials", "contact"],
+    "layout": "professional",
+    "colorScheme": "medical-blue",
+    "components": ["Hero", "ServiceCards", "TeamGrid", "TestimonialSlider", "ContactForm"]
+  },
+  "businessTypes": ["healthcare", "medical", "dental", "clinic", "hospital"],
+  "tones": ["professional", "trustworthy", "caring"]
+}

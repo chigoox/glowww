@@ -1,0 +1,13 @@
+{
+  "name": "Modern Tech Startup",
+  "description": "Clean, modern design for tech companies and startups",
+  "category": "business",
+  "structure": {
+    "sections": ["hero", "features", "testimonials", "pricing", "contact"],
+    "layout": "modern-grid",
+    "colorScheme": "blue-gradient",
+    "components": ["Hero", "FeatureGrid", "PricingCards", "ContactForm"]
+  },
+  "businessTypes": ["technology", "software", "startup", "saas", "fintech"],
+  "tones": ["professional", "modern", "innovative"]
+}

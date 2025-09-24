@@ -9,16 +9,16 @@ import {
 import { 
   UploadOutlined, FileTextOutlined, CopyOutlined, ShopOutlined, 
   StarOutlined, EyeOutlined, DownloadOutlined, UserOutlined,
-  SearchOutlined, FilterOutlined, RobotOutlined, CrownOutlined
+  SearchOutlined, FilterOutlined, MessageOutlined 
 } from '@ant-design/icons';
 import { useAuth } from '../../../contexts/AuthContext';
-import AIPageGenerator from './AIPageGenerator';
+import TemplateRatingModal from './TemplateRatingModal';
 
 const { TextArea, Search } = Input;
 const { Text, Title } = Typography;
 const { Option } = Select;
 
-const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
+const PageLoadModalEnhanced = ({ visible, onCancel, onLoad, mode = 'load' }) => {
   const [activeTab, setActiveTab] = useState('paste');
   const [pasteData, setPasteData] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,9 +31,8 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [marketplaceView, setMarketplaceView] = useState('marketplace'); // marketplace, my-templates
-  
-  // AI Generation State
-  const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   
   const { user } = useAuth();
 
@@ -121,26 +120,26 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
     }
   };
 
-  const handleAIGenerate = async (generatedPageData) => {
-    console.log('PageLoadModal.handleAIGenerate called with:', generatedPageData);
-    console.log('Type of generatedPageData:', typeof generatedPageData);
-    
+  const handleTemplateView = async (templateId) => {
     try {
-      // Convert the JavaScript object to JSON string for handleLoadPageData
-      const pageDataString = typeof generatedPageData === 'string' 
-        ? generatedPageData 
-        : JSON.stringify(generatedPageData);
-      
-      console.log('About to call onLoad with pageDataString length:', pageDataString.length);
-      console.log('onLoad function:', onLoad);
-      
-      await onLoad(pageDataString);
-      onCancel();
-      message.success('AI-generated page loaded successfully!');
+      await fetch(`/api/templates?action=track-view&templateId=${templateId}`);
     } catch (error) {
-      console.error('AI generation error:', error);
-      message.error('Failed to load AI-generated page: ' + error.message);
+      console.error('Error tracking view:', error);
     }
+  };
+
+  const handleRatingUpdate = (templateId, newQualityScore) => {
+    // Update template in state
+    const updateTemplate = (templateList) => {
+      return templateList.map(t => 
+        t.id === templateId 
+          ? { ...t, qualityScore: newQualityScore, averageRating: newQualityScore.average, totalRatings: newQualityScore.totalRatings }
+          : t
+      );
+    };
+    
+    setTemplates(prev => updateTemplate(prev));
+    setMyTemplates(prev => updateTemplate(prev));
   };
 
   const handlePasteLoad = async () => {
@@ -222,6 +221,12 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
       }
     };
 
+    const handleRateTemplate = (e) => {
+      e.stopPropagation();
+      setSelectedTemplate(template);
+      setRatingModalVisible(true);
+    };
+
     return (
       <Card
         hoverable
@@ -269,18 +274,23 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
           )
         }
         actions={[
-          <Tooltip key="rating" title={`${template.averageRating} stars (${template.totalRatings} ratings)`}>
-            <Space>
+          <Tooltip key="rating" title={`${template.averageRating || 0} stars (${template.totalRatings || 0} ratings)`}>
+            <Button 
+              type="text" 
+              size="small" 
+              onClick={handleRateTemplate}
+              style={{ display: 'flex', alignItems: 'center', padding: 0 }}
+            >
               <Rate 
                 disabled 
                 allowHalf 
-                value={template.averageRating} 
-                style={{ fontSize: 12 }}
+                value={template.averageRating || 0} 
+                style={{ fontSize: 12, marginRight: 4 }}
               />
               <Text type="secondary" style={{ fontSize: 11 }}>
-                ({template.totalRatings})
+                ({template.totalRatings || 0})
               </Text>
-            </Space>
+            </Button>
           </Tooltip>,
           <Tooltip key="stats" title="Views / Downloads">
             <Space>
@@ -290,15 +300,24 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
               <Text style={{ fontSize: 11 }}>{template.usageCount || 0}</Text>
             </Space>
           </Tooltip>,
-          <Button
-            key="load"
-            type="primary"
-            size="small"
-            loading={cardLoading}
-            onClick={handleLoadTemplate}
-          >
-            Use Template
-          </Button>
+          <Space key="actions">
+            <Button
+              type="text"
+              size="small"
+              icon={<MessageOutlined />}
+              onClick={handleRateTemplate}
+            >
+              Reviews
+            </Button>
+            <Button
+              type="primary"
+              size="small"
+              loading={cardLoading}
+              onClick={handleLoadTemplate}
+            >
+              Use Template
+            </Button>
+          </Space>
         ]}
       >
         <Card.Meta
@@ -547,61 +566,6 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
           )}
         </div>
       )
-    },
-    {
-      key: 'ai-generate',
-      label: (
-        <span>
-          <RobotOutlined />
-          AI Generate
-          <Badge count="Premium" size="small" style={{ marginLeft: 4, backgroundColor: '#faad14' }} />
-        </span>
-      ),
-      children: (
-        <div>
-          <Alert
-            message="AI Page Generation - Premium Feature"
-            description={
-              user?.subscriptionTier && user.subscriptionTier.toLowerCase() !== 'free'
-                ? "Generate professional pages instantly using AI and our high-quality community templates."
-                : "Upgrade from Free to access AI-powered page generation with premium templates."
-            }
-            type="info"
-            style={{ marginBottom: 16 }}
-          />
-          
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <RobotOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
-            <Title level={4}>AI-Powered Page Creation</Title>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-              Our AI uses high-rated community templates as foundations and generates 
-              personalized content based on your business needs.
-            </Text>
-            
-            <Space direction="vertical" size="large">
-              <ul style={{ textAlign: 'left', marginBottom: 16 }}>
-                <li>🎯 Personalized content generation</li>
-                <li>🏆 Uses top-rated templates (4+ stars)</li>
-                <li>⚡ Professional results in seconds</li>
-                <li>🎨 Customizable after generation</li>
-              </ul>
-              
-              <Button
-                type="primary"
-                size="large"
-                icon={<RobotOutlined />}
-                onClick={() => setAiModalVisible(true)}
-                disabled={!user?.subscriptionTier || user.subscriptionTier.toLowerCase() === 'free'}
-              >
-                {user?.subscriptionTier && user.subscriptionTier.toLowerCase() !== 'free'
-                  ? 'Start AI Generation'
-                  : 'Upgrade Required'
-                }
-              </Button>
-            </Space>
-          </div>
-        </div>
-      )
     }
   ];
 
@@ -611,7 +575,7 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={600}
+      width={800}
       centered
     >
       <Tabs
@@ -634,14 +598,18 @@ const PageLoadModal = ({ visible, onCancel, onLoad, mode = 'load' }) => {
         style={{ marginTop: 16 }}
       />
       
-      {/* AI Page Generator Modal */}
-      <AIPageGenerator
-        visible={aiModalVisible}
-        onCancel={() => setAiModalVisible(false)}
-        onGenerate={handleAIGenerate}
+      {/* Template Rating Modal */}
+      <TemplateRatingModal
+        visible={ratingModalVisible}
+        onCancel={() => {
+          setRatingModalVisible(false);
+          setSelectedTemplate(null);
+        }}
+        template={selectedTemplate}
+        onRatingUpdate={(newQualityScore) => handleRatingUpdate(selectedTemplate?.id, newQualityScore)}
       />
     </Modal>
   );
 };
 
-export default PageLoadModal;
+export default PageLoadModalEnhanced;

@@ -50,13 +50,15 @@ import {
   FallOutlined,
   LogoutOutlined,
   MenuOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  ShopOutlined
 } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { theme } from 'antd';
 import { signOut } from '@/lib/auth';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import TemplateModeration from '../Components/admin/TemplateModeration';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -778,6 +780,11 @@ export default function AdminDashboard() {
       label: 'Users'
     },
     {
+      key: 'templates',
+      icon: <ShopOutlined />,
+      label: 'Templates'
+    },
+    {
       key: 'email',
       icon: <MailOutlined />,
       label: 'Email'
@@ -908,6 +915,7 @@ export default function AdminDashboard() {
               {activeTab === 'overview' && 'Platform Overview'}
               {activeTab === 'sites' && 'Site Management'}
               {activeTab === 'users' && 'User Management'}
+              {activeTab === 'templates' && 'Template Marketplace'}
               {activeTab === 'email' && 'Email Analytics'}
               {activeTab === 'system' && 'System Health'}
             </Title>
@@ -1237,6 +1245,11 @@ export default function AdminDashboard() {
                 scroll={{ x: 800 }}
               />
             </Card>
+          )}
+
+          {/* Templates Management Tab */}
+          {activeTab === 'templates' && (
+            <TemplateModeration />
           )}
 
           {/* Email Analytics Tab */}

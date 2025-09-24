@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -13,6 +13,7 @@
     "test:email": "jest __tests__/email"
   },
   "dependencies": {
+    "@ant-design/charts": "^2.6.4",
     "@craftjs/core": "^0.2.12",
     "@craftjs/layers": "^0.2.7",
     "@google-analytics/data": "^5.0.0",
@@ -28,6 +29,7 @@
     "copy-to-clipboard": "^3.3.3",
     "critters": "^0.0.22",
     "cropperjs": "^1.6.2",
+    "dayjs": "^1.11.18",
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "firebase": "^11.8.1",
@@ -42,6 +44,7 @@
     "lucide-react": "^0.460.0",
     "motion": "^12.23.12",
     "next": "15.3.2",
+    "openai": "^5.22.0",
     "pako": "^2.1.0",
     "postmark": "^3.11.0",
     "puppeteer-core": "^24.3.0",

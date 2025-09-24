@@ -1,86 +1,74 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { getUserSites, createSite, deleteSite, updateSite, canCreateSite, syncUserSiteCount } from '../../lib/sites';
-import { signOut } from '../../lib/auth';
-import { PRICING_PLANS, createCheckoutSession, createSetupIntent, setDefaultPaymentMethod, getSubscriptionStatus, cancelSubscriptionAtPeriodEnd, resumeSubscription, switchSubscriptionPlan, startStripeConnectOnboarding, getStripeConnectedAccount, disconnectStripeAccount, getStripeMetrics } from '../../lib/stripe';
-import { startPaypalOnboarding } from '../../lib/paypal';
-import { updateUserData, checkUsernameExists } from '../../lib/auth';
 import { auth } from '@/lib/firebase';
-import { updateProfile } from 'firebase/auth';
-import { Elements, useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
+import {
+  AppstoreOutlined,
+  BarChartOutlined,
+  CheckCircleOutlined,
+  CrownOutlined,
+  EyeOutlined,
+  GlobalOutlined,
+  HomeOutlined,
+  LineChartOutlined,
+  LockOutlined,
+  LogoutOutlined,
+  MailOutlined,
+  MenuOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+  ShoppingOutlined,
+  UserOutlined,
+  WalletOutlined
+} from '@ant-design/icons';
 import { loadStripe as loadStripeJs } from '@stripe/stripe-js';
-import { ensureUserSubscription, getUserSubscription } from '../../lib/subscriptions';
-import SiteCard from '../Components/ui/SiteCard';
-import FlipSiteCard from '../Components/ui/FlipSiteCard';
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  Col,
+  ConfigProvider,
+  Drawer,
+  Dropdown,
+  Empty,
+  Form,
+  Input,
+  Layout,
+  Menu,
+  Modal,
+  Progress,
+  Row,
+  Space,
+  Spin,
+  Statistic,
+  Tabs,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+  theme
+} from 'antd';
+import { updateProfile } from 'firebase/auth';
 import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { checkUsernameExists, signOut, updateUserData } from '../../lib/auth';
+import { startPaypalOnboarding } from '../../lib/paypal';
+import { canCreateSite, createSite, deleteSite, getUserSites, syncUserSiteCount, updateSite } from '../../lib/sites';
+import { PRICING_PLANS, getStripeMetrics, startStripeConnectOnboarding } from '../../lib/stripe';
+import { ensureUserSubscription, getUserSubscription } from '../../lib/subscriptions';
+import FlipSiteCard from '../Components/ui/FlipSiteCard';
+import SiteSettingsModal from '../Components/ui/SiteSettingsModal';
+import useIsMobile from '../Hooks/useIsMobile';
+import { Admin } from './Admin/Admin';
 const SiteEmailManager = dynamic(() => import('../Components/email/SiteEmailManager'), { ssr: false });
 const UserAnalyticsDashboard = dynamic(() => import('../Components/UserAnalyticsDashboard'), { ssr: false });
 const EmailManager = dynamic(() => import('../Components/EmailManager'), { ssr: false });
-import SiteSettingsModal from '../Components/ui/SiteSettingsModal';
-import { Admin } from './Admin/Admin';
-import useIsMobile from '../Hooks/useIsMobile';
-import {
-  Button,
-  Card,
-  Empty,
-  Spin,
-  message,
-  Modal,
-  Input,
-  Form,
-  Space,
-  Typography,
-  Divider,
-  Row,
-  Col,
-  Table,
-  theme,
-  Tabs,
-  ConfigProvider,
-  Progress,
-  Tag,
-  Alert,
-  Layout,
-  Menu,
-  Statistic,
-  Avatar,
-  Tooltip,
-  Dropdown,
-  Popconfirm,
-  Drawer
-} from 'antd';
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  GlobalOutlined,
-  CrownOutlined,
-  RocketOutlined,
-  SettingOutlined,
-  ShareAltOutlined,
-  CopyOutlined,
-  LogoutOutlined,
-  CheckCircleOutlined,
-  LockOutlined,
-  CreditCardOutlined,
-  BarChartOutlined,
-  LineChartOutlined,
-  UserOutlined,
-  SafetyOutlined,
-  PhoneOutlined,
-  MailOutlined,
-  KeyOutlined,
-  DashboardOutlined,
-  WalletOutlined,
-  ShoppingOutlined,
-  MenuOutlined,
-  HomeOutlined,
-  ReloadOutlined
-} from '@ant-design/icons';
-import { ResponsiveContainer, LineChart as RechartsLineChart, Line as RechartsLine, XAxis as RechartsXAxis, YAxis as RechartsYAxis, Tooltip as RechartsTooltip, CartesianGrid as RechartsCartesianGrid, Legend as RechartsLegend } from 'recharts';
+const TemplateModeration = dynamic(() => import('../Components/admin/TemplateModeration'), { ssr: false });
+const TemplateCollections = dynamic(() => import('../Components/TemplateCollections'), { ssr: false });
+const TemplateAnalyticsDashboard = dynamic(() => import('../Components/TemplateAnalyticsDashboard'), { ssr: false });
+const SmartTemplateRecommendations = dynamic(() => import('../Components/SmartTemplateRecommendations'), { ssr: false });
 
 const { Title, Text, Paragraph } = Typography;
 const { Header, Content, Sider } = Layout;
@@ -181,6 +169,11 @@ export default function Dashboard() {
       label: 'Sites',
     },
     {
+      key: 'templates',
+      icon: <AppstoreOutlined />,
+      label: 'Templates',
+    },
+    {
       key: 'analytics',
       icon: <BarChartOutlined />,
       label: 'Analytics',
@@ -205,7 +198,7 @@ export default function Dashboard() {
   // Initialize active tab from URL
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const allowed = new Set(['overview', 'sites', 'payments', 'analytics', 'ecommerce', 'emails']);
+    const allowed = new Set(['overview', 'sites', 'templates', 'payments', 'analytics', 'ecommerce', 'emails']);
     const sp = new URLSearchParams(window.location.search);
     const t = (sp.get('tab') || '').toLowerCase();
     if (allowed.has(t)) {
@@ -897,6 +890,7 @@ export default function Dashboard() {
               <Title level={3} style={{ margin: 0, color: token.colorText }}>
                 {activeTab === 'overview' && 'Dashboard Overview'}
                 {activeTab === 'sites' && 'Site Management'}
+                {activeTab === 'templates' && 'Template Marketplace'}
                 {activeTab === 'analytics' && 'Analytics & Insights'}
                 {activeTab === 'emails' && 'Email Management'}
                 {activeTab === 'payments' && 'Payment Settings'}
@@ -1330,6 +1324,91 @@ export default function Dashboard() {
                     </div>
                   )}
                 </Card>
+              </div>
+            )}
+
+            {/* Templates Tab */}
+            {activeTab === 'templates' && (
+              <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+                <Tabs 
+                  defaultActiveKey="marketplace" 
+                  size="large"
+                  style={{ marginBottom: 16 }}
+                  items={[
+                    {
+                      key: 'marketplace',
+                      label: (
+                        <Space>
+                          <AppstoreOutlined />
+                          <span>Template Marketplace</span>
+                        </Space>
+                      ),
+                      children: (
+                        <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                          <SmartTemplateRecommendations 
+                            embedded={false}
+                            showSearch={true}
+                            showFilters={true}
+                            maxRecommendations={24}
+                          />
+                        </Card>
+                      )
+                    },
+                    {
+                      key: 'collections',
+                      label: (
+                        <Space>
+                          <AppstoreOutlined />
+                          <span>Template Collections</span>
+                        </Space>
+                      ),
+                      children: (
+                        <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                          <TemplateCollections 
+                            embedded={false}
+                            showFilters={true}
+                            showSearch={true}
+                          />
+                        </Card>
+                      )
+                    },
+                    // Only show admin features for admin users
+                    ...(userData?.tier === 'admin' || userData?.subscriptionTier === 'admin' ? [
+                      {
+                        key: 'moderation',
+                        label: (
+                          <Space>
+                            <CheckCircleOutlined />
+                            <span>Template Moderation</span>
+                          </Space>
+                        ),
+                        children: (
+                          <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <TemplateModeration 
+                              adminMode={true}
+                              user={user}
+                              userData={userData}
+                            />
+                          </Card>
+                        )
+                      },
+                      {
+                        key: 'template-analytics',
+                        label: (
+                          <Space>
+                            <BarChartOutlined />
+                            <span>Template Analytics</span>
+                          </Space>
+                        ),
+                        children: (
+                          <Card style={{ borderRadius: 12, border: `1px solid ${token.colorBorderSecondary}` }}>
+                            <TemplateAnalyticsDashboard />
+                          </Card>
+                        )
+                      }
+                    ] : [])
+                  ]}
+                />
               </div>
             )}
 

@@ -1,0 +1,1458 @@
+{
+  "ROOT": {
+    "type": {
+      "resolvedName": "Root"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "100vh",
+      "maxWidth": "100%",
+      "display": "block",
+      "position": "relative",
+      "zIndex": 1,
+      "visibility": "visible",
+      "margin": 0,
+      "padding": 0,
+      "backgroundColor": "#000000",
+      "background": "linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%)",
+      "className": "w-full h-full min-h-[100vh]",
+      "canvas": true
+    },
+    "displayName": "Root",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "minWidth",
+          "maxWidth",
+          "minHeight",
+          "maxHeight",
+          "display",
+          "position",
+          "backgroundColor",
+          "background",
+          "className"
+        ]
+      }
+    },
+    "parent": null,
+    "hidden": false,
+    "nodes": [
+      "hero-section",
+      "features-section",
+      "cta-section",
+      "footer-section"
+    ],
+    "linkedNodes": {}
+  },
+  "hero-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "100vh",
+      "minHeight": "700px",
+      "display": "flex",
+      "position": "relative",
+      "zIndex": 1,
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "40px 20px",
+      "backgroundColor": "rgba(0, 0, 0, 0.6)",
+      "backgroundImage": "url('https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=2426&q=80')",
+      "backgroundSize": "cover",
+      "backgroundPosition": "center",
+      "backgroundRepeat": "no-repeat",
+      "textAlign": "center"
+    },
+    "displayName": "Hero Section",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "justifyContent",
+          "padding",
+          "backgroundColor"
+        ]
+      }
+    },
+    "parent": "ROOT",
+    "hidden": false,
+    "nodes": [
+      "hero-title",
+      "hero-subtitle",
+      "hero-cta-button"
+    ],
+    "linkedNodes": {}
+  },
+  "hero-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "AMG C 63 S",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 30px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 64,
+      "fontWeight": "700",
+      "lineHeight": 1.1,
+      "textAlign": "center",
+      "color": "#ffffff",
+      "textShadow": "0 4px 20px rgba(0,0,0,0.8)",
+      "letterSpacing": "3px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "Hero Title",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin",
+          "textShadow"
+        ]
+      }
+    },
+    "parent": "hero-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "hero-subtitle": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "PURE PERFORMANCE. UNCOMPROMISING LUXURY.",
+      "width": "auto",
+      "height": "auto",
+      "maxWidth": "800px",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 auto 40px auto",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 22,
+      "fontWeight": "300",
+      "lineHeight": 1.4,
+      "textAlign": "center",
+      "color": "#f0f0f0",
+      "letterSpacing": "4px",
+      "textShadow": "0 2px 10px rgba(0,0,0,0.7)"
+    },
+    "displayName": "Hero Subtitle",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "width",
+          "margin"
+        ]
+      }
+    },
+    "parent": "hero-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "hero-cta-button": {
+    "type": {
+      "resolvedName": "CraftButton"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "EXPLORE NOW",
+      "buttonType": "primary",
+      "size": "large",
+      "width": "auto",
+      "height": "auto",
+      "minWidth": 250,
+      "position": "relative",
+      "zIndex": 1,
+      "display": "inline-flex",
+      "margin": "0",
+      "padding": "18px 40px",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "600",
+      "color": "#000000",
+      "textAlign": "center",
+      "backgroundColor": "#ffffff",
+      "border": "2px solid #ffffff",
+      "borderRadius": 2,
+      "boxShadow": "0 8px 32px rgba(255,255,255,0.3)",
+      "transition": "all 0.4s ease",
+      "cursor": "pointer",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "letterSpacing": "2px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "Hero CTA Button",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "buttonType",
+          "size",
+          "width",
+          "height",
+          "padding",
+          "fontFamily",
+          "fontSize",
+          "fontWeight",
+          "color",
+          "backgroundColor",
+          "border",
+          "borderRadius",
+          "boxShadow",
+          "margin"
+        ]
+      }
+    },
+    "parent": "hero-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "features-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "600px",
+      "display": "flex",
+      "position": "relative",
+      "zIndex": 1,
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "#1a1a1a"
+    },
+    "displayName": "Features Section",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "justifyContent",
+          "padding",
+          "backgroundColor"
+        ]
+      }
+    },
+    "parent": "ROOT",
+    "hidden": false,
+    "nodes": [
+      "features-title",
+      "features-grid"
+    ],
+    "linkedNodes": {}
+  },
+  "features-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "ENGINEERED FOR EXCELLENCE",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 60px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 42,
+      "fontWeight": "700",
+      "lineHeight": 1.2,
+      "textAlign": "center",
+      "color": "#ffffff",
+      "letterSpacing": "3px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "Features Title",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin"
+        ]
+      }
+    },
+    "parent": "features-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "features-grid": {
+    "type": {
+      "resolvedName": "GridBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "maxWidth": "1200px",
+      "display": "grid",
+      "position": "relative",
+      "zIndex": 1,
+      "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+      "gap": 30,
+      "padding": "0 20px",
+      "margin": "0 auto"
+    },
+    "displayName": "Features Grid",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "gridTemplateColumns",
+          "gap",
+          "padding",
+          "margin"
+        ]
+      }
+    },
+    "parent": "features-section",
+    "hidden": false,
+    "nodes": [
+      "feature-1",
+      "feature-2",
+      "feature-3"
+    ],
+    "linkedNodes": {}
+  },
+  "feature-1": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "280px",
+      "display": "flex",
+      "position": "relative",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "40px 30px",
+      "backgroundColor": "rgba(0, 0, 0, 0.8)",
+      "border": "1px solid rgba(255, 255, 255, 0.1)",
+      "borderRadius": 8,
+      "boxShadow": "0 8px 32px rgba(0,0,0,0.4)",
+      "textAlign": "center"
+    },
+    "displayName": "Feature 1",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "padding",
+          "backgroundColor",
+          "borderRadius",
+          "boxShadow"
+        ]
+      }
+    },
+    "parent": "features-grid",
+    "hidden": false,
+    "nodes": [
+      "feature-1-icon",
+      "feature-1-title",
+      "feature-1-text"
+    ],
+    "linkedNodes": {}
+  },
+  "feature-1-icon": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "⚡",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 20px 0",
+      "padding": "0",
+      "fontSize": 48,
+      "textAlign": "center",
+      "color": "#ffffff"
+    },
+    "displayName": "Feature 1 Icon",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "textAlign",
+          "margin",
+          "color"
+        ]
+      }
+    },
+    "parent": "feature-1",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-1-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "PERFORMANCE",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 15px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 24,
+      "fontWeight": "700",
+      "textAlign": "center",
+      "color": "#ffffff",
+      "letterSpacing": "2px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "Feature 1 Title",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin"
+        ]
+      }
+    },
+    "parent": "feature-1",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-1-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "4.0L V8 Biturbo engine delivering 503 hp and 516 lb-ft of torque. 0-60 mph in just 3.8 seconds.",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "300",
+      "lineHeight": 1.5,
+      "textAlign": "center",
+      "color": "#cccccc"
+    },
+    "displayName": "Feature 1 Text",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "lineHeight"
+        ]
+      }
+    },
+    "parent": "feature-1",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-2": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "280px",
+      "display": "flex",
+      "position": "relative",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "40px 30px",
+      "backgroundColor": "rgba(0, 0, 0, 0.8)",
+      "border": "1px solid rgba(255, 255, 255, 0.1)",
+      "borderRadius": 8,
+      "boxShadow": "0 8px 32px rgba(0,0,0,0.4)",
+      "textAlign": "center"
+    },
+    "displayName": "Feature 2",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "padding",
+          "backgroundColor",
+          "borderRadius",
+          "boxShadow"
+        ]
+      }
+    },
+    "parent": "features-grid",
+    "hidden": false,
+    "nodes": [
+      "feature-2-icon",
+      "feature-2-title",
+      "feature-2-text"
+    ],
+    "linkedNodes": {}
+  },
+  "feature-2-icon": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "🛡️",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 20px 0",
+      "padding": "0",
+      "fontSize": 48,
+      "textAlign": "center",
+      "color": "#ffffff"
+    },
+    "displayName": "Feature 2 Icon",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "textAlign",
+          "margin",
+          "color"
+        ]
+      }
+    },
+    "parent": "feature-2",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-2-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "SAFETY",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 15px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 24,
+      "fontWeight": "700",
+      "textAlign": "center",
+      "color": "#ffffff",
+      "letterSpacing": "2px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "Feature 2 Title",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin"
+        ]
+      }
+    },
+    "parent": "feature-2",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-2-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Advanced driver assistance systems, active brake assist, and blind spot monitoring for ultimate protection.",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "300",
+      "lineHeight": 1.5,
+      "textAlign": "center",
+      "color": "#cccccc"
+    },
+    "displayName": "Feature 2 Text",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "lineHeight"
+        ]
+      }
+    },
+    "parent": "feature-2",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-3": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "280px",
+      "display": "flex",
+      "position": "relative",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "40px 30px",
+      "backgroundColor": "rgba(0, 0, 0, 0.8)",
+      "border": "1px solid rgba(255, 255, 255, 0.1)",
+      "borderRadius": 8,
+      "boxShadow": "0 8px 32px rgba(0,0,0,0.4)",
+      "textAlign": "center"
+    },
+    "displayName": "Feature 3",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "padding",
+          "backgroundColor",
+          "borderRadius",
+          "boxShadow"
+        ]
+      }
+    },
+    "parent": "features-grid",
+    "hidden": false,
+    "nodes": [
+      "feature-3-icon",
+      "feature-3-title",
+      "feature-3-text"
+    ],
+    "linkedNodes": {}
+  },
+  "feature-3-icon": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "✨",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 20px 0",
+      "padding": "0",
+      "fontSize": 48,
+      "textAlign": "center",
+      "color": "#ffffff"
+    },
+    "displayName": "Feature 3 Icon",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "textAlign",
+          "margin",
+          "color"
+        ]
+      }
+    },
+    "parent": "feature-3",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-3-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "LUXURY",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 15px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 24,
+      "fontWeight": "700",
+      "textAlign": "center",
+      "color": "#ffffff",
+      "letterSpacing": "2px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "Feature 3 Title",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin"
+        ]
+      }
+    },
+    "parent": "feature-3",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "feature-3-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Premium leather interior, AMG Performance seats, and the latest MBUX infotainment system.",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "300",
+      "lineHeight": 1.5,
+      "textAlign": "center",
+      "color": "#cccccc"
+    },
+    "displayName": "Feature 3 Text",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "lineHeight"
+        ]
+      }
+    },
+    "parent": "feature-3",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "cta-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "500px",
+      "display": "flex",
+      "position": "relative",
+      "zIndex": 1,
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "rgba(0, 0, 0, 0.7)",
+      "backgroundImage": "url('https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?ixlib=rb-4.0.3&auto=format&fit=crop&w=2426&q=80')",
+      "backgroundSize": "cover",
+      "backgroundPosition": "center",
+      "backgroundRepeat": "no-repeat",
+      "textAlign": "center"
+    },
+    "displayName": "CTA Section",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "justifyContent",
+          "padding",
+          "backgroundColor"
+        ]
+      }
+    },
+    "parent": "ROOT",
+    "hidden": false,
+    "nodes": [
+      "cta-title",
+      "cta-text",
+      "cta-buttons"
+    ],
+    "linkedNodes": {}
+  },
+  "cta-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "EXPERIENCE THE BEAST",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 30px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 42,
+      "fontWeight": "700",
+      "lineHeight": 1.2,
+      "textAlign": "center",
+      "color": "#ffffff",
+      "letterSpacing": "3px",
+      "textTransform": "uppercase",
+      "textShadow": "0 4px 20px rgba(0,0,0,0.8)"
+    },
+    "displayName": "CTA Title",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin"
+        ]
+      }
+    },
+    "parent": "cta-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "cta-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Schedule your test drive today and feel the pure adrenaline of AMG performance.",
+      "width": "auto",
+      "height": "auto",
+      "maxWidth": "600px",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 auto 40px auto",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 20,
+      "fontWeight": "300",
+      "lineHeight": 1.5,
+      "textAlign": "center",
+      "color": "rgba(255, 255, 255, 0.9)",
+      "textShadow": "0 2px 10px rgba(0,0,0,0.7)"
+    },
+    "displayName": "CTA Text",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "width",
+          "margin"
+        ]
+      }
+    },
+    "parent": "cta-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "cta-buttons": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "auto",
+      "height": "auto",
+      "display": "flex",
+      "position": "relative",
+      "flexDirection": "row",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "gap": 20,
+      "flexWrap": "wrap"
+    },
+    "displayName": "CTA Buttons",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "justifyContent",
+          "gap"
+        ]
+      }
+    },
+    "parent": "cta-section",
+    "hidden": false,
+    "nodes": [
+      "cta-primary-button",
+      "cta-secondary-link"
+    ],
+    "linkedNodes": {}
+  },
+  "cta-primary-button": {
+    "type": {
+      "resolvedName": "CraftButton"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "SCHEDULE TEST DRIVE",
+      "buttonType": "primary",
+      "size": "large",
+      "width": "auto",
+      "height": "auto",
+      "minWidth": 220,
+      "position": "relative",
+      "display": "inline-flex",
+      "margin": "0",
+      "padding": "18px 36px",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "700",
+      "color": "#000000",
+      "textAlign": "center",
+      "backgroundColor": "#ffffff",
+      "border": "2px solid #ffffff",
+      "borderRadius": 2,
+      "boxShadow": "0 8px 32px rgba(255,255,255,0.3)",
+      "transition": "all 0.4s ease",
+      "cursor": "pointer",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "letterSpacing": "2px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "CTA Primary Button",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "buttonType",
+          "size",
+          "padding",
+          "fontFamily",
+          "fontSize",
+          "fontWeight",
+          "color",
+          "backgroundColor",
+          "border",
+          "borderRadius",
+          "boxShadow"
+        ]
+      }
+    },
+    "parent": "cta-buttons",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "cta-secondary-link": {
+    "type": {
+      "resolvedName": "Link"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "VIEW GALLERY →",
+      "href": "#gallery",
+      "target": "_self",
+      "width": "auto",
+      "height": "auto",
+      "display": "inline-block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "18px 32px",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "600",
+      "textAlign": "center",
+      "textDecoration": "none",
+      "color": "rgba(255, 255, 255, 0.9)",
+      "colorHover": "#ffffff",
+      "backgroundColor": "transparent",
+      "backgroundHover": "rgba(255, 255, 255, 0.1)",
+      "border": "2px solid rgba(255, 255, 255, 0.5)",
+      "borderRadius": 2,
+      "transition": "all 0.4s ease",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "letterSpacing": "2px",
+      "textTransform": "uppercase"
+    },
+    "displayName": "CTA Secondary Link",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "href",
+          "target",
+          "padding",
+          "fontFamily",
+          "fontSize",
+          "fontWeight",
+          "color",
+          "colorHover",
+          "backgroundColor",
+          "backgroundHover",
+          "border",
+          "borderRadius"
+        ]
+      }
+    },
+    "parent": "cta-buttons",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "footer-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "display": "flex",
+      "position": "relative",
+      "zIndex": 1,
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "60px 20px 40px 20px",
+      "backgroundColor": "#0a0a0a",
+      "textAlign": "center"
+    },
+    "displayName": "Footer Section",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "justifyContent",
+          "padding",
+          "backgroundColor"
+        ]
+      }
+    },
+    "parent": "ROOT",
+    "hidden": false,
+    "nodes": [
+      "footer-logo",
+      "footer-links",
+      "footer-copyright"
+    ],
+    "linkedNodes": {}
+  },
+  "footer-logo": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Mercedes-AMG",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0 0 30px 0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 32,
+      "fontWeight": "700",
+      "textAlign": "center",
+      "color": "#ffffff",
+      "letterSpacing": "3px"
+    },
+    "displayName": "Footer Logo",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign",
+          "margin"
+        ]
+      }
+    },
+    "parent": "footer-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "footer-links": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "auto",
+      "height": "auto",
+      "display": "flex",
+      "position": "relative",
+      "flexDirection": "row",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "gap": 30,
+      "margin": "0 0 30px 0",
+      "flexWrap": "wrap"
+    },
+    "displayName": "Footer Links",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "display",
+          "flexDirection",
+          "alignItems",
+          "justifyContent",
+          "gap",
+          "margin"
+        ]
+      }
+    },
+    "parent": "footer-section",
+    "hidden": false,
+    "nodes": [
+      "footer-link-1",
+      "footer-link-2",
+      "footer-link-3",
+      "footer-link-4"
+    ],
+    "linkedNodes": {}
+  },
+  "footer-link-1": {
+    "type": {
+      "resolvedName": "Link"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Models",
+      "href": "#models",
+      "target": "_self",
+      "width": "auto",
+      "height": "auto",
+      "display": "inline-block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "400",
+      "textDecoration": "none",
+      "color": "rgba(255, 255, 255, 0.7)",
+      "colorHover": "#ffffff",
+      "transition": "color 0.3s ease",
+      "letterSpacing": "1px"
+    },
+    "displayName": "Footer Link 1",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "href",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "colorHover"
+        ]
+      }
+    },
+    "parent": "footer-links",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "footer-link-2": {
+    "type": {
+      "resolvedName": "Link"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Dealers",
+      "href": "#dealers",
+      "target": "_self",
+      "width": "auto",
+      "height": "auto",
+      "display": "inline-block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "400",
+      "textDecoration": "none",
+      "color": "rgba(255, 255, 255, 0.7)",
+      "colorHover": "#ffffff",
+      "transition": "color 0.3s ease",
+      "letterSpacing": "1px"
+    },
+    "displayName": "Footer Link 2",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "href",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "colorHover"
+        ]
+      }
+    },
+    "parent": "footer-links",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "footer-link-3": {
+    "type": {
+      "resolvedName": "Link"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Service",
+      "href": "#service",
+      "target": "_self",
+      "width": "auto",
+      "height": "auto",
+      "display": "inline-block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "400",
+      "textDecoration": "none",
+      "color": "rgba(255, 255, 255, 0.7)",
+      "colorHover": "#ffffff",
+      "transition": "color 0.3s ease",
+      "letterSpacing": "1px"
+    },
+    "displayName": "Footer Link 3",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "href",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "colorHover"
+        ]
+      }
+    },
+    "parent": "footer-links",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "footer-link-4": {
+    "type": {
+      "resolvedName": "Link"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Contact",
+      "href": "#contact",
+      "target": "_self",
+      "width": "auto",
+      "height": "auto",
+      "display": "inline-block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 16,
+      "fontWeight": "400",
+      "textDecoration": "none",
+      "color": "rgba(255, 255, 255, 0.7)",
+      "colorHover": "#ffffff",
+      "transition": "color 0.3s ease",
+      "letterSpacing": "1px"
+    },
+    "displayName": "Footer Link 4",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "href",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "colorHover"
+        ]
+      }
+    },
+    "parent": "footer-links",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "footer-copyright": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "© 2024 Mercedes-AMG. The best or nothing.",
+      "width": "auto",
+      "height": "auto",
+      "display": "block",
+      "position": "relative",
+      "margin": "0",
+      "padding": "0",
+      "fontFamily": "Arial, sans-serif",
+      "fontSize": 14,
+      "fontWeight": "300",
+      "textAlign": "center",
+      "color": "rgba(255, 255, 255, 0.5)",
+      "letterSpacing": "1px"
+    },
+    "displayName": "Footer Copyright",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "text",
+          "fontSize",
+          "fontFamily",
+          "fontWeight",
+          "color",
+          "textAlign"
+        ]
+      }
+    },
+    "parent": "footer-section",
+    "hidden": false,
+    "nodes": [],
+    "linkedNodes": {}
+  }
+}

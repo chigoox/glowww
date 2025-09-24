@@ -1,0 +1,13 @@
+{
+  "name": "Creative Portfolio",
+  "description": "Artistic and creative design for portfolios and creative professionals",
+  "category": "creative",
+  "structure": {
+    "sections": ["hero", "portfolio", "about", "services", "contact"],
+    "layout": "creative-masonry",
+    "colorScheme": "artistic-gradient",
+    "components": ["HeroCreative", "PortfolioGrid", "AboutSection", "ContactForm"]
+  },
+  "businessTypes": ["creative", "design", "photography", "art", "freelance"],
+  "tones": ["creative", "artistic", "playful", "modern"]
+}

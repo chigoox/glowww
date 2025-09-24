@@ -477,9 +477,18 @@ export function CartProvider({ children }) {
     return ()=>{ if(estimateTimerRef.current) clearTimeout(estimateTimerRef.current); };
   }, [items, subtotal, discountAmount, appliedCodes, currency, emitEvent]);
 
+  // Helper function to check if we're on a published page
+  const isOnPublishedPage = () => {
+    if (typeof window === 'undefined') return false;
+    const pathname = window.location.pathname;
+    // Published pages follow the pattern /u/[username]/[site]/*
+    return /^\/u\/[^/]+\/[^/]+(?:\/.*)?$/.test(pathname);
+  };
+
   // Throttled heartbeat with single-tab leader election (aligned to 5 min server interval)
+  // Only runs when user is on a published page with cart items
   useEffect(()=>{
-    if(!userId || !items.length) return;
+    if(!userId || !items.length || !isOnPublishedPage()) return;
     const LEADER_KEY = 'glow_cart_hb_leader_v1';
     const LEADER_TTL = 5 * 60 * 1000; // 5 minutes matches server write window
     const INTERVAL = 5 * 60 * 1000; // attempt exactly every 5 minutes

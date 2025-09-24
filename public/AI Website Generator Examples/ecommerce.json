@@ -1,0 +1,13 @@
+{
+  "name": "E-commerce Store",
+  "description": "Modern e-commerce layout for online stores",
+  "category": "ecommerce",
+  "structure": {
+    "sections": ["hero", "featured-products", "categories", "testimonials", "newsletter"],
+    "layout": "ecommerce-grid",
+    "colorScheme": "retail-modern",
+    "components": ["HeroStore", "ProductGrid", "CategoryCards", "TestimonialCarousel"]
+  },
+  "businessTypes": ["ecommerce", "retail", "fashion", "electronics", "marketplace"],
+  "tones": ["friendly", "modern", "trustworthy"]
+}

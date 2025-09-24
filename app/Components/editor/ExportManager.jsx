@@ -7,10 +7,18 @@ import {
   DownloadOutlined,
   CodeOutlined,
   FolderOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  ShopOutlined,
+  SaveOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 import { useEditor } from '@craftjs/core';
+import { useAuth } from '../../../contexts/AuthContext';
 import JSZip from 'jszip';
+import TemplateSaveModal from './TemplateSaveModal';
+import TemplatePreview from '../TemplatePreview';
+import { updateTemplateVersion, getTemplateVersionStats } from '../../../lib/templateVersioning';
+import { trackUserInteraction } from '../../../lib/templateDiscovery';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -21,12 +29,17 @@ const { Option } = Select;
  */
 const ExportManager = () => {
   const { query } = useEditor();
+  const { user } = useAuth();
   
   // State management
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [templateSaveModalVisible, setTemplateSaveModalVisible] = useState(false);
+  const [templatePreviewVisible, setTemplatePreviewVisible] = useState(false);
   const [projectName, setProjectName] = useState('my-next-app');
   const [isExporting, setIsExporting] = useState(false);
   const [currentProjectPages, setCurrentProjectPages] = useState([]);
+  const [existingTemplateId, setExistingTemplateId] = useState(null);
+  const [versionStats, setVersionStats] = useState(null);
 
   // Listen for project page updates from PageManager
   useEffect(() => {
@@ -43,6 +56,125 @@ const ExportManager = () => {
       window.removeEventListener('projectPagesUpdate', handlePageUpdate);
     };
   }, []);
+
+  /**
+   * Get current page data for template saving
+   */
+  const getCurrentPageData = () => {
+    try {
+      return JSON.stringify(query.serialize());
+    } catch (error) {
+      console.error('Error serializing page data:', error);
+      return null;
+    }
+  };
+
+  /**
+   * Handle template save with preview
+   */
+  const handleTemplateSaveWithPreview = () => {
+    if (!user) {
+      message.error('Please login to save templates');
+      return;
+    }
+    
+    const subscription = user?.subscription?.tier;
+    const isPro = ['pro', 'premium', 'enterprise'].includes(subscription);
+    
+    if (!isPro) {
+      message.error('Template saving is only available for Pro users and above');
+      return;
+    }
+    
+    // Track user interaction
+    if (user?.uid) {
+      trackUserInteraction(user.uid, {
+        type: 'save',
+        metadata: {
+          source: 'editor_preview'
+        }
+      }).catch(console.warn);
+    }
+    
+    setTemplatePreviewVisible(true);
+  };
+
+  /**
+   * Handle template save from preview modal
+   */
+  const handleTemplateSave = () => {
+    // Track template save interaction
+    if (user?.uid) {
+      trackUserInteraction(user.uid, {
+        type: 'save',
+        metadata: {
+          source: 'template_preview',
+          hasExistingTemplate: !!existingTemplateId
+        }
+      }).catch(console.warn);
+    }
+    
+    setTemplatePreviewVisible(false);
+    setTemplateSaveModalVisible(true);
+  };
+
+  /**
+   * Handle template update (versioning)
+   */
+  const handleTemplateUpdate = async () => {
+    if (!existingTemplateId) {
+      message.error('No existing template to update');
+      return;
+    }
+
+    try {
+      const pageData = getCurrentPageData();
+      if (!pageData) {
+        message.error('No page data to save');
+        return;
+      }
+
+      const result = await updateTemplateVersion(existingTemplateId, {
+        jsonData: pageData,
+        changelog: 'Updated template from editor',
+        versionType: 'minor'
+      }, user.uid);
+
+      if (result.success) {
+        message.success(`Template updated to version ${result.version}!`);
+        setTemplatePreviewVisible(false);
+        loadVersionStats();
+      } else {
+        message.error('Failed to update template: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error updating template:', error);
+      message.error('Failed to update template');
+    }
+  };
+
+  /**
+   * Load version statistics for existing template
+   */
+  const loadVersionStats = async () => {
+    if (!existingTemplateId) return;
+    
+    try {
+      const result = await getTemplateVersionStats(existingTemplateId);
+      if (result.success) {
+        setVersionStats(result.stats);
+      }
+    } catch (error) {
+      console.error('Error loading version stats:', error);
+    }
+  };
+
+  // Load version stats when template ID changes
+  useEffect(() => {
+    if (existingTemplateId) {
+      loadVersionStats();
+    }
+  }, [existingTemplateId]);
 
   /**
    * Generate the complete Next.js project structure from PageManager data
@@ -1032,15 +1164,39 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
 
   return (
     <>
-      <Tooltip title="Export as Next.js App">
-        <Button
-          icon={<ExportOutlined />}
-          size="small"
-          type="text"
-          onClick={() => setExportModalVisible(true)}
-          className="hover:bg-purple-50 hover:text-purple-600 transition-colors"
-        />
-      </Tooltip>
+      <Space size="small">
+        <Tooltip title="Preview & Save Template">
+          <Button
+            icon={<EyeOutlined />}
+            size="small"
+            type="text"
+            onClick={handleTemplateSaveWithPreview}
+            disabled={!user}
+            className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+          />
+        </Tooltip>
+        
+        <Tooltip title="Save as Template">
+          <Button
+            icon={<ShopOutlined />}
+            size="small"
+            type="text"
+            onClick={() => setTemplateSaveModalVisible(true)}
+            disabled={!user}
+            className="hover:bg-green-50 hover:text-green-600 transition-colors"
+          />
+        </Tooltip>
+        
+        <Tooltip title="Export as Next.js App">
+          <Button
+            icon={<ExportOutlined />}
+            size="small"
+            type="text"
+            onClick={() => setExportModalVisible(true)}
+            className="hover:bg-purple-50 hover:text-purple-600 transition-colors"
+          />
+        </Tooltip>
+      </Space>
 
       <Modal
         title={
@@ -1125,6 +1281,28 @@ ${components.map(name => `export { ${name} } from './${name}';`).join('\n')}`;
           </div>
         </Space>
       </Modal>
+      
+      {/* Template Preview Modal */}
+      <TemplatePreview
+        visible={templatePreviewVisible}
+        onClose={() => setTemplatePreviewVisible(false)}
+        templateData={getCurrentPageData()}
+        isExistingTemplate={!!existingTemplateId}
+        templateId={existingTemplateId}
+        onSave={handleTemplateSave}
+        onUpdate={handleTemplateUpdate}
+      />
+      
+      {/* Template Save Modal */}
+      <TemplateSaveModal
+        visible={templateSaveModalVisible}
+        onCancel={() => setTemplateSaveModalVisible(false)}
+        pageData={getCurrentPageData()}
+        onSuccess={() => {
+          message.success('Template saved successfully!');
+          setTemplateSaveModalVisible(false);
+        }}
+      />
     </>
   );
 };

@@ -27,10 +27,23 @@ export const AuthProvider = ({ children }) => {
         const additionalUserData = await getUserData(firebaseUser.uid);
         setUserData(additionalUserData);
 
+        console.log('🔍 AuthContext Debug - Raw Firebase user data:', {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          additionalUserData
+        });
+
         // Derive subscription tier (new schema prioritizes subscriptionTier)
         const subscriptionTier = additionalUserData?.subscriptionTier ||
           additionalUserData?.tier || // backward compatibility
           additionalUserData?.subscription?.plan || 'free';
+
+        console.log('🔍 AuthContext Debug - Subscription tier calculation:', {
+          'additionalUserData?.subscriptionTier': additionalUserData?.subscriptionTier,
+          'additionalUserData?.tier': additionalUserData?.tier,
+          'additionalUserData?.subscription?.plan': additionalUserData?.subscription?.plan,
+          'final subscriptionTier': subscriptionTier
+        });
 
         const isAdmin = subscriptionTier === 'admin';
 
@@ -51,6 +64,13 @@ export const AuthProvider = ({ children }) => {
           isAdmin,
             subscription: normalizedSubscription
         };
+
+        console.log('🔍 AuthContext Debug - Final enhanced user:', {
+          subscriptionTier: enhancedUser.subscriptionTier,
+          isAdmin: enhancedUser.isAdmin,
+          subscription: enhancedUser.subscription
+        });
+
         setUser(enhancedUser);
       } else {
         setUser(null);

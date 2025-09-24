@@ -1,0 +1,1402 @@
+{
+  "ROOT": {
+    "type": {
+      "resolvedName": "Root"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "auto",
+      "minHeight": "100vh",
+      "backgroundColor": "#ffffff",
+      "className": "w-full min-h-screen"
+    },
+    "displayName": "Root",
+    "custom": {
+      "styleMenu": {
+        "supportedProps": [
+          "width",
+          "height",
+          "minWidth",
+          "maxWidth",
+          "minHeight",
+          "maxHeight",
+          "display",
+          "position",
+          "backgroundColor",
+          "background",
+          "className"
+        ]
+      }
+    },
+    "parent": null,
+    "hidden": false,
+    "nodes": [
+      "hero-section",
+      "services-section", 
+      "about-section",
+      "team-section",
+      "testimonials-section",
+      "contact-section"
+    ],
+    "linkedNodes": {}
+  },
+  "hero-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "height": "90vh",
+      "minHeight": "600px",
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "40px 20px",
+      "backgroundColor": "rgba(37, 99, 235, 0.05)",
+      "backgroundImage": "linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)",
+      "textAlign": "center"
+    },
+    "displayName": "Hero Section",
+    "parent": "ROOT",
+    "nodes": [
+      "hero-title",
+      "hero-subtitle",
+      "hero-cta-buttons",
+      "hero-image"
+    ],
+    "linkedNodes": {}
+  },
+  "hero-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Your Health, Our Priority",
+      "fontSize": 52,
+      "fontWeight": "700",
+      "color": "#1f2937",
+      "textAlign": "center",
+      "margin": "0 0 24px 0",
+      "maxWidth": "800px",
+      "lineHeight": 1.1
+    },
+    "displayName": "Hero Title",
+    "parent": "hero-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "hero-subtitle": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Providing compassionate, comprehensive healthcare services with state-of-the-art technology and experienced medical professionals dedicated to your wellbeing.",
+      "fontSize": 20,
+      "fontWeight": "400",
+      "color": "#4b5563",
+      "textAlign": "center",
+      "margin": "0 0 40px 0",
+      "maxWidth": "700px",
+      "lineHeight": 1.6
+    },
+    "displayName": "Hero Subtitle",
+    "parent": "hero-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "hero-cta-buttons": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "row",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "gap": "20px",
+      "flexWrap": "wrap",
+      "margin": "0 0 60px 0"
+    },
+    "displayName": "Hero CTA Buttons",
+    "parent": "hero-section",
+    "nodes": [
+      "hero-primary-button",
+      "hero-secondary-button"
+    ],
+    "linkedNodes": {}
+  },
+  "hero-primary-button": {
+    "type": {
+      "resolvedName": "CraftButton"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Book Appointment",
+      "backgroundColor": "#2563eb",
+      "color": "#ffffff",
+      "padding": "16px 32px",
+      "borderRadius": 8,
+      "fontSize": 18,
+      "fontWeight": "600",
+      "border": "none",
+      "cursor": "pointer",
+      "boxShadow": "0 4px 6px rgba(37, 99, 235, 0.25)",
+      "transition": "all 0.3s ease"
+    },
+    "displayName": "Book Appointment Button",
+    "parent": "hero-cta-buttons",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "hero-secondary-button": {
+    "type": {
+      "resolvedName": "CraftButton"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Emergency Care",
+      "backgroundColor": "#dc2626",
+      "color": "#ffffff",
+      "padding": "16px 32px",
+      "borderRadius": 8,
+      "fontSize": 18,
+      "fontWeight": "600",
+      "border": "none",
+      "cursor": "pointer",
+      "boxShadow": "0 4px 6px rgba(220, 38, 38, 0.25)",
+      "transition": "all 0.3s ease"
+    },
+    "displayName": "Emergency Button",
+    "parent": "hero-cta-buttons",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "hero-image": {
+    "type": {
+      "resolvedName": "Image"
+    },
+    "isCanvas": false,
+    "props": {
+      "src": "https://source.unsplash.com/1200x600/?medical,hospital,healthcare,professional",
+      "alt": "Modern healthcare facility with professional medical staff",
+      "width": "100%",
+      "maxWidth": "800px",
+      "height": "400px",
+      "objectFit": "cover",
+      "borderRadius": 16,
+      "boxShadow": "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+    },
+    "displayName": "Hero Image",
+    "parent": "hero-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "services-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "#f8fafc"
+    },
+    "displayName": "Services Section",
+    "parent": "ROOT",
+    "nodes": [
+      "services-title",
+      "services-subtitle",
+      "services-grid"
+    ],
+    "linkedNodes": {}
+  },
+  "services-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Our Medical Services",
+      "fontSize": 42,
+      "fontWeight": "700",
+      "color": "#1f2937",
+      "textAlign": "center",
+      "margin": "0 0 16px 0"
+    },
+    "displayName": "Services Title",
+    "parent": "services-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "services-subtitle": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Comprehensive healthcare services tailored to meet your individual needs",
+      "fontSize": 20,
+      "fontWeight": "400",
+      "color": "#6b7280",
+      "textAlign": "center",
+      "margin": "0 0 60px 0",
+      "maxWidth": "600px"
+    },
+    "displayName": "Services Subtitle",
+    "parent": "services-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "services-grid": {
+    "type": {
+      "resolvedName": "GridBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "maxWidth": "1200px",
+      "display": "grid",
+      "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+      "gap": "40px",
+      "margin": "0 auto"
+    },
+    "displayName": "Services Grid",
+    "parent": "services-section",
+    "nodes": [
+      "service-1",
+      "service-2",
+      "service-3"
+    ],
+    "linkedNodes": {}
+  },
+  "service-1": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center",
+      "padding": "40px 30px",
+      "backgroundColor": "#ffffff",
+      "borderRadius": 16,
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.05)",
+      "border": "1px solid #e5e7eb"
+    },
+    "displayName": "Primary Care Service",
+    "parent": "services-grid",
+    "nodes": [
+      "service-1-icon",
+      "service-1-title",
+      "service-1-text"
+    ],
+    "linkedNodes": {}
+  },
+  "service-1-icon": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "🏥",
+      "fontSize": 48,
+      "margin": "0 0 24px 0"
+    },
+    "displayName": "Primary Care Icon",
+    "parent": "service-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-1-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Primary Care",
+      "fontSize": 24,
+      "fontWeight": "600",
+      "color": "#1f2937",
+      "margin": "0 0 16px 0"
+    },
+    "displayName": "Primary Care Title",
+    "parent": "service-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-1-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Comprehensive primary care services including preventive care, routine checkups, and management of chronic conditions.",
+      "fontSize": 16,
+      "color": "#6b7280",
+      "lineHeight": 1.6
+    },
+    "displayName": "Primary Care Description",
+    "parent": "service-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-2": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center",
+      "padding": "40px 30px",
+      "backgroundColor": "#ffffff",
+      "borderRadius": 16,
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.05)",
+      "border": "1px solid #e5e7eb"
+    },
+    "displayName": "Specialist Care Service",
+    "parent": "services-grid",
+    "nodes": [
+      "service-2-icon",
+      "service-2-title",
+      "service-2-text"
+    ],
+    "linkedNodes": {}
+  },
+  "service-2-icon": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "👩‍⚕️",
+      "fontSize": 48,
+      "margin": "0 0 24px 0"
+    },
+    "displayName": "Specialist Care Icon",
+    "parent": "service-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-2-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Specialist Care",
+      "fontSize": 24,
+      "fontWeight": "600",
+      "color": "#1f2937",
+      "margin": "0 0 16px 0"
+    },
+    "displayName": "Specialist Care Title",
+    "parent": "service-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-2-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Access to board-certified specialists in cardiology, dermatology, orthopedics, and other specialized medical fields.",
+      "fontSize": 16,
+      "color": "#6b7280",
+      "lineHeight": 1.6
+    },
+    "displayName": "Specialist Care Description",
+    "parent": "service-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-3": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center",
+      "padding": "40px 30px",
+      "backgroundColor": "#ffffff",
+      "borderRadius": 16,
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.05)",
+      "border": "1px solid #e5e7eb"
+    },
+    "displayName": "Emergency Care Service",
+    "parent": "services-grid",
+    "nodes": [
+      "service-3-icon",
+      "service-3-title", 
+      "service-3-text"
+    ],
+    "linkedNodes": {}
+  },
+  "service-3-icon": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "🚑",
+      "fontSize": 48,
+      "margin": "0 0 24px 0"
+    },
+    "displayName": "Emergency Care Icon",
+    "parent": "service-3",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-3-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Emergency Care",
+      "fontSize": 24,
+      "fontWeight": "600",
+      "color": "#1f2937",
+      "margin": "0 0 16px 0"
+    },
+    "displayName": "Emergency Care Title",
+    "parent": "service-3",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "service-3-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "24/7 emergency medical services with rapid response times and state-of-the-art emergency room facilities.",
+      "fontSize": 16,
+      "color": "#6b7280",
+      "lineHeight": 1.6
+    },
+    "displayName": "Emergency Care Description",
+    "parent": "service-3",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "about-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "display": "flex",
+      "flexDirection": "row",
+      "alignItems": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "#ffffff",
+      "maxWidth": "1200px",
+      "margin": "0 auto",
+      "gap": "60px"
+    },
+    "displayName": "About Section",
+    "parent": "ROOT",
+    "nodes": [
+      "about-content",
+      "about-image"
+    ],
+    "linkedNodes": {}
+  },
+  "about-content": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "flex": 1
+    },
+    "displayName": "About Content",
+    "parent": "about-section",
+    "nodes": [
+      "about-title",
+      "about-text",
+      "about-stats"
+    ],
+    "linkedNodes": {}
+  },
+  "about-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Excellence in Healthcare Since 1985",
+      "fontSize": 36,
+      "fontWeight": "700",
+      "color": "#1f2937",
+      "margin": "0 0 24px 0"
+    },
+    "displayName": "About Title",
+    "parent": "about-content",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "about-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Our healthcare facility has been serving the community for over 35 years, providing exceptional medical care with a patient-centered approach. We combine advanced medical technology with compassionate care to ensure the best outcomes for our patients.",
+      "fontSize": 18,
+      "color": "#4b5563",
+      "lineHeight": 1.7,
+      "margin": "0 0 32px 0"
+    },
+    "displayName": "About Description",
+    "parent": "about-content",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "about-stats": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "row",
+      "gap": "40px",
+      "flexWrap": "wrap"
+    },
+    "displayName": "About Stats",
+    "parent": "about-content",
+    "nodes": [
+      "stat-1",
+      "stat-2"
+    ],
+    "linkedNodes": {}
+  },
+  "stat-1": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column"
+    },
+    "displayName": "Stat 1",
+    "parent": "about-stats",
+    "nodes": [
+      "stat-1-number",
+      "stat-1-label"
+    ],
+    "linkedNodes": {}
+  },
+  "stat-1-number": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "50,000+",
+      "fontSize": 32,
+      "fontWeight": "700",
+      "color": "#2563eb",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Patients Served Number",
+    "parent": "stat-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "stat-1-label": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Patients Served",
+      "fontSize": 16,
+      "color": "#6b7280",
+      "fontWeight": "500"
+    },
+    "displayName": "Patients Served Label",
+    "parent": "stat-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "stat-2": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column"
+    },
+    "displayName": "Stat 2",
+    "parent": "about-stats",
+    "nodes": [
+      "stat-2-number",
+      "stat-2-label"
+    ],
+    "linkedNodes": {}
+  },
+  "stat-2-number": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "35+",
+      "fontSize": 32,
+      "fontWeight": "700",
+      "color": "#2563eb",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Years Experience Number",
+    "parent": "stat-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "stat-2-label": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Years of Excellence",
+      "fontSize": 16,
+      "color": "#6b7280",
+      "fontWeight": "500"
+    },
+    "displayName": "Years Experience Label",
+    "parent": "stat-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "about-image": {
+    "type": {
+      "resolvedName": "Image"
+    },
+    "isCanvas": false,
+    "props": {
+      "src": "https://source.unsplash.com/600x500/?medical,team,healthcare,professionals",
+      "alt": "Healthcare professionals team",
+      "width": "500px",
+      "height": "400px",
+      "objectFit": "cover",
+      "borderRadius": 16,
+      "boxShadow": "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)"
+    },
+    "displayName": "About Image",
+    "parent": "about-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "#f8fafc"
+    },
+    "displayName": "Team Section",
+    "parent": "ROOT",
+    "nodes": [
+      "team-title",
+      "team-subtitle",
+      "team-grid"
+    ],
+    "linkedNodes": {}
+  },
+  "team-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Meet Our Medical Team",
+      "fontSize": 42,
+      "fontWeight": "700",
+      "color": "#1f2937",
+      "textAlign": "center",
+      "margin": "0 0 16px 0"
+    },
+    "displayName": "Team Title",
+    "parent": "team-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-subtitle": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Board-certified physicians and healthcare professionals dedicated to your health",
+      "fontSize": 20,
+      "fontWeight": "400",
+      "color": "#6b7280",
+      "textAlign": "center",
+      "margin": "0 0 60px 0",
+      "maxWidth": "600px"
+    },
+    "displayName": "Team Subtitle",
+    "parent": "team-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-grid": {
+    "type": {
+      "resolvedName": "GridBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "maxWidth": "900px",
+      "display": "grid",
+      "gridTemplateColumns": "repeat(auto-fit, minmax(250px, 1fr))",
+      "gap": "40px",
+      "margin": "0 auto"
+    },
+    "displayName": "Team Grid",
+    "parent": "team-section",
+    "nodes": [
+      "team-member-1",
+      "team-member-2",
+      "team-member-3"
+    ],
+    "linkedNodes": {}
+  },
+  "team-member-1": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center",
+      "padding": "30px 20px",
+      "backgroundColor": "#ffffff",
+      "borderRadius": 16,
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.05)"
+    },
+    "displayName": "Dr. Sarah Johnson",
+    "parent": "team-grid",
+    "nodes": [
+      "team-1-image",
+      "team-1-name",
+      "team-1-specialty"
+    ],
+    "linkedNodes": {}
+  },
+  "team-1-image": {
+    "type": {
+      "resolvedName": "Image"
+    },
+    "isCanvas": false,
+    "props": {
+      "src": "https://source.unsplash.com/200x200/?doctor,female,professional",
+      "alt": "Dr. Sarah Johnson",
+      "width": "120px",
+      "height": "120px",
+      "objectFit": "cover",
+      "borderRadius": "50%",
+      "margin": "0 0 20px 0"
+    },
+    "displayName": "Dr. Johnson Photo",
+    "parent": "team-member-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-1-name": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Dr. Sarah Johnson",
+      "fontSize": 20,
+      "fontWeight": "600",
+      "color": "#1f2937",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Dr. Johnson Name",
+    "parent": "team-member-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-1-specialty": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Chief of Internal Medicine",
+      "fontSize": 16,
+      "color": "#2563eb",
+      "fontWeight": "500"
+    },
+    "displayName": "Dr. Johnson Specialty",
+    "parent": "team-member-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-member-2": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center",
+      "padding": "30px 20px",
+      "backgroundColor": "#ffffff",
+      "borderRadius": 16,
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.05)"
+    },
+    "displayName": "Dr. Michael Chen",
+    "parent": "team-grid",
+    "nodes": [
+      "team-2-image",
+      "team-2-name",
+      "team-2-specialty"
+    ],
+    "linkedNodes": {}
+  },
+  "team-2-image": {
+    "type": {
+      "resolvedName": "Image"
+    },
+    "isCanvas": false,
+    "props": {
+      "src": "https://source.unsplash.com/200x200/?doctor,male,professional",
+      "alt": "Dr. Michael Chen",
+      "width": "120px",
+      "height": "120px",
+      "objectFit": "cover",
+      "borderRadius": "50%",
+      "margin": "0 0 20px 0"
+    },
+    "displayName": "Dr. Chen Photo",
+    "parent": "team-member-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-2-name": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Dr. Michael Chen",
+      "fontSize": 20,
+      "fontWeight": "600",
+      "color": "#1f2937",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Dr. Chen Name",
+    "parent": "team-member-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-2-specialty": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Cardiologist",
+      "fontSize": 16,
+      "color": "#2563eb",
+      "fontWeight": "500"
+    },
+    "displayName": "Dr. Chen Specialty",
+    "parent": "team-member-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-member-3": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center",
+      "padding": "30px 20px",
+      "backgroundColor": "#ffffff",
+      "borderRadius": 16,
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.05)"
+    },
+    "displayName": "Dr. Emily Rodriguez",
+    "parent": "team-grid",
+    "nodes": [
+      "team-3-image",
+      "team-3-name",
+      "team-3-specialty"
+    ],
+    "linkedNodes": {}
+  },
+  "team-3-image": {
+    "type": {
+      "resolvedName": "Image"
+    },
+    "isCanvas": false,
+    "props": {
+      "src": "https://source.unsplash.com/200x200/?nurse,female,healthcare",
+      "alt": "Dr. Emily Rodriguez",
+      "width": "120px",
+      "height": "120px",
+      "objectFit": "cover",
+      "borderRadius": "50%",
+      "margin": "0 0 20px 0"
+    },
+    "displayName": "Dr. Rodriguez Photo",
+    "parent": "team-member-3",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-3-name": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Dr. Emily Rodriguez",
+      "fontSize": 20,
+      "fontWeight": "600",
+      "color": "#1f2937",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Dr. Rodriguez Name",
+    "parent": "team-member-3",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "team-3-specialty": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Pediatric Specialist",
+      "fontSize": 16,
+      "color": "#2563eb",
+      "fontWeight": "500"
+    },
+    "displayName": "Dr. Rodriguez Specialty",
+    "parent": "team-member-3",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "testimonials-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "#ffffff"
+    },
+    "displayName": "Testimonials Section",
+    "parent": "ROOT",
+    "nodes": [
+      "testimonials-title",
+      "testimonials-grid"
+    ],
+    "linkedNodes": {}
+  },
+  "testimonials-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "What Our Patients Say",
+      "fontSize": 42,
+      "fontWeight": "700",
+      "color": "#1f2937",
+      "textAlign": "center",
+      "margin": "0 0 60px 0"
+    },
+    "displayName": "Testimonials Title",
+    "parent": "testimonials-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "testimonials-grid": {
+    "type": {
+      "resolvedName": "GridBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "maxWidth": "1000px",
+      "display": "grid",
+      "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 1fr))",
+      "gap": "30px",
+      "margin": "0 auto"
+    },
+    "displayName": "Testimonials Grid",
+    "parent": "testimonials-section",
+    "nodes": [
+      "testimonial-1",
+      "testimonial-2"
+    ],
+    "linkedNodes": {}
+  },
+  "testimonial-1": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "padding": "30px",
+      "backgroundColor": "#f8fafc",
+      "borderRadius": 16,
+      "border": "1px solid #e5e7eb"
+    },
+    "displayName": "Patient Testimonial 1",
+    "parent": "testimonials-grid",
+    "nodes": [
+      "testimonial-1-text",
+      "testimonial-1-author"
+    ],
+    "linkedNodes": {}
+  },
+  "testimonial-1-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "\"The staff here is incredible. Dr. Johnson took the time to listen to my concerns and provided excellent care. I couldn't be happier with my experience.\"",
+      "fontSize": 16,
+      "color": "#4b5563",
+      "lineHeight": 1.6,
+      "margin": "0 0 20px 0",
+      "fontStyle": "italic"
+    },
+    "displayName": "Testimonial 1 Text",
+    "parent": "testimonial-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "testimonial-1-author": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "— Maria Thompson",
+      "fontSize": 14,
+      "color": "#2563eb",
+      "fontWeight": "600"
+    },
+    "displayName": "Testimonial 1 Author",
+    "parent": "testimonial-1",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "testimonial-2": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "padding": "30px",
+      "backgroundColor": "#f8fafc",
+      "borderRadius": 16,
+      "border": "1px solid #e5e7eb"
+    },
+    "displayName": "Patient Testimonial 2",
+    "parent": "testimonials-grid",
+    "nodes": [
+      "testimonial-2-text",
+      "testimonial-2-author"
+    ],
+    "linkedNodes": {}
+  },
+  "testimonial-2-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "\"Professional, compassionate, and thorough. The entire team made me feel comfortable during my treatment. Highly recommend this healthcare facility.\"",
+      "fontSize": 16,
+      "color": "#4b5563",
+      "lineHeight": 1.6,
+      "margin": "0 0 20px 0",
+      "fontStyle": "italic"
+    },
+    "displayName": "Testimonial 2 Text",
+    "parent": "testimonial-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "testimonial-2-author": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "— Robert Chen",
+      "fontSize": 14,
+      "color": "#2563eb",
+      "fontWeight": "600"
+    },
+    "displayName": "Testimonial 2 Author",
+    "parent": "testimonial-2",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-section": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "width": "100%",
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "padding": "80px 20px",
+      "backgroundColor": "#2563eb",
+      "color": "#ffffff",
+      "textAlign": "center"
+    },
+    "displayName": "Contact Section",
+    "parent": "ROOT",
+    "nodes": [
+      "contact-title",
+      "contact-text",
+      "contact-info",
+      "contact-cta-button"
+    ],
+    "linkedNodes": {}
+  },
+  "contact-title": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Ready to Take Care of Your Health?",
+      "fontSize": 42,
+      "fontWeight": "700",
+      "color": "#ffffff",
+      "textAlign": "center",
+      "margin": "0 0 24px 0"
+    },
+    "displayName": "Contact Title",
+    "parent": "contact-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-text": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Schedule your appointment today and experience compassionate, professional healthcare.",
+      "fontSize": 20,
+      "color": "#dbeafe",
+      "textAlign": "center",
+      "margin": "0 0 40px 0",
+      "maxWidth": "600px"
+    },
+    "displayName": "Contact Text",
+    "parent": "contact-section",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-info": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "row",
+      "alignItems": "center",
+      "justifyContent": "center",
+      "gap": "60px",
+      "flexWrap": "wrap",
+      "margin": "0 0 40px 0"
+    },
+    "displayName": "Contact Info",
+    "parent": "contact-section",
+    "nodes": [
+      "contact-phone",
+      "contact-hours"
+    ],
+    "linkedNodes": {}
+  },
+  "contact-phone": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center"
+    },
+    "displayName": "Phone Info",
+    "parent": "contact-info",
+    "nodes": [
+      "contact-phone-label",
+      "contact-phone-number"
+    ],
+    "linkedNodes": {}
+  },
+  "contact-phone-label": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "📞 Call Us",
+      "fontSize": 18,
+      "color": "#dbeafe",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Phone Label",
+    "parent": "contact-phone",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-phone-number": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "(555) 123-4567",
+      "fontSize": 22,
+      "fontWeight": "600",
+      "color": "#ffffff"
+    },
+    "displayName": "Phone Number",
+    "parent": "contact-phone",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-hours": {
+    "type": {
+      "resolvedName": "FlexBox"
+    },
+    "isCanvas": true,
+    "props": {
+      "display": "flex",
+      "flexDirection": "column",
+      "alignItems": "center",
+      "textAlign": "center"
+    },
+    "displayName": "Hours Info",
+    "parent": "contact-info",
+    "nodes": [
+      "contact-hours-label",
+      "contact-hours-time"
+    ],
+    "linkedNodes": {}
+  },
+  "contact-hours-label": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "🕒 Office Hours",
+      "fontSize": 18,
+      "color": "#dbeafe",
+      "margin": "0 0 8px 0"
+    },
+    "displayName": "Hours Label",
+    "parent": "contact-hours",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-hours-time": {
+    "type": {
+      "resolvedName": "Text"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Mon-Fri: 8AM-6PM",
+      "fontSize": 22,
+      "fontWeight": "600",
+      "color": "#ffffff"
+    },
+    "displayName": "Hours Time",
+    "parent": "contact-hours",
+    "nodes": [],
+    "linkedNodes": {}
+  },
+  "contact-cta-button": {
+    "type": {
+      "resolvedName": "CraftButton"
+    },
+    "isCanvas": false,
+    "props": {
+      "text": "Schedule Appointment",
+      "backgroundColor": "#ffffff",
+      "color": "#2563eb",
+      "padding": "18px 36px",
+      "borderRadius": 8,
+      "fontSize": 18,
+      "fontWeight": "600",
+      "border": "none",
+      "cursor": "pointer",
+      "boxShadow": "0 4px 6px rgba(0, 0, 0, 0.1)"
+    },
+    "displayName": "Schedule Button",
+    "parent": "contact-section",
+    "nodes": [],
+    "linkedNodes": {}
+  }
+}
