@@ -4,6 +4,30 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useNode, useEditor } from '@craftjs/core';
 import { snapGridSystem } from '../utils/grid/SnapGridSystem';
 
+// Utility to get unified coordinates for mouse/touch events
+const getEventCoordinates = (e) => {
+  if (e.touches && e.touches.length > 0) {
+    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
+};
+
+// Enhanced event handler that works with both mouse and touch
+const createUnifiedEventHandler = (handler) => {
+  return (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Prevent default for touch events to avoid scrolling
+    if (e.type.startsWith('touch')) {
+      e.preventDefault();
+    }
+    handler(e);
+  };
+};
+
 /**
  * SnapPositionHandle - Custom position handle with full snap integration
  * This replaces Craft.js position handling with snap-aware positioning
@@ -78,6 +102,7 @@ const SnapPositionHandle = ({
 
   // Handle drag start
   const handleMouseDown = useCallback((e) => {
+    const coords = getEventCoordinates(e);
     e.preventDefault();
     e.stopPropagation();
 
@@ -103,8 +128,8 @@ const SnapPositionHandle = ({
     // Initialize drag state - align to padding box (inside border, including padding)
     dragState.current = {
       isDragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
+      startX: coords.clientX,
+      startY: coords.clientY,
       startElementX: currentLeft,
       startElementY: currentTop,
       elementWidth: elementRect.width,
@@ -157,15 +182,18 @@ const SnapPositionHandle = ({
     // Call external drag start handler
     onDragStart?.(e);
 
-    // Add global mouse handlers
+    // Add global mouse and touch handlers
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleMouseMove, { passive: false });
+    document.addEventListener('touchend', handleMouseUp);
   }, [dom, nodeId, query, getParentContainer, onDragStart]);
 
   // Handle drag move with snapping and container detection
   const handleMouseMove = useCallback((e) => {
     if (!dragState.current.isDragging || !dom) return;
 
+    const coords = getEventCoordinates(e);
     const { 
       startX, 
       startY, 
@@ -177,8 +205,8 @@ const SnapPositionHandle = ({
     } = dragState.current;
 
     // For smooth dragging, use traditional delta-based positioning
-    const deltaX = e.clientX - startX;
-    const deltaY = e.clientY - startY;
+    const deltaX = coords.clientX - startX;
+    const deltaY = coords.clientY - startY;
     const newX = startElementX + deltaX;
     const newY = startElementY + deltaY;
 
@@ -262,7 +290,8 @@ const SnapPositionHandle = ({
       const threshold = cfgSrc.threshold ?? 260;
       const maxSpeed = cfgSrc.maxSpeed ?? 55;
       const ease = cfgSrc.ease ?? 'cubic';
-      const y = e.clientY;
+      const coords = getEventCoordinates(e);
+      const y = coords.clientY;
       const vh = window.innerHeight;
       let speed = 0;
       if (y < threshold) {
@@ -475,9 +504,11 @@ const SnapPositionHandle = ({
       snapGridSystem.clearSnapIndicators();
     }, 300); // Keep visible for 300ms after drag ends
 
-    // Remove global mouse handlers
+    // Remove global mouse and touch handlers
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('touchmove', handleMouseMove);
+    document.removeEventListener('touchend', handleMouseUp);
 
     // Clean up registered elements
     setTimeout(() => {

@@ -4,6 +4,26 @@ import React, { useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { snapGridSystem } from '../../utils/grid/SnapGridSystem';
 
+// Utility to get unified coordinates for mouse/touch events
+const getEventCoordinates = (e) => {
+  if (e.touches && e.touches.length > 0) {
+    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
+};
+
+// Enhanced event handler that works with both mouse and touch
+const createUnifiedResizeHandler = (handler) => {
+  return (e) => {
+    e.stopPropagation();
+    e.preventDefault(); // Prevent scrolling on touch
+    handler(e);
+  };
+};
+
 /**
  * Reusable resize handles overlay (portal-based) mirroring Box resize behavior.
  *
@@ -64,8 +84,9 @@ export const ResizeHandles = ({
     e.stopPropagation();
     e.preventDefault();
 
-    const startX = e.clientX;
-    const startY = e.clientY;
+    const coords = getEventCoordinates(e);
+    const startX = coords.clientX;
+    const startY = coords.clientY;
     const rect = targetRef.current.getBoundingClientRect();
     const startWidth = rect.width;
     const startHeight = rect.height;
@@ -111,8 +132,9 @@ export const ResizeHandles = ({
     let hasSetInlineStyles = false;
 
     const handleMouseMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
+      const coords = getEventCoordinates(moveEvent);
+      const deltaX = coords.clientX - startX;
+      const deltaY = coords.clientY - startY;
 
       // Track movement early to determine if this should be treated as a resize
       if (!hasMoved && (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1)) {
@@ -271,8 +293,16 @@ export const ResizeHandles = ({
     const handleMouseUp = () => {
       snapGridSystem.clearSnapIndicators();
       setTimeout(() => snapGridSystem.cleanupTrackedElements(), 100);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Use cleanup function if available, otherwise fallback to individual removes
+      if (handleMouseUp.cleanup) {
+        handleMouseUp.cleanup();
+      } else {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleMouseMove);
+        document.removeEventListener('touchend', handleMouseUp);
+      }
       
       if (targetRef?.current) {
         const finalRect = targetRef.current.getBoundingClientRect();
@@ -402,9 +432,28 @@ export const ResizeHandles = ({
       }
     };
 
+    // Add both mouse and touch event listeners
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleMouseMove, { passive: false });
+    document.addEventListener('touchend', handleMouseUp);
+    
+    // Clean up function
+    const cleanup = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleMouseMove);
+      document.removeEventListener('touchend', handleMouseUp);
+    };
+    
+    // Store cleanup for use in handleMouseUp
+    handleMouseUp.cleanup = cleanup;
   }, [enableInternalResize, nodeId, targetRef, editorActions, craftQuery, minWidth, minHeight, maintainAspect, onResize, onResizeEnd]);
+
+  // Check if mobile device for larger handles
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+  const mobileCornerSize = isMobile ? Math.max(cornerSize * 1.5, 16) : cornerSize;
+  const mobileEdgeThickness = isMobile ? Math.max(edgeThickness * 1.5, 12) : edgeThickness;
 
   const handles = (
     <div
@@ -422,29 +471,33 @@ export const ResizeHandles = ({
         <>
           {/* NW */}
           <div
-            style={cornerStyle(boxPosition.top, boxPosition.left, cornerSize, accentColor, 'nw')}
-            onMouseDown={(e) => internalResizeStart(e, 'nw')}
+            style={cornerStyle(boxPosition.top, boxPosition.left, mobileCornerSize, accentColor, 'nw')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'nw'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'nw'))}
             title="Resize"
             data-direction="nw"
           />
           {/* NE */}
             <div
-              style={cornerStyle(boxPosition.top, boxPosition.left + boxPosition.width, cornerSize, accentColor, 'ne')}
-              onMouseDown={(e) => internalResizeStart(e, 'ne')}
+              style={cornerStyle(boxPosition.top, boxPosition.left + boxPosition.width, mobileCornerSize, accentColor, 'ne')}
+              onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'ne'))}
+              onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'ne'))}
               title="Resize"
               data-direction="ne"
             />
           {/* SW */}
           <div
-            style={cornerStyle(boxPosition.top + boxPosition.height, boxPosition.left, cornerSize, accentColor, 'sw')}
-            onMouseDown={(e) => internalResizeStart(e, 'sw')}
+            style={cornerStyle(boxPosition.top + boxPosition.height, boxPosition.left, mobileCornerSize, accentColor, 'sw')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'sw'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'sw'))}
             title="Resize"
             data-direction="sw"
           />
           {/* SE */}
           <div
-            style={cornerStyle(boxPosition.top + boxPosition.height, boxPosition.left + boxPosition.width, cornerSize, accentColor, 'se')}
-            onMouseDown={(e) => internalResizeStart(e, 'se')}
+            style={cornerStyle(boxPosition.top + boxPosition.height, boxPosition.left + boxPosition.width, mobileCornerSize, accentColor, 'se')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'se'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'se'))}
             title="Resize"
             data-direction="se"
           />
@@ -457,56 +510,60 @@ export const ResizeHandles = ({
           {/* North */}
           <div
             style={edgeStyle({
-              top: boxPosition.top - (edgeThickness / 2),
+              top: boxPosition.top - (mobileEdgeThickness / 2),
               left: boxPosition.left + (boxPosition.width / 2) - (edgeLength / 2),
               width: edgeLength,
-              height: edgeThickness,
+              height: mobileEdgeThickness,
               cursor: 'n-resize',
               accentColor,
             })}
-            onMouseDown={(e) => internalResizeStart(e, 'n')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'n'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'n'))}
             title="Resize height"
             data-direction="n"
           />
           {/* South */}
           <div
             style={edgeStyle({
-              top: boxPosition.top + boxPosition.height - (edgeThickness / 2),
+              top: boxPosition.top + boxPosition.height - (mobileEdgeThickness / 2),
               left: boxPosition.left + (boxPosition.width / 2) - (edgeLength / 2),
               width: edgeLength,
-              height: edgeThickness,
+              height: mobileEdgeThickness,
               cursor: 's-resize',
               accentColor,
             })}
-            onMouseDown={(e) => internalResizeStart(e, 's')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 's'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 's'))}
             title="Resize height"
             data-direction="s"
           />
           {/* West */}
           <div
             style={edgeStyle({
-              left: boxPosition.left - (edgeThickness / 2),
+              left: boxPosition.left - (mobileEdgeThickness / 2),
               top: boxPosition.top + (boxPosition.height / 2) - (edgeLength / 2),
-              width: edgeThickness,
+              width: mobileEdgeThickness,
               height: edgeLength,
               cursor: 'w-resize',
               accentColor,
             })}
-            onMouseDown={(e) => internalResizeStart(e, 'w')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'w'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'w'))}
             title="Resize width"
             data-direction="w"
           />
           {/* East */}
           <div
             style={edgeStyle({
-              left: boxPosition.left + boxPosition.width - (edgeThickness / 2),
+              left: boxPosition.left + boxPosition.width - (mobileEdgeThickness / 2),
               top: boxPosition.top + (boxPosition.height / 2) - (edgeLength / 2),
-              width: edgeThickness,
+              width: mobileEdgeThickness,
               height: edgeLength,
               cursor: 'e-resize',
               accentColor,
             })}
-            onMouseDown={(e) => internalResizeStart(e, 'e')}
+            onMouseDown={createUnifiedResizeHandler((e) => internalResizeStart(e, 'e'))}
+            onTouchStart={createUnifiedResizeHandler((e) => internalResizeStart(e, 'e'))}
             title="Resize width"
             data-direction="e"
           />

@@ -9,6 +9,29 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import SnapPositionHandle from '../../editor/SnapPositionHandle';
 import ResizeHandles from './ResizeHandles';
 
+// Utility to get unified coordinates for mouse/touch events
+const getEventCoordinates = (e) => {
+  if (e.touches && e.touches.length > 0) {
+    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
+};
+
+// Enhanced event handler that works with both mouse and touch
+const createUnifiedEventHandler = (handler) => {
+  return (e) => {
+    e.stopPropagation();
+    // Prevent default for touch events to avoid scrolling
+    if (e.type.startsWith('touch')) {
+      e.preventDefault();
+    }
+    handler(e);
+  };
+};
+
 /**
  * Reusable portal controls for Craft.js elements.
  *
@@ -63,6 +86,9 @@ export default function PortalControls({
         transition: { duration: 0.18, ease: [0.4, 0, 0.2, 1] }
       };
 
+  // Check if mobile device
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+  
   const { top = 0, left = 0, width = 0, height = 0 } = boxPosition || {};
   const showMove = show?.move && !!dragRef;
   // Show Edit control even if no handler; clicking will no-op if missing
@@ -76,14 +102,16 @@ export default function PortalControls({
     pos: styleOverrides.colors?.pos || "#1890ff",
   };
 
-  // Build icon-only controls
+  // Build icon-only controls with mobile-friendly sizes
   const iconButtonBase = {
-    width: 28,
-    height: 28,
-    minWidth: 28,
+    width: isMobile ? 44 : 28, // Larger touch targets on mobile
+    height: isMobile ? 44 : 28,
+    minWidth: isMobile ? 44 : 28,
     padding: 0,
-    borderRadius: 8,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.12)'
+    borderRadius: isMobile ? 12 : 8, // Larger border radius on mobile
+    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+    touchAction: 'manipulation', // Improve touch performance
+    WebkitTapHighlightColor: 'transparent', // Remove tap highlight on iOS
   };
 
   const segments = [];
@@ -92,25 +120,25 @@ export default function PortalControls({
     <Tooltip key="MOVE" title="Drag to move between containers">
       <div
         ref={dragRef}
-  className="move-handle"
-  data-cy="move-handle"
+        className="move-handle"
+        data-cy="move-handle"
         data-handle-type="move"
         data-craft-node-id={nodeId}
-  role="button"
-        onMouseDown={(e) => e.stopPropagation()}
+        role="button"
+        onMouseDown={createUnifiedEventHandler((e) => {})}
+        onTouchStart={createUnifiedEventHandler((e) => {})}
         style={{
           ...iconButtonBase,
           background: colors.move,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: dragRef ? 'grab' : 'not-allowed'
-          ,
+          cursor: dragRef ? 'grab' : 'not-allowed',
           ...(styleOverrides.segment || {})
         }}
         aria-label={labels.move}
       >
-        <DragOutlined style={{ color: '#fff', fontSize: 14 }} />
+        <DragOutlined style={{ color: '#fff', fontSize: isMobile ? 18 : 14 }} />
       </div>
     </Tooltip>
   );
@@ -118,8 +146,9 @@ export default function PortalControls({
   const makeEdit = () => (
     <Tooltip key="EDIT" title="Edit">
       <div
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onEditClick?.(e); }}
+        onMouseDown={createUnifiedEventHandler((e) => {})}
+        onTouchStart={createUnifiedEventHandler((e) => {})}
+        onClick={createUnifiedEventHandler((e) => { onEditClick?.(e); })}
         style={{
           ...iconButtonBase,
           background: colors.edit,
@@ -132,7 +161,7 @@ export default function PortalControls({
         aria-label={labels.edit}
         role="button"
       >
-        <EditOutlined style={{ color: '#fff' }} />
+        <EditOutlined style={{ color: '#fff', fontSize: isMobile ? 18 : 14 }} />
       </div>
     </Tooltip>
   );
@@ -159,9 +188,9 @@ export default function PortalControls({
   const makeUPM = () => (
     <Tooltip key="UPM" title="User Prop Manager">
       <div
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
+        onMouseDown={createUnifiedEventHandler((e) => {})}
+        onTouchStart={createUnifiedEventHandler((e) => {})}
+        onClick={createUnifiedEventHandler((e) => {
           try {
             if (nodeId && editorActions?.selectNode) {
               editorActions.selectNode(nodeId);
@@ -177,7 +206,7 @@ export default function PortalControls({
               setTimeout(open, 0);
             }
           } catch {/* noop */}
-        }}
+        })}
         style={{
           ...iconButtonBase,
           background: '#6f42c1',
@@ -190,7 +219,7 @@ export default function PortalControls({
         aria-label={labels.upm}
         role="button"
       >
-        <SlidersOutlined style={{ color: '#fff' }} />
+        <SlidersOutlined style={{ color: '#fff', fontSize: isMobile ? 18 : 14 }} />
       </div>
     </Tooltip>
   );
@@ -335,10 +364,10 @@ export default function PortalControls({
             {...motionCfg}
             style={{
               position: 'absolute',
-              top: top + offsetY,
+              top: top + (isMobile ? -52 : offsetY), // More space on mobile for larger buttons
               left: left + offsetX,
               display: 'flex',
-              gap: 6,
+              gap: isMobile ? 8 : 6, // More spacing on mobile
               background: 'transparent',
               userSelect: 'none',
               pointerEvents: 'auto',
