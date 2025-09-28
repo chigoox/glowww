@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Layout,
   Typography,
@@ -26,8 +26,8 @@ import {
 } from '@ant-design/icons';
 import dynamic from 'next/dynamic';
 
-const SmartTemplateRecommendations = dynamic(() => import('../../Components/SmartTemplateRecommendations'), { ssr: false });
-const TemplateCollections = dynamic(() => import('../../Components/TemplateCollections'), { ssr: false });
+const SmartTemplateRecommendations = dynamic(() => import('../Components/SmartTemplateRecommendations'), { ssr: false });
+const TemplateCollections = dynamic(() => import('../Components/TemplateCollections'), { ssr: false });
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text, Paragraph } = Typography;
