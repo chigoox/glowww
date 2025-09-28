@@ -19,7 +19,15 @@ const getEventCoordinates = (e) => {
 const createUnifiedResizeHandler = (handler) => {
   return (e) => {
     e.stopPropagation();
-    e.preventDefault(); // Prevent scrolling on touch
+    
+    // For touch events, prevent default to avoid scrolling
+    if (e.type.startsWith('touch')) {
+      e.preventDefault();
+      // Also prevent body scroll during touch drag
+      document.body.style.touchAction = 'none';
+      document.body.style.overscrollBehavior = 'none';
+    }
+    
     handler(e);
   };
 };
@@ -294,6 +302,10 @@ export const ResizeHandles = ({
       snapGridSystem.clearSnapIndicators();
       setTimeout(() => snapGridSystem.cleanupTrackedElements(), 100);
       
+      // Restore touch actions after drag ends
+      document.body.style.touchAction = '';
+      document.body.style.overscrollBehavior = '';
+      
       // Use cleanup function if available, otherwise fallback to individual removes
       if (handleMouseUp.cleanup) {
         handleMouseUp.cleanup();
@@ -452,8 +464,9 @@ export const ResizeHandles = ({
 
   // Check if mobile device for larger handles
   const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
-  const mobileCornerSize = isMobile ? Math.max(cornerSize * 1.5, 16) : cornerSize;
-  const mobileEdgeThickness = isMobile ? Math.max(edgeThickness * 1.5, 12) : edgeThickness;
+  const mobileCornerSize = isMobile ? Math.max(cornerSize * 2, 20) : cornerSize; // Bigger for mobile
+  const mobileEdgeThickness = isMobile ? Math.max(edgeThickness * 2, 16) : edgeThickness; // Bigger for mobile
+  const mobileEdgeLength = isMobile ? Math.max(edgeLength * 1.5, 30) : edgeLength; // Longer for mobile
 
   const handles = (
     <div
@@ -463,8 +476,12 @@ export const ResizeHandles = ({
         left: 0,
         pointerEvents: 'none',
         zIndex,
+        touchAction: isMobile ? 'none' : 'auto', // Prevent scrolling on mobile
+        userSelect: 'none',
+        webkitUserSelect: 'none'
       }}
       data-resize-handles
+      data-mobile={isMobile}
     >
       {/* Corner Handles */}
       {showCorners && (
@@ -511,8 +528,8 @@ export const ResizeHandles = ({
           <div
             style={edgeStyle({
               top: boxPosition.top - (mobileEdgeThickness / 2),
-              left: boxPosition.left + (boxPosition.width / 2) - (edgeLength / 2),
-              width: edgeLength,
+              left: boxPosition.left + (boxPosition.width / 2) - (mobileEdgeLength / 2),
+              width: mobileEdgeLength,
               height: mobileEdgeThickness,
               cursor: 'n-resize',
               accentColor,
@@ -526,8 +543,8 @@ export const ResizeHandles = ({
           <div
             style={edgeStyle({
               top: boxPosition.top + boxPosition.height - (mobileEdgeThickness / 2),
-              left: boxPosition.left + (boxPosition.width / 2) - (edgeLength / 2),
-              width: edgeLength,
+              left: boxPosition.left + (boxPosition.width / 2) - (mobileEdgeLength / 2),
+              width: mobileEdgeLength,
               height: mobileEdgeThickness,
               cursor: 's-resize',
               accentColor,
@@ -541,9 +558,9 @@ export const ResizeHandles = ({
           <div
             style={edgeStyle({
               left: boxPosition.left - (mobileEdgeThickness / 2),
-              top: boxPosition.top + (boxPosition.height / 2) - (edgeLength / 2),
+              top: boxPosition.top + (boxPosition.height / 2) - (mobileEdgeLength / 2),
               width: mobileEdgeThickness,
-              height: edgeLength,
+              height: mobileEdgeLength,
               cursor: 'w-resize',
               accentColor,
             })}
@@ -556,9 +573,9 @@ export const ResizeHandles = ({
           <div
             style={edgeStyle({
               left: boxPosition.left + boxPosition.width - (mobileEdgeThickness / 2),
-              top: boxPosition.top + (boxPosition.height / 2) - (edgeLength / 2),
+              top: boxPosition.top + (boxPosition.height / 2) - (mobileEdgeLength / 2),
               width: mobileEdgeThickness,
-              height: edgeLength,
+              height: mobileEdgeLength,
               cursor: 'e-resize',
               accentColor,
             })}
@@ -591,7 +608,10 @@ function cornerStyle(top, left, size, accentColor, dir) {
     zIndex: 10001,
     pointerEvents: 'auto',
     boxSizing: 'border-box',
-    transform: 'translate(-50%, -50%)'
+    transform: 'translate(-50%, -50%)',
+    touchAction: 'none', // Prevent scrolling on touch
+    userSelect: 'none',
+    webkitUserSelect: 'none'
   };
 }
 
@@ -609,6 +629,9 @@ function edgeStyle({ top, left, width, height, cursor, accentColor }) {
     borderRadius: 4,
     pointerEvents: 'auto',
     boxSizing: 'border-box',
+    touchAction: 'none', // Prevent scrolling on touch
+    userSelect: 'none',
+    webkitUserSelect: 'none'
   };
 }
 

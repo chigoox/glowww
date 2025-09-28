@@ -23,6 +23,9 @@ const createUnifiedEventHandler = (handler) => {
     // Prevent default for touch events to avoid scrolling
     if (e.type.startsWith('touch')) {
       e.preventDefault();
+      // Also prevent body scroll during touch drag
+      document.body.style.touchAction = 'none';
+      document.body.style.overscrollBehavior = 'none';
     }
     handler(e);
   };
@@ -509,6 +512,10 @@ const SnapPositionHandle = ({
     document.removeEventListener('mouseup', handleMouseUp);
     document.removeEventListener('touchmove', handleMouseMove);
     document.removeEventListener('touchend', handleMouseUp);
+    
+    // Restore touch actions after drag ends
+    document.body.style.touchAction = '';
+    document.body.style.overscrollBehavior = '';
 
     // Clean up registered elements
     setTimeout(() => {
