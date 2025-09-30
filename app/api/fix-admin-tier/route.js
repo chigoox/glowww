@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyIdToken } from '../../../lib/auth';
+import { verifyIdToken } from '../../../lib/serverAuth';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 

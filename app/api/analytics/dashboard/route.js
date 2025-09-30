@@ -19,7 +19,7 @@ import {
   count
 } from 'firebase/firestore';
 import { db } from '../../../../lib/firebase';
-import { verifyAuth, isAdmin } from '../../../../lib/auth';
+import { verifyAuth, isAdmin } from '../../../../lib/serverAuth';
 
 // GET /api/analytics/dashboard - Get analytics data
 export async function GET(request) {
