@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 // Use the editor variant of SnapPositionHandle; the support variant handles container auto-position and can interfere with size
 import SnapPositionHandle from '../../editor/SnapPositionHandle';
 import ResizeHandles from './ResizeHandles';
+import TouchDragWrapper from './TouchDragWrapper';
 
 // Utility to get unified coordinates for mouse/touch events
 const getEventCoordinates = (e) => {
@@ -118,36 +119,37 @@ export default function PortalControls({
 
   const makeMove = () => (
     <Tooltip key="MOVE" title="Drag to move between containers">
-      <div
-        ref={dragRef}
-        className="move-handle"
-        data-cy="move-handle"
-        data-handle-type="move"
-        data-craft-node-id={nodeId}
-        role="button"
-        onMouseDown={createUnifiedEventHandler((e) => {})}
-        onTouchStart={createUnifiedEventHandler((e) => {})}
-        style={{
-          ...iconButtonBase,
-          background: colors.move,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: dragRef ? 'grab' : 'not-allowed',
-          ...(styleOverrides.segment || {})
-        }}
-        aria-label={labels.move}
-      >
-        <DragOutlined style={{ color: '#fff', fontSize: isMobile ? 18 : 14 }} />
-      </div>
+      <TouchDragWrapper>
+        <div
+          ref={dragRef}
+          className="move-handle"
+          data-cy="move-handle"
+          data-handle-type="move"
+          data-craft-node-id={nodeId}
+          role="button"
+          style={{
+            ...iconButtonBase,
+            background: colors.move,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: dragRef ? 'grab' : 'not-allowed',
+            touchAction: 'none', // Prevent scrolling on mobile
+            userSelect: 'none',
+            webkitUserSelect: 'none',
+            ...(styleOverrides.segment || {})
+          }}
+          aria-label={labels.move}
+        >
+          <DragOutlined style={{ color: '#fff', fontSize: isMobile ? 18 : 14 }} />
+        </div>
+      </TouchDragWrapper>
     </Tooltip>
   );
 
   const makeEdit = () => (
     <Tooltip key="EDIT" title="Edit">
       <div
-        onMouseDown={createUnifiedEventHandler((e) => {})}
-        onTouchStart={createUnifiedEventHandler((e) => {})}
         onClick={createUnifiedEventHandler((e) => { onEditClick?.(e); })}
         style={{
           ...iconButtonBase,
@@ -156,6 +158,9 @@ export default function PortalControls({
           alignItems: 'center',
           justifyContent: 'center',
           cursor: onEditClick ? 'pointer' : 'default',
+          touchAction: 'manipulation', // Better touch performance for buttons
+          userSelect: 'none',
+          webkitUserSelect: 'none',
           ...(styleOverrides.segment || {})
         }}
         aria-label={labels.edit}

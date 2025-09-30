@@ -591,6 +591,8 @@ const SnapPositionHandle = ({
     border: 'none',
     position: 'relative',
     zIndex: 1000,
+    touchAction: 'none', // Prevent scrolling on mobile
+    webkitUserSelect: 'none',
     ...style
   };
 
@@ -600,6 +602,7 @@ const SnapPositionHandle = ({
       className={`snap-position-handle ${className}`}
       style={defaultStyle}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleMouseDown}
       title="Position Handle - Drag to move with snapping"
     >
       {children || '✥'}
